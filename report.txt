@@ -1,0 +1,29 @@
+Filetype idenfied as csv
+Processing file data-2019-05-03T00-00-structure-20190503T0000.csv
+key                   ftype    tags    matches
+--------------------  -------  ------  -------------------------------
+name                  str      uniq
+addressresidence      str      uniq    address 59.80
+addressactivities     str              address 50.98
+addressobjects        str              address 28.00
+bin                   int              ogrn 99.02
+inn                   str              inn 100.00,inn 99.02
+purposeaudit          str              runpa 8.82
+dateregistration      str              datetime 94.12 (dt:date:date_2)
+expirydate            str              datetime 18.63 (dt:date:date_2)
+startdateactivity     str              datetime 28.43 (dt:date:date_2)
+othergrounds          str      dict
+startdateaudit        str              datetime 65.69 (dt:date:date_2)
+workdays              int      dict
+workhours             str      dict
+formaudit             str      dict
+namestatecontrol      str
+assignment decree     str      dict
+effectivedate         str      dict
+Inspectionenddate     str      empty
+riskcategory          str      dict
+expirationdate        str      empty
+startupnotifications  str      empty
+daylastcheck          str      empty
+otherreasonsrefusal   str      empty
+numbersystem          str      empty

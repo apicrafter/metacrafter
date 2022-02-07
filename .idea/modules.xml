@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ProjectModuleManager">
+    <modules>
+      <module fileurl="file://$PROJECT_DIR$/.idea/metacrafter.iml" filepath="$PROJECT_DIR$/.idea/metacrafter.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../metacrafter-registry/.idea/metacrafter-registry.iml" filepath="$PROJECT_DIR$/../metacrafter-registry/.idea/metacrafter-registry.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../metacrafter-rules/.idea/metacrafter-rules.iml" filepath="$PROJECT_DIR$/../metacrafter-rules/.idea/metacrafter-rules.iml" />
+    </modules>
+  </component>
+</project>

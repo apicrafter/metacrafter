@@ -1,0 +1,23 @@
+name: identifiers
+description: Basic identifiers
+context: identifiers
+lang: common
+rules:
+  uuid:
+    key: uuid
+    name: Universally unique identifier (UUID)
+    rule: Word(hexnums, exact=8) + Literal('-').suppress() + Word(hexnums, exact=4) + Literal('-').suppress() + Word(hexnums, exact=4) + Literal('-').suppress() + Word(hexnums, exact=4) + Literal('-').suppress() + Word(hexnums, exact=12)
+    maxlen: 36
+    minlen: 36
+    priority: 1
+    match: ppr
+    type: data
+  guid:
+    key: guid
+    name: Globally unique identifier (GUID)
+    rule: Literal('{').suppress() + Word(hexnums, exact=8) + Literal('-').suppress() + Word(hexnums, exact=4) + Literal('-').suppress() + Word(hexnums, exact=4) + Literal('-').suppress() + Word(hexnums, exact=4) + Literal('-').suppress() + Word(hexnums, exact=12) + Literal('}').suppress()
+    maxlen: 38
+    minlen: 38
+    priority: 1
+    match: ppr
+    type: data

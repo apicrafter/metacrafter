@@ -1,0 +1,32 @@
+name: crypto
+description: Cryptographic identifiers
+context: crypto
+lang: common
+rules:
+  sha256hash:
+    key: sha256hash
+    name: SHA-256 hash
+    maxlen: 64
+    minlen: 64
+    priority: 1
+    match: ppr
+    type: data
+    rule: Word(hexnums, exact=64)
+  sha1hash:
+    key: sha1hash
+    name: SHA-1 hash
+    maxlen: 40
+    minlen: 40
+    priority: 1
+    match: ppr
+    type: data
+    rule: Word(hexnums, exact=40)
+  md5hash:
+    key: md5hash
+    name: MD5 hash
+    maxlen: 32
+    minlen: 32
+    priority: 1
+    match: ppr
+    rule: Word(hexnums, exact=32)
+    type: data

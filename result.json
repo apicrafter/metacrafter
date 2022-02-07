@@ -1,0 +1,955 @@
+[
+    {
+        "fields": [
+            {
+                "field": "region",
+                "ftype": "int",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "creationDate",
+                "ftype": "datetime",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/datetime",
+                        "confidence": 100,
+                        "dataclass": "datetime",
+                        "format": null,
+                        "ruleid": "_int_fieldtype_datetime",
+                        "ruletype": "fieldtype"
+                    }
+                ],
+                "tags": []
+            },
+            {
+                "field": "legalName",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "ogrn",
+                "ftype": "int",
+                "matches": [],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "inn",
+                "ftype": "int",
+                "matches": [],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "kpp",
+                "ftype": "int",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "addressCode",
+                "ftype": "int",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "firstRateCompany",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "businessSize",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "source",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.codeExternalSystem",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.dateModify",
+                "ftype": "datetime",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/datetime",
+                        "confidence": 100,
+                        "dataclass": "datetime",
+                        "format": null,
+                        "ruleid": "_int_fieldtype_datetime",
+                        "ruletype": "fieldtype"
+                    }
+                ],
+                "tags": []
+            },
+            {
+                "field": "innerInfo.deleted",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.isModerated",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.moderationTime",
+                "ftype": "datetime",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/datetime",
+                        "confidence": 100,
+                        "dataclass": "datetime",
+                        "format": null,
+                        "ruleid": "_int_fieldtype_datetime",
+                        "ruletype": "fieldtype"
+                    }
+                ],
+                "tags": []
+            },
+            {
+                "field": "innerInfo.registrationStatus",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.status",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.disableImportInfo",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.disableImportVacancy",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.disableJoinCompany",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.disableJoinManager",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "uniqkey",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "companyStructureHidden",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.idAuthor",
+                "ftype": "str",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/uuid",
+                        "confidence": 100.0,
+                        "dataclass": "uuid",
+                        "format": null,
+                        "ruleid": "uuid",
+                        "ruletype": "data"
+                    }
+                ],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "innerInfo.changeTime",
+                "ftype": "str",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/datetime",
+                        "confidence": 100.0,
+                        "dataclass": "datetime",
+                        "format": "dt:date:date_9:time_2",
+                        "ruleid": "qddate",
+                        "ruletype": "data"
+                    }
+                ],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "address",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "hr-agency",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.idUser",
+                "ftype": "str",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/uuid",
+                        "confidence": 100.0,
+                        "dataclass": "uuid",
+                        "format": null,
+                        "ruleid": "uuid",
+                        "ruletype": "data"
+                    }
+                ],
+                "tags": []
+            },
+            {
+                "field": "innerInfo.managerIds",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "description",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "site",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "stateProgram",
+                "ftype": "str",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/uuid",
+                        "confidence": 100.0,
+                        "dataclass": "uuid",
+                        "format": null,
+                        "ruleid": "uuid",
+                        "ruletype": "data"
+                    }
+                ],
+                "tags": []
+            },
+            {
+                "field": "innerInfo.idSmallIcon",
+                "ftype": "str",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/uuid",
+                        "confidence": 100.0,
+                        "dataclass": "uuid",
+                        "format": null,
+                        "ruleid": "uuid",
+                        "ruletype": "data"
+                    }
+                ],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "innerInfo.stateProgram",
+                "ftype": "str",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/uuid",
+                        "confidence": 100.0,
+                        "dataclass": "uuid",
+                        "format": null,
+                        "ruleid": "uuid",
+                        "ruletype": "data"
+                    }
+                ],
+                "tags": []
+            },
+            {
+                "field": "legalFormCode",
+                "ftype": "int",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "legalFormName",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "innerInfo.moderationComment",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "codeParentCompany",
+                "ftype": "int",
+                "matches": [],
+                "tags": [
+                    "uniq"
+                ]
+            }
+        ],
+        "table": "trudorgs"
+    },
+    {
+        "fields": [
+            {
+                "field": "region",
+                "ftype": "int",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "creationDate",
+                "ftype": "datetime",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/datetime",
+                        "confidence": 100,
+                        "dataclass": "datetime",
+                        "format": null,
+                        "ruleid": "_int_fieldtype_datetime",
+                        "ruletype": "fieldtype"
+                    }
+                ],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "source",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.dateModify",
+                "ftype": "datetime",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/datetime",
+                        "confidence": 100,
+                        "dataclass": "datetime",
+                        "format": null,
+                        "ruleid": "_int_fieldtype_datetime",
+                        "ruletype": "fieldtype"
+                    }
+                ],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.deleted",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.status",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.changeTime",
+                "ftype": "str",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/datetime",
+                        "confidence": 100.0,
+                        "dataclass": "datetime",
+                        "format": "dt:date:date_9:time_2",
+                        "ruleid": "qddate",
+                        "ruletype": "data"
+                    }
+                ],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "region",
+                "ftype": "int",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "organization",
+                "ftype": "str",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/uuid",
+                        "confidence": 12.3,
+                        "dataclass": "uuid",
+                        "format": null,
+                        "ruleid": "uuid",
+                        "ruletype": "data"
+                    }
+                ],
+                "tags": []
+            },
+            {
+                "field": "industry",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "profession",
+                "ftype": "int",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "federal_district.@rel",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "federal_district.@resource",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "creationDate",
+                "ftype": "datetime",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/datetime",
+                        "confidence": 100,
+                        "dataclass": "datetime",
+                        "format": null,
+                        "ruleid": "_int_fieldtype_datetime",
+                        "ruletype": "fieldtype"
+                    }
+                ],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "datePosted",
+                "ftype": "str",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/datetime",
+                        "confidence": 100.0,
+                        "dataclass": "datetime",
+                        "format": "dt:date:date_9:time_2",
+                        "ruleid": "qddate",
+                        "ruletype": "data"
+                    }
+                ],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "identifier",
+                "ftype": "str",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/uuid",
+                        "confidence": 100.0,
+                        "dataclass": "uuid",
+                        "format": null,
+                        "ruleid": "uuid",
+                        "ruletype": "data"
+                    }
+                ],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "hiringOrganization.identifier",
+                "ftype": "str",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/uuid",
+                        "confidence": 12.3,
+                        "dataclass": "uuid",
+                        "format": null,
+                        "ruleid": "uuid",
+                        "ruletype": "data"
+                    }
+                ],
+                "tags": []
+            },
+            {
+                "field": "baseSalary.salary",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "baseSalary.salaryMin",
+                "ftype": "float",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "title",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "employmentType",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "workHours",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "responsibilities",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "incentiveCompensation.accommodation.capability",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "incentiveCompensation.accommodation.housing",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "incentiveCompensation.retraining.grant",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "incentiveCompensation.premium",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "empty"
+                ]
+            },
+            {
+                "field": "incentiveCompensation.jobBenefits.otherBenefits",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "requirements.educationRequirements.educationType",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "requirements.experienceRequirements",
+                "ftype": "int",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "requirements.qualifications",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "jobLocation.address",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "jobLocation.additionalAddressInfo",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "jobLocation.geo.latitude",
+                "ftype": "float",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "jobLocation.geo.longitude",
+                "ftype": "float",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "socialProtecteds",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "empty"
+                ]
+            },
+            {
+                "field": "metroStations",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "empty"
+                ]
+            },
+            {
+                "field": "source",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "workPlaces",
+                "ftype": "int",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "additionalInfo",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "innerInfo.sourceType",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.status",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.visibility",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.contactSource",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.dateModify",
+                "ftype": "datetime",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/datetime",
+                        "confidence": 100,
+                        "dataclass": "datetime",
+                        "format": null,
+                        "ruleid": "_int_fieldtype_datetime",
+                        "ruletype": "fieldtype"
+                    }
+                ],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "innerInfo.deleted",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "vac_url",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "isUzbekistanRecruitment",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "incentiveCompensation.accommodation",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "empty"
+                ]
+            },
+            {
+                "field": "requirements.educationRequirements",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "empty"
+                ]
+            },
+            {
+                "field": "jobLocation.geo",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "empty"
+                ]
+            },
+            {
+                "field": "baseSalary.salaryMax",
+                "ftype": "float",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "incentiveCompensation.jobBenefits",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "empty"
+                ]
+            },
+            {
+                "field": "requirements.id_priority_category",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "needMedcard",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "innerInfo.changeTime",
+                "ftype": "str",
+                "matches": [
+                    {
+                        "classurl": "https://meta.apicrafter.io/class/datetime",
+                        "confidence": 100.0,
+                        "dataclass": "datetime",
+                        "format": "dt:date:date_9:time_2:t_right",
+                        "ruleid": "qddate",
+                        "ruletype": "data"
+                    }
+                ],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "requiredDriveLicense",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "incentiveCompensation.premium.premiumType",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "incentiveCompensation.premium.premiumSize",
+                "ftype": "int",
+                "matches": [],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "incentiveCompensation.retraining.capability",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "socialProtecteds.socialProtected",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "dict"
+                ]
+            },
+            {
+                "field": "incentiveCompensation.transportCompensation",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "incentiveCompensation.retraining",
+                "ftype": "str",
+                "matches": [],
+                "tags": []
+            },
+            {
+                "field": "requirements.educationRequirements.speciality",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "oksoCode",
+                "ftype": "int",
+                "matches": [],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "incentiveCompensation.jobBenefits.benefits",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "uniq"
+                ]
+            },
+            {
+                "field": "careerPerspective",
+                "ftype": "str",
+                "matches": [],
+                "tags": [
+                    "uniq"
+                ]
+            }
+        ],
+        "table": "trudvac"
+    }
+]
