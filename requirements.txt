@@ -4,6 +4,8 @@ qddate
 pyparsing
 pymongo
 validators
-pyarrow
 sqlalchemy
 PyYAML
+click
+tabulate
+chardet

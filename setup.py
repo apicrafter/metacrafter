@@ -42,7 +42,9 @@ install_requires = [
     'PyYAML',
     'pandas',
     'sqlalchemy',
-    'validators'
+    'validators',
+    'click',
+    'tabulate'
 ]
 
 
