@@ -24,8 +24,8 @@ Databases support:
 * MongoDB
 
 Metacrafter key features:
-* 25 basic and PII rules.
-* all labels metadata collected into [Metacrafter registry](https://github.com/apicrafter/metacrafter-registry ) public repository - 
+* 25 basic and PII data labeling rules
+* all labels metadata collected into [Metacrafter registry](https://github.com/apicrafter/metacrafter-registry ) public repository
 * 312 date detection rules/patterns, date detection using [qddate](https://github.com/ivbeg/qddate), "quick and dirty" date detection library
 * extendable set of rules using PyParsing, exact text match and validation functions
 * support any database supported by SQLAlchemy
