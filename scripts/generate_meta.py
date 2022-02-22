@@ -31,8 +31,23 @@ def generate():
                         identifiers[rule[k]]['langs'].append(rule['lang'])
     print(yaml.dump(identifiers))
                     
+def export():
+    typer.echo(f"Processing rules")
+    pr = RulesProcessor()
+    for rp in RULEPATHS:
+        pr.import_rules_path(rp, recursive=True)
+    headers = ['id', 'key', 'piikey', 'name', 'type', 'match', 'rule', 'minlen', 'maxlen', 'priority', 'validator', 'fieldrule', 'fieldrulematch', 'imprecise']
+    print('\t'.join(headers))
+    for rules in [pr.data_rules, pr.field_rules]:
+        for rule in rules:
+            record = []
+            for k in ['id', 'key', 'piikey', 'name', 'type', 'match', 'rule', 'minlen', 'maxlen', 'priority', 'validator', 'fieldrule', 'fieldrulematch', 'imprecise']:
+                v = str(rule[k]) if k in rule.keys() else ""
+                record.append(v)
+            print('\t'.join(record))
+
 #    for k in sorted(identifiers.keys()):
 #        print(identifiers[k])    
 
 if __name__ == "__main__":
-    typer.run(generate)
+    typer.run(export)
