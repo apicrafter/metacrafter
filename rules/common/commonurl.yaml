@@ -1,0 +1,20 @@
+name: commonurl
+description: Common URL data types
+context: common
+lang: common
+rules:
+  url:
+    key: url
+    name: Web URL
+    maxlen: 1024
+    minlen: 5
+    priority: 1
+    match: func
+    type: data
+    rule: validators.url
+  urlknownpat:
+    key: url
+    name: URL/website by known name pattern
+    rule: Word(printables) + "url" +  lineEnd
+    type: field
+    match: ppr
