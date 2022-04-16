@@ -4,57 +4,57 @@ context: pii
 lang: common
 rules:
   birthdayknown:
-    key: datetime
-    piikey: birthday
+    key: birthday
+    is_pii: True
     name: Birthday by known field names
     rule: birthday,dayofbirth,date_of_birth,birth_day
     type: field
     match: text
   deathdayknown:
     key: datetime
-    piikey: deathday
+    is_pii: True
     name: Deathday by known field names
     rule: deathday,day_of_death
     type: field
     match: text
   genderbyknown:
     key: gender
-    piikey: gender
+    is_pii: True
     name: Gender by known field name
     rule: gender,
     type: field
     match: text
   nationalitybyknown:
     key: nationality
-    piikey: nationality
+    is_pii: True
     name: Nationality by known field name
     rule: nationality
     type: field
     match: text
   passwordbyknown:
     key: password
-    piikey: password
+    is_pii: True
     name: Password by known field name
     rule: password
     type: field
     match: text
   passportbyknown:
     key: passport
-    piikey: passport
+    is_pii: True
     name: Passport code by known name
     rule: passport
     type: field
     match: text
   creditcardbyknown:
     key: creditcard
-    piikey: creditcard
+    is_pii: True
     name: Credit card by known name
     rule: creditcard,credit_card
     type: field
     match: text
   usernamebyknown:
     key: username
-    piikey: username
+    is_pii: True
     name: User name by known name
     rule: username,userid,login
     type: field

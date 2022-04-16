@@ -4,43 +4,43 @@ context: pii
 lang: ru
 rules:
   rubirthdayknown:
-    key: datetime
-    piikey: birthday
+    key: birthday
+    is_pii: True
     name: Russian birthday by known field names
     rule: дата рождения
     type: field
     match: text
   rudeathdayknown:
-    key: datetime
-    piikey: deathday
+    key: deathday
+    is_pii: True
     name: Russian deathday by known field names
     rule: дата смерти
     type: field
     match: text
   passportbyknown:
     key: ruintpassport
-    piikey: passport
+    is_pii: True
     name: Russian passport by field name
     rule: номер паспорта,паспорт,номер и серия паспорта,nomer_passporta
     type: field
     match: text
   passportbypat:
     key: ruintpassport
-    piikey: passport
+    is_pii: True
     name: Russian passport by pattern
     rule: ((Word(nums, exact=2) + Literal(' ').suppress() + Word(nums, exact=2)) | Word(nums,exact=4)) + Literal(' ').suppress() + Word(nums, exact=6)
     type: data
     match: ppr
   snilsbyknown:
     key: rusnils
-    piikey: rusnils
+    is_pii: True
     name: Russian SNILS number by known names
     rule: снилс,номер снилс,snils,snils_number
     type: field
     match: text
   rusnils:
     key: rusnils
-    piikey: rusnils
+    is_pii: True
     name: Russian SNILS person social insurance ID
     rule: Word(nums, exact=3) + Literal('-').suppress() + Word(nums, exact=3) + Literal('-').suppress() + Word(nums, exact=3) + Word(nums, exact=2)
     maxlen: 17

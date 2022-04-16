@@ -32,7 +32,7 @@ DEFAULT_MIN_LEN = 3
 RULE_TYPE_FIELD = 1
 RULE_TYPE_DATA = 2
 
-BASE_URL = "https://meta.apicrafter.io/class/{dataclass}"
+BASE_URL = "https://registry.apicrafter.io/datatype/{dataclass}"
 
 
 class TableScanResult:
@@ -84,27 +84,18 @@ class RuleResult:
     """Result match error"""
 
     def __init__(
-        self, ruleid, dataclass, confidence, ruletype, piiclass=None, format=None
+        self, ruleid, dataclass, confidence, ruletype, is_pii=False, format=None
     ):
         self.ruleid = ruleid
         self.dataclass = dataclass
         self.confidence = confidence
         self.ruletype = ruletype
-        self.piiclass = piiclass
+        self.is_pii = is_pii
         self.format = format
 
-    def is_pii(self):
-        return self.piiclass is not None
 
     def class_url(self):
         return BASE_URL.format(dataclass=self.dataclass)
-
-    def pii_url(self):
-        return (
-            BASE_URL.format(dataclass=self.piiclass)
-            if self.piiclass is not None
-            else None
-        )
 
     def asdict(self):
         return {
@@ -211,7 +202,7 @@ class RulesProcessor:
             rule["context"] = contexts
 
             # Add more than one context
-            if "piikey" in rule.keys() and "pii" not in rule["context"]:
+            if "is_pii" in rule.keys() and rule["is_pii"] == "True" and "pii" not in rule["context"]:
                 rule["context"].append("pii")
 
             for context in contexts:

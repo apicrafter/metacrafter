@@ -8,7 +8,7 @@ import qddate
 import click
 import orjson
 from tabulate import tabulate
-from metacrafter.classify.processor import RulesProcessor
+from metacrafter.classify.processor import RulesProcessor, BASE_URL
 from metacrafter.classify.stats import Analyzer
 from metacrafter.classify.utils import detect_delimiter, detect_encoding
 import yaml
@@ -76,10 +76,10 @@ class CrafterCmd(object):
                 for r in prepared:
                     if len(r[3]) > 0:
                         outres.append(r)
-                headers = ["key", "ftype", "tags", "matches"]
+                headers = ["key", "ftype", "tags", "matches", 'datatype_url']
             elif dformat == "full":
                 outres = prepared
-                headers = ["key", "ftype", "tags", "matches"]
+                headers = ["key", "ftype", "tags", "matches", 'datatype_url']
             if len(outres) > 0:
                 print(tabulate(outres, headers=headers))
 
@@ -95,10 +95,10 @@ class CrafterCmd(object):
                     for r in prepared:
                         if len(r[3]) > 0:
                             outres.append(r)
-                    headers = ["key", "ftype", "tags", "matches"]
+                    headers = ["key", "ftype", "tags", "matches", 'datatype_url']
                 elif dformat == "full":
                     outres = prepared
-                    headers = ["key", "ftype", "tags", "matches"]
+                    headers = ["key", "ftype", "tags", "matches", 'datatype_url']
                 if len(outres) > 0:
                     print(tabulate(outres, headers=headers))
         if output:
@@ -161,11 +161,14 @@ class CrafterCmd(object):
                     datastats_dict[res.field]["ftype"],
                     ",".join(datastats_dict[res.field]["tags"]),
                     ",".join(matches),
+                    BASE_URL.format(dataclass=res.matches[0].dataclass) if len(res.matches) > 0 else ""
                 ]
             )
             record = res.asdict()
             record["tags"] = datastats_dict[res.field]["tags"]
             record["ftype"] = datastats_dict[res.field]["ftype"]
+            record['datatype_url'] = BASE_URL.format(dataclass=res.matches[0].dataclass) if len(res.matches) > 0 else ""
+
             outdata.append(record)
         return output, outdata
 
