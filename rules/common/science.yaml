@@ -1,0 +1,17 @@
+name: sciencecommon
+description: Scientific identifiers
+context: science
+lang: common
+rules:
+  orcidbyknown:
+    key: orcid
+    name: ORCID unique identifier of researcher
+    rule: orcid
+    type: field
+    match: text
+  doibydata:
+    key: doi
+    name: DOI unique ID of publication
+    rule: Literal("10.") + Word(nums,exact=4) + Literal("/") + Word(printables)
+    type: data
+    match: ppr

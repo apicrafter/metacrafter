@@ -1,0 +1,11 @@
+name: vehicles
+description: Vehicles related classification codes
+context: vehicles
+lang: common
+rules:
+  vehiclenumberbyfieldname:
+    key: vehiclenumber
+    name: Vehicle number by known fieldnames
+    rule: vehiclenumber,vehicle number,vehicle_number
+    match: text
+    type: data

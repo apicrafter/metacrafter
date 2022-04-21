@@ -1,0 +1,11 @@
+name: orgs
+description: Companies identifiers
+context: companies
+lang: common
+rules:
+  companynameknown:
+    key: orgname
+    name: Company name known names
+    rule: legalname,companyname,orgname,org_name,company_name,organization_name,legal_name,organizationname,company name
+    type: field
+    match: text

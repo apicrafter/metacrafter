@@ -1,0 +1,57 @@
+name: intcodes
+description: Internationaly recognized codes
+context: geo
+lang: common
+rules:
+  iso3166-alpha2:
+    key: countrycode_alpha2
+    name: ISO 3166 country code alpha 2
+    rule: aw,af,ao,al,ad,an,1a,ae,ar,am,as,ag,au,at,az,bi,be,bj,bf,bd,bg,bh,bs,ba,by,bz,bm,bo,br,bb,bn,bt,bw,cf,ca,ch,jg,cl,cn,ci,cm,cd,cg,co,km,cv,cr,cu,ky,cy,cz,de,dj,dm,dk,do,dz,4e,z4,7e,z7,ec,eg,xc,er,es,ee,et,eu,fi,fj,fr,fo,fm,ga,gb,ge,gh,gi,gn,gm,gw,gq,gr,gd,gl,gt,gu,gy,xd,hk,hn,xe,hr,ht,hu,id,im,in,ie,ir,iq,is,il,it,jm,jo,jp,kz,ke,kg,kh,ki,kn,kr,kv,kw,xj,la,lb,lr,ly,lc,zj,xl,xm,li,lk,xn,xo,ls,lt,lu,lv,mo,ma,mc,md,mg,mv,zq,mx,mh,xp,mk,ml,mt,mm,xq,me,mn,mp,mz,mr,mu,mw,my,yt,xu,na,nc,ne,ng,ni,nl,xr,no,np,nz,xs,oe,om,pk,pa,pe,ph,pw,pg,pl,pr,kp,pt,py,ps,pf,qa,ro,ru,rw,8s,sa,sd,sn,sg,sb,sl,sv,sm,so,rs,zf,zg,st,sr,sk,si,se,sz,sc,sy,tc,td,tg,th,tj,tm,tl,to,tt,tn,tr,tv,tz,ug,ua,xt,uy,us,uz,vc,ve,vi,vn,vu,1w,ws,ye,za,zm,zw,tw,va
+    maxlen: 2
+    minlen: 2
+    priority: 1
+    match: text
+    type: data
+    fieldrule: Optional(Word(printables)) + CaselessLiteral('country') + Optional(Word(printables))
+    fieldrulematch: ppr
+  iso3166-alpha3:
+    key: countrycode_alpha3
+    name: ISO 3166 country code alpha 3
+    rule: abw,afg,ago,alb,and,ant,arb,are,arg,arm,asm,atg,aus,aut,aze,bdi,bel,ben,bfa,bgd,bgr,bhr,bhs,bih,blr,blz,bmu,bol,bra,brb,brn,btn,bwa,caf,can,che,chi,chl,chn,civ,cmr,cod,cog,col,com,cpv,cri,cub,cym,cyp,cze,deu,dji,dma,dnk,dom,dza,eap,eas,eca,ecs,ecu,egy,emu,eri,esp,est,eth,euu,fin,fji,fra,fro,fsm,gab,gbr,geo,gha,gib,gin,gmb,gnb,gnq,grc,grd,grl,gtm,gum,guy,hic,hkg,hnd,hpc,hrv,hti,hun,idn,imn,ind,irl,irn,irq,isl,isr,ita,jam,jor,jpn,kaz,ken,kgz,khm,kir,kna,kor,ksv,kwt,lac,lao,lbn,lbr,lby,lca,lcn,ldc,lic,lie,lka,lmc,lmy,lso,ltu,lux,lva,mac,mar,mco,mda,mdg,mdv,mea,mex,mhl,mic,mkd,mli,mlt,mmr,mna,mne,mng,mnp,moz,mrt,mus,mwi,mys,myt,nac,nam,ncl,ner,nga,nic,nld,noc,nor,npl,nzl,oec,oed,omn,pak,pan,per,phl,plw,png,pol,pri,prk,prt,pry,pse,pyf,qat,rou,rus,rwa,sas,sau,sdn,sen,sgp,slb,sle,slv,smr,som,srb,ssa,ssf,stp,sur,svk,svn,swe,swz,syc,syr,tca,tcd,tgo,tha,tjk,tkm,tls,ton,tto,tun,tur,tuv,tza,uga,ukr,umc,ury,usa,uzb,vct,ven,vir,vnm,vut,wld,wsm,yem,zaf,zmb,zwe,
+    maxlen: 3
+    minlen: 3
+    priority: 1
+    match: text
+    type: data
+    fieldrule: Optional(Word(printables)) + CaselessLiteral('country') + Optional(Word(printables))
+    fieldrulematch: ppr
+# This rule generates a lot of False positives so it marked as imprecise rule and could be filtered if it's set
+  iso3166-alpha2imprecise:
+    key: countrycode_alpha2
+    name: ISO 3166 country code alpha 2
+    rule: aw,af,ao,al,ad,an,1a,ae,ar,am,as,ag,au,at,az,bi,be,bj,bf,bd,bg,bh,bs,ba,by,bz,bm,bo,br,bb,bn,bt,bw,cf,ca,ch,jg,cl,cn,ci,cm,cd,cg,co,km,cv,cr,cu,ky,cy,cz,de,dj,dm,dk,do,dz,4e,z4,7e,z7,ec,eg,xc,er,es,ee,et,eu,fi,fj,fr,fo,fm,ga,gb,ge,gh,gi,gn,gm,gw,gq,gr,gd,gl,gt,gu,gy,xd,hk,hn,xe,hr,ht,hu,id,im,in,ie,ir,iq,is,il,it,jm,jo,jp,kz,ke,kg,kh,ki,kn,kr,kv,kw,xj,la,lb,lr,ly,lc,zj,xl,xm,li,lk,xn,xo,ls,lt,lu,lv,mo,ma,mc,md,mg,mv,zq,mx,mh,xp,mk,ml,mt,mm,xq,me,mn,mp,mz,mr,mu,mw,my,yt,xu,na,nc,ne,ng,ni,nl,xr,no,np,nz,xs,oe,om,pk,pa,pe,ph,pw,pg,pl,pr,kp,pt,py,ps,pf,qa,ro,ru,rw,8s,sa,sd,sn,sg,sb,sl,sv,sm,so,rs,zf,zg,st,sr,sk,si,se,sz,sc,sy,tc,td,tg,th,tj,tm,tl,to,tt,tn,tr,tv,tz,ug,ua,xt,uy,us,uz,vc,ve,vi,vn,vu,1w,ws,ye,za,zm,zw,tw,va
+    maxlen: 2
+    minlen: 2
+    priority: 1
+    match: text
+    type: data
+    imprecise: 1
+# This rule generates a lot of False positives so it marked as imprecise rule and could be filtered if it's set
+  iso3166-alpha3imprecise:
+    key: countrycode_alpha3
+    name: ISO 3166 country code alpha 3
+    rule: abw,afg,ago,alb,and,ant,arb,are,arg,arm,asm,atg,aus,aut,aze,bdi,bel,ben,bfa,bgd,bgr,bhr,bhs,bih,blr,blz,bmu,bol,bra,brb,brn,btn,bwa,caf,can,che,chi,chl,chn,civ,cmr,cod,cog,col,com,cpv,cri,cub,cym,cyp,cze,deu,dji,dma,dnk,dom,dza,eap,eas,eca,ecs,ecu,egy,emu,eri,esp,est,eth,euu,fin,fji,fra,fro,fsm,gab,gbr,geo,gha,gib,gin,gmb,gnb,gnq,grc,grd,grl,gtm,gum,guy,hic,hkg,hnd,hpc,hrv,hti,hun,idn,imn,ind,irl,irn,irq,isl,isr,ita,jam,jor,jpn,kaz,ken,kgz,khm,kir,kna,kor,ksv,kwt,lac,lao,lbn,lbr,lby,lca,lcn,ldc,lic,lie,lka,lmc,lmy,lso,ltu,lux,lva,mac,mar,mco,mda,mdg,mdv,mea,mex,mhl,mic,mkd,mli,mlt,mmr,mna,mne,mng,mnp,moz,mrt,mus,mwi,mys,myt,nac,nam,ncl,ner,nga,nic,nld,noc,nor,npl,nzl,oec,oed,omn,pak,pan,per,phl,plw,png,pol,pri,prk,prt,pry,pse,pyf,qat,rou,rus,rwa,sas,sau,sdn,sen,sgp,slb,sle,slv,smr,som,srb,ssa,ssf,stp,sur,svk,svn,swe,swz,syc,syr,tca,tcd,tgo,tha,tjk,tkm,tls,ton,tto,tun,tur,tuv,tza,uga,ukr,umc,ury,usa,uzb,vct,ven,vir,vnm,vut,wld,wsm,yem,zaf,zmb,zwe,
+    maxlen: 3
+    minlen: 3
+    priority: 1
+    match: text
+    type: data
+    imprecise: 1
+  languagetag:
+    key: languagetag
+    name: IETF language tags (RFC 5646)
+    rule: en-gb,ru,
+    maxlen: 5
+    minlen: 2
+    type: data
+    match: text

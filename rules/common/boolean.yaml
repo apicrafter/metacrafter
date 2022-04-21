@@ -1,0 +1,17 @@
+name: commonboolean
+description: Common known boolean
+context: common
+lang: common
+rules:
+  booleancommon:
+    key: boolean
+    name: Boolean value by known
+    rule: true,false
+    match: text
+    type: data
+  booleanyesno:
+    key: boolean
+    name: Boolean value yes/no
+    rule: yes,no
+    match: text
+    type: data

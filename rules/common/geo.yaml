@@ -1,0 +1,87 @@
+name: commongeo
+description: Common geodata
+context: geo
+lang: common
+rules:
+  addressknown:
+    key: address
+    is_pii: True
+    name: Address
+    rule: address,postaladdress,actualaddress,fulladdress,address_legal,legaladdress,postal address,post address
+    type: field
+    match: text
+  latitude:
+    key: latitude
+    name: Latitude by known name
+    rule: latitude,latitude_wgs84,geodata_latitude,poi_latitude
+    type: field
+    match: text
+  longitude:
+    key: longitude
+    name: Longitude by known name
+    rule: longitude,longitude_wgs84,geodata_longtitude,poi_longitude
+    type: field
+    match: text
+  latitudepat:
+    key: latitude
+    name: Latitude by known name pattern
+    maxlen: 100
+    minlen: 10
+    rule: Word(printables) + Optional('_') + "latitude"
+    type: field
+    match: ppr
+  longitudepat:
+    key: longitude
+    name: Longitude by known name pattern
+    maxlen: 100
+    minlen: 11
+    rule: Word(printables) + Optional('_') + "longitude"
+    type: field
+    match: ppr
+  latitudevalue:
+    key: latitude
+    name: Latitude by data pattern and name
+    maxlen: 13
+    minlen: 4
+    rule: ((Word('012345678', exact=1) + Word(nums, exact=1)) ^ (Literal("9") + Word(nums, exact=1))) + Literal('.') + Word(nums, min=1, max=10)
+    type: data
+    match: ppr
+    fieldrule: Optional(Word(printables)) + Optional('_') + "lat"
+    fieldrulematch: ppr
+  longitudevalue:
+    key: longitude
+    name: Longitude by data pattern and name
+    maxlen: 13
+    minlen: 4
+    rule: ((Literal("1") + Word("012345678") + Word(nums, exact=1)) ^ (Word(nums, exact=2))) + Literal(".") + Word(nums, min=1, max=10)
+    type: data
+    match: ppr
+    fieldrule: Optional(Word(printables)) + Optional('_') + (Literal("lon") ^ Literal("lng"))
+    fieldrulematch: ppr
+  postindexknown:
+    key: postindex
+    is_pii: True
+    name: Post index code (ZIP code and e.t.c) by known name
+    rule: postindex,postIndex,post_index,postcode,zip_code,zipcode,postalcode,post index
+    match: text
+    type: field
+  streetknown:
+    key: street
+    is_pii: True
+    name: Street name by field name
+    rule: street,street name,streetname,street_name
+    match: text
+    type: field
+  cityknown:
+    key: city
+    is_pii: True
+    name: City/town name by field name
+    rule: town,city,cityname,location (city)
+    match: text
+    type: field
+  countryknown:
+    key: country
+    name: Country name by field name
+    rule: country,countryname,country_name
+    match: text
+    type: field

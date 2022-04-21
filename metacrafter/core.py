@@ -374,7 +374,7 @@ def cli3():
 @click.option(
     "--langs", "-l", default=None, help="List of languages to use. Comma separated"
 )
-@click.option("--format", "-f", default="short", help="Output format: short, long")
+@click.option("--format", "-f", default="short", help="Output format: short, full")
 @click.option("--output", "-o", default=None, help="Output JSON filename")
 def scan_file(filename, delimiter, limit, contexts, langs, format, output):
     """Match file"""
