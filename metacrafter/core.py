@@ -60,16 +60,15 @@ class CrafterCmd(object):
 
     def _write_results(self, prepared, results, filename, dformat, output):
         if output:
-            if output:
-                f = open(output, "w", encoding="utf8")
-                out = []
-                f.write(
-                    json.dumps(
-                        {"table": filename, "fields": results}, indent=4, sort_keys=True
-                    )
+            f = open(output, "w", encoding="utf8")
+            out = []
+            f.write(
+                json.dumps(
+                    {"table": filename, "fields": results}, indent=4, sort_keys=True
                 )
-                f.close()
-                print("Output written to %s" % (output))
+            )
+            f.close()
+            print("Output written to %s" % (output))
         elif len(prepared) > 0:
             outres = []
             if dformat == "short":
@@ -77,11 +76,17 @@ class CrafterCmd(object):
                     if len(r[3]) > 0:
                         outres.append(r)
                 headers = ["key", "ftype", "tags", "matches", 'datatype_url']
-            elif dformat == "full":
+            elif dformat in ["full", 'long']:
                 outres = prepared
-                headers = ["key", "ftype", "tags", "matches", 'datatype_url']
+                headers = ["key", "ftype", "tags", "matches", "datatype_url"]
+            else:
+                print('Unknown output format %s' % (dformat))
             if len(outres) > 0:
                 print(tabulate(outres, headers=headers))
+            else:
+                print('No results')
+        else:
+            print('No results')
 
     def _write_db_results(self, db_results, dformat, output):
         out = []
@@ -374,7 +379,7 @@ def cli3():
 @click.option(
     "--langs", "-l", default=None, help="List of languages to use. Comma separated"
 )
-@click.option("--format", "-f", default="short", help="Output format: short, full")
+@click.option("--format", "-f", default="long", help="Output format: short, full")
 @click.option("--output", "-o", default=None, help="Output JSON filename")
 def scan_file(filename, delimiter, limit, contexts, langs, format, output):
     """Match file"""
@@ -399,7 +404,7 @@ def cli4():
 @click.option(
     "--langs", "-l", default=None, help="List of languages to use. Comma separated"
 )
-@click.option("--format", "-f", default="short", help="Output format: short, long")
+@click.option("--format", "-f", default="long", help="Output format: short, long")
 @click.option("--output", "-o", default=None, help="Output JSON filename")
 def scan_db(connstr, schema, limit, contexts, langs, format, output):
     """Scan database using SQL alchemy connection string"""
@@ -433,7 +438,7 @@ def cli5():
 @click.option(
     "--langs", "-l", default=None, help="List of languages to use. Comma separated"
 )
-@click.option("--format", "-f", default="short", help="Output format: short, long")
+@click.option("--format", "-f", default="long", help="Output format: short, long")
 @click.option("--output", "-o", default=None, help="Output JSON filename")
 def scan_mongodb(
     host, port, dbname, username, password, limit, contexts, langs, format, output
