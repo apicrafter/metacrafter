@@ -310,6 +310,8 @@ class RulesProcessor:
             for rule in field_rules:
                 if rule["match"] == "func":
                     res = rule["compiled"](shortfield)
+                    if not res:
+                        res = rule["compiled"](field)
                     if res:
                         m_result.add(
                             RuleResult(
@@ -322,8 +324,15 @@ class RulesProcessor:
                         if stop_on_match:
                             break
                 elif rule["match"] == "ppr":
+                    res = None
                     try:
                         res = rule["compiled"].parseString(shortfield)
+                    except ParseException:
+                        try:
+                            res = rule["compiled"].parseString(field)
+                        except ParseException:
+                            pass
+                    if res:
                         m_result.add(
                             {
                                 "dataclass": rule["key"],
@@ -334,10 +343,13 @@ class RulesProcessor:
                         )
                         if stop_on_match:
                             break
-                    except ParseException:
-                        pass
                 elif rule["match"] == "text":
+                    res = False
                     if shortfield.lower() in rule["keywords"]:
+                        res = True
+                    if field.lower() in rule["keywords"]:
+                        res = True
+                    if res:
                         m_result.add(
                             RuleResult(
                                 ruleid=rule["id"],

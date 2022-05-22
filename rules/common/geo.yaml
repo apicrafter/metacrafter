@@ -13,13 +13,13 @@ rules:
   latitude:
     key: latitude
     name: Latitude by known name
-    rule: latitude,latitude_wgs84,geodata_latitude,poi_latitude
+    rule: latitude,latitude_wgs84,geodata_latitude,poi_latitude,geo_point_2d.lat
     type: field
     match: text
   longitude:
     key: longitude
     name: Longitude by known name
-    rule: longitude,longitude_wgs84,geodata_longtitude,poi_longitude
+    rule: longitude,longitude_wgs84,geodata_longtitude,poi_longitude,geo_point_2d.lon
     type: field
     match: text
   latitudepat:
