@@ -379,7 +379,7 @@ def cli3():
 @click.option(
     "--langs", "-l", default=None, help="List of languages to use. Comma separated"
 )
-@click.option("--format", "-f", default="long", help="Output format: short, full")
+@click.option("--format", "-f", default="full", help="Output format: short, full")
 @click.option("--output", "-o", default=None, help="Output JSON filename")
 def scan_file(filename, delimiter, limit, contexts, langs, format, output):
     """Match file"""
@@ -404,7 +404,7 @@ def cli4():
 @click.option(
     "--langs", "-l", default=None, help="List of languages to use. Comma separated"
 )
-@click.option("--format", "-f", default="long", help="Output format: short, long")
+@click.option("--format", "-f", default="full", help="Output format: short, full")
 @click.option("--output", "-o", default=None, help="Output JSON filename")
 def scan_db(connstr, schema, limit, contexts, langs, format, output):
     """Scan database using SQL alchemy connection string"""
@@ -438,7 +438,7 @@ def cli5():
 @click.option(
     "--langs", "-l", default=None, help="List of languages to use. Comma separated"
 )
-@click.option("--format", "-f", default="long", help="Output format: short, long")
+@click.option("--format", "-f", default="full", help="Output format: short, full")
 @click.option("--output", "-o", default=None, help="Output JSON filename")
 def scan_mongodb(
     host, port, dbname, username, password, limit, contexts, langs, format, output
