@@ -1,0 +1,12 @@
+name: fr-pii
+description: Person identifiable information (PII) for French language and French data
+context: pii
+lang: fr
+rules:
+  frbirthdayknown:
+    key: birthday
+    is_pii: True
+    name: French birthday by known field names
+    rule: date_de_naissance,date_naissance
+    type: field
+    match: text

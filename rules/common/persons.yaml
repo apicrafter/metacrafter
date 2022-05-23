@@ -3,25 +3,32 @@ description: Persons identifiers
 context: persons
 lang: common
 rules:
+  fullname:
+    key: person_fullname
+    is_pii: True
+    name: Person full name by known
+    rule: applicant_fullname,owner_fullname,person_fullname
+    type: field
+    match: text
   surname:
     key: person_surname
     is_pii: True
     name: Person surname by known
-    rule: surname,lastname,sur_name,last_name
+    rule: surname,lastname,sur_name,last_name,name_last,owner_last_name
     type: field
     match: text
   firstname:
     key: person_firstname
     is_pii: True
     name: Person firstname by known
-    rule: firstname,forename,first_name
+    rule: firstname,forename,first_name,candidate_first_name,owner_first_name,client_first_name
     type: field
     match: text
   midname:
     key: person_midname
     is_pii: True
     name: Person midname by known
-    rule: midname,secondname,middlename,mid_name,middle_name,second_name
+    rule: midname,secondname,middlename,mid_name,middle_name,second_name,
     type: field
     match: text
   firstnamepat:

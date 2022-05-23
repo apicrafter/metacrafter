@@ -17,7 +17,7 @@ rules:
   iso3166-alpha3:
     key: countrycode_alpha3
     name: ISO 3166 country code alpha 3
-    rule: abw,afg,ago,alb,and,ant,arb,are,arg,arm,asm,atg,aus,aut,aze,bdi,bel,ben,bfa,bgd,bgr,bhr,bhs,bih,blr,blz,bmu,bol,bra,brb,brn,btn,bwa,caf,can,che,chi,chl,chn,civ,cmr,cod,cog,col,com,cpv,cri,cub,cym,cyp,cze,deu,dji,dma,dnk,dom,dza,eap,eas,eca,ecs,ecu,egy,emu,eri,esp,est,eth,euu,fin,fji,fra,fro,fsm,gab,gbr,geo,gha,gib,gin,gmb,gnb,gnq,grc,grd,grl,gtm,gum,guy,hic,hkg,hnd,hpc,hrv,hti,hun,idn,imn,ind,irl,irn,irq,isl,isr,ita,jam,jor,jpn,kaz,ken,kgz,khm,kir,kna,kor,ksv,kwt,lac,lao,lbn,lbr,lby,lca,lcn,ldc,lic,lie,lka,lmc,lmy,lso,ltu,lux,lva,mac,mar,mco,mda,mdg,mdv,mea,mex,mhl,mic,mkd,mli,mlt,mmr,mna,mne,mng,mnp,moz,mrt,mus,mwi,mys,myt,nac,nam,ncl,ner,nga,nic,nld,noc,nor,npl,nzl,oec,oed,omn,pak,pan,per,phl,plw,png,pol,pri,prk,prt,pry,pse,pyf,qat,rou,rus,rwa,sas,sau,sdn,sen,sgp,slb,sle,slv,smr,som,srb,ssa,ssf,stp,sur,svk,svn,swe,swz,syc,syr,tca,tcd,tgo,tha,tjk,tkm,tls,ton,tto,tun,tur,tuv,tza,uga,ukr,umc,ury,usa,uzb,vct,ven,vir,vnm,vut,wld,wsm,yem,zaf,zmb,zwe,
+    rule: abw,afg,ago,alb,and,ant,arb,are,arg,arm,asm,atg,aus,aut,aze,bdi,bel,ben,bfa,bgd,bgr,bhr,bhs,bih,blr,blz,bmu,bol,bra,brb,brn,btn,bwa,caf,can,che,chi,chl,chn,civ,cmr,cod,cog,col,com,cpv,cri,cub,cym,cyp,cze,deu,dji,dma,dnk,dom,dza,eap,eas,eca,ecs,ecu,egy,emu,eri,esp,est,eth,euu,fin,fji,fra,fro,fsm,gab,gbr,geo,gha,gib,gin,gmb,gnb,gnq,grc,grd,grl,gtm,gum,guy,hic,hkg,hnd,hpc,hrv,hti,hun,idn,imn,ind,irl,irn,irq,isl,isr,ita,jam,jor,jpn,kaz,ken,kgz,khm,kir,kna,kor,ksv,kwt,lac,lao,lbn,lbr,lby,lca,lcn,ldc,lic,lie,lka,lmc,lmy,lso,ltu,lux,lva,mac,mar,mco,mda,mdg,mdv,mea,mex,mhl,mic,mkd,mli,mlt,mmr,mna,mne,mng,mnp,moz,mrt,mus,mwi,mys,myt,nac,nam,ncl,ner,nga,nic,nld,noc,nor,npl,nzl,oec,oed,omn,pak,pan,per,phl,plw,png,pol,pri,prk,prt,pry,pse,pyf,qat,rou,rus,rwa,sas,sau,sdn,sen,sgp,slb,sle,slv,smr,som,srb,ssa,ssf,stp,sur,svk,svn,swe,swz,syc,syr,tca,tcd,tgo,tha,tjk,tkm,tls,ton,tto,tun,tur,tuv,tza,uga,ukr,umc,ury,usa,uzb,vct,ven,vir,vnm,vut,wld,wsm,yem,zaf,zmb,zwe
     maxlen: 3
     minlen: 3
     priority: 1
@@ -40,17 +40,17 @@ rules:
   iso3166-alpha3imprecise:
     key: countrycode_alpha3
     name: ISO 3166 country code alpha 3
-    rule: abw,afg,ago,alb,and,ant,arb,are,arg,arm,asm,atg,aus,aut,aze,bdi,bel,ben,bfa,bgd,bgr,bhr,bhs,bih,blr,blz,bmu,bol,bra,brb,brn,btn,bwa,caf,can,che,chi,chl,chn,civ,cmr,cod,cog,col,com,cpv,cri,cub,cym,cyp,cze,deu,dji,dma,dnk,dom,dza,eap,eas,eca,ecs,ecu,egy,emu,eri,esp,est,eth,euu,fin,fji,fra,fro,fsm,gab,gbr,geo,gha,gib,gin,gmb,gnb,gnq,grc,grd,grl,gtm,gum,guy,hic,hkg,hnd,hpc,hrv,hti,hun,idn,imn,ind,irl,irn,irq,isl,isr,ita,jam,jor,jpn,kaz,ken,kgz,khm,kir,kna,kor,ksv,kwt,lac,lao,lbn,lbr,lby,lca,lcn,ldc,lic,lie,lka,lmc,lmy,lso,ltu,lux,lva,mac,mar,mco,mda,mdg,mdv,mea,mex,mhl,mic,mkd,mli,mlt,mmr,mna,mne,mng,mnp,moz,mrt,mus,mwi,mys,myt,nac,nam,ncl,ner,nga,nic,nld,noc,nor,npl,nzl,oec,oed,omn,pak,pan,per,phl,plw,png,pol,pri,prk,prt,pry,pse,pyf,qat,rou,rus,rwa,sas,sau,sdn,sen,sgp,slb,sle,slv,smr,som,srb,ssa,ssf,stp,sur,svk,svn,swe,swz,syc,syr,tca,tcd,tgo,tha,tjk,tkm,tls,ton,tto,tun,tur,tuv,tza,uga,ukr,umc,ury,usa,uzb,vct,ven,vir,vnm,vut,wld,wsm,yem,zaf,zmb,zwe,
+    rule: abw,afg,ago,alb,and,ant,arb,are,arg,arm,asm,atg,aus,aut,aze,bdi,bel,ben,bfa,bgd,bgr,bhr,bhs,bih,blr,blz,bmu,bol,bra,brb,brn,btn,bwa,caf,can,che,chi,chl,chn,civ,cmr,cod,cog,col,com,cpv,cri,cub,cym,cyp,cze,deu,dji,dma,dnk,dom,dza,eap,eas,eca,ecs,ecu,egy,emu,eri,esp,est,eth,euu,fin,fji,fra,fro,fsm,gab,gbr,geo,gha,gib,gin,gmb,gnb,gnq,grc,grd,grl,gtm,gum,guy,hic,hkg,hnd,hpc,hrv,hti,hun,idn,imn,ind,irl,irn,irq,isl,isr,ita,jam,jor,jpn,kaz,ken,kgz,khm,kir,kna,kor,ksv,kwt,lac,lao,lbn,lbr,lby,lca,lcn,ldc,lic,lie,lka,lmc,lmy,lso,ltu,lux,lva,mac,mar,mco,mda,mdg,mdv,mea,mex,mhl,mic,mkd,mli,mlt,mmr,mna,mne,mng,mnp,moz,mrt,mus,mwi,mys,myt,nac,nam,ncl,ner,nga,nic,nld,noc,nor,npl,nzl,oec,oed,omn,pak,pan,per,phl,plw,png,pol,pri,prk,prt,pry,pse,pyf,qat,rou,rus,rwa,sas,sau,sdn,sen,sgp,slb,sle,slv,smr,som,srb,ssa,ssf,stp,sur,svk,svn,swe,swz,syc,syr,tca,tcd,tgo,tha,tjk,tkm,tls,ton,tto,tun,tur,tuv,tza,uga,ukr,umc,ury,usa,uzb,vct,ven,vir,vnm,vut,wld,wsm,yem,zaf,zmb,zwe
     maxlen: 3
     minlen: 3
     priority: 1
     match: text
     type: data
-    imprecise: 1
+#    imprecise: 1
   languagetag:
     key: languagetag
     name: IETF language tags (RFC 5646)
-    rule: en-gb,ru,
+    rule: en-gb,af,am,ar,arn,as,az,ba,be,bg,bn,bo,br,bs,ca,co,cs,cy,da,de,dsb,dv,el,en,es,et,eu,fa,fi,fil,fo,fr,fy,ga,gd,gl,gsw,gu,ha,he,hi,hr,hsb,hu,hy,id,ig,ii,is,it,iu,ja,ka,kk,kl,km,kn,ko,kok,ky,lb,lo,lt,lv,mi,mk,ml,mn,moh,mr,ms,mt,my,nb,ne,nl,nn,no,nso,oc,or,pa,pl,prs,ps,pt,quc,quz,rm,ro,ru,rw,sa,sah,se,si,sk,sl,sma,smj,smn,sms,sq,sr,sv,sw,syr,ta,te,tg,th,tk,tn,tr,tt,tzm,ug,uk,ur,uz,vi,wo,xh,yo,zh,zu
     maxlen: 5
     minlen: 2
     type: data

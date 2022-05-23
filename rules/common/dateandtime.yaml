@@ -1,0 +1,95 @@
+name: commondateandtime
+description: Common date and time related rules
+context: datetime
+lang: common
+rules:
+  yearbydatafiltered:
+    key: year
+    name: Modern years in range 1001-2199 by data and fieldname
+    maxlen: 4
+    minlen: 4
+    rule: (Literal('1') + Word(nums, exact=3)) ^ (Literal('2') + Word('01', exact=1) + Word(nums, exact=2))
+    match: ppr
+    type: data
+    fieldrule: Optional(Word(printables)) + Literal('year') + Optional(Word(printables))
+    fieldrulematch: ppr
+  yearknown:
+    key: year
+    name: Year by known name
+    rule: year,yearnum
+    type: field
+    match: text
+  yearknownpat:
+    key: year
+    name: Year by known name pattern
+    rule: Word(printables) + "year" +  lineEnd
+    type: field
+    match: ppr
+  timestampknown:
+    key: timestamp
+    name: Timestamp by known name
+    rule: timestamp
+    type: field
+    match: text
+  timestampknownpat:
+    key: timestamp
+    name: Timestamp by known name pattern
+    rule: Word(printables) + "timestamp" +  lineEnd
+    type: field
+    match: ppr
+  timezoneknown:
+    key: timezone
+    name: Timezone by known name
+    rule: timezone
+    type: field
+    match: text
+  timezoneknownpat:
+    key: timezone
+    name: Timezone by known name pattern
+    rule: Word(printables) + "timezone" +  lineEnd
+    type: field
+    match: ppr
+  monthknownpat:
+    key: month
+    name: Month by known name pattern
+    rule: Word(printables) + Literal("month")
+    type: field
+    match: ppr
+  monthknown:
+    key: month
+    name: Month by known name
+    rule: month,monthnum
+    type: field
+    match: text
+  timebypat:
+    key: time
+    name: Time by pattern (10:00)
+    type: data
+    match: ppr
+    rule: Word("012", exact=1) + Word(nums, exact=1) + Literal(":") + Word("012345", exact=1) + Word(nums, exact=1)
+    validator: metacrafterext.rules.common.dateandtime.is_valid_time
+  timebypatmin:
+    key: time
+    name: Time by pattern (10:00:00)
+    type: data
+    match: ppr
+    rule: Word("012", exact=1) + Word(nums, exact=1) + Literal(":") + Word("012345", exact=1) + Word(nums, exact=1) + Word("012345", exact=1) + Word(nums, exact=1)
+    validator: metacrafterext.rules.common.dateandtime.is_valid_time
+  timerangebypat:
+    key: timerange
+    name: Time range by pattern (10:00-15:00)
+    type: data
+    match: ppr
+    rule: Word("012", exact=1) + Word(nums, exact=1) + Literal(":") + Word("012345", exact=1) + Word(nums, exact=1) + Literal("-") + Word("012", exact=1) + Word(nums, exact=1) + Literal(":") + Word("012345", exact=1) + Word(nums, exact=1)
+    validator: metacrafterext.rules.common.dateandtime.is_valid_timerange
+# This rule generates a lot of False positives since integer range 1001-2199 is quite common
+# so it marked as imprecise rule and could be filtered if it's set
+  yearbydataimprecise:
+    key: year
+    name: Modern years in range 1001-2199 by data
+    maxlen: 4
+    minlen: 4
+    rule: (Literal('1') + Word(nums, exact=3)) ^ (Literal('2') + Word('01', exact=1) + Word(nums, exact=2))
+    match: ppr
+    type: data
+    imprecise: 1

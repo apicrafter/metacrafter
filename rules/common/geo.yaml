@@ -3,23 +3,29 @@ description: Common geodata
 context: geo
 lang: common
 rules:
+  geopointbyname:
+    key: geopoint
+    name: Geopoint by knownname
+    rule: geo_point_2d,point_geo,geopoint,geo_point,position_geographique,geo_coordinates,coordonnees_geographiques
+    type: field
+    match: text
   addressknown:
     key: address
     is_pii: True
     name: Address
-    rule: address,postaladdress,actualaddress,fulladdress,address_legal,legaladdress,postal address,post address
+    rule: address,postaladdress,actualaddress,fulladdress,address_legal,legaladdress,postal address,post address,location_address,location_1_address,address_1
     type: field
     match: text
   latitude:
     key: latitude
     name: Latitude by known name
-    rule: latitude,latitude_wgs84,geodata_latitude,poi_latitude,geo_point_2d.lat
+    rule: latitude,latitude_wgs84,geodata_latitude,poi_latitude
     type: field
     match: text
   longitude:
     key: longitude
     name: Longitude by known name
-    rule: longitude,longitude_wgs84,geodata_longtitude,poi_longitude,geo_point_2d.lon
+    rule: longitude,longitude_wgs84,geodata_longtitude,poi_longitude
     type: field
     match: text
   latitudepat:
@@ -62,7 +68,7 @@ rules:
     key: postindex
     is_pii: True
     name: Post index code (ZIP code and e.t.c) by known name
-    rule: postindex,postIndex,post_index,postcode,zip_code,zipcode,postalcode,post index
+    rule: postindex,postIndex,post_index,postcode,zip_code,zipcode,postalcode,post index,zip_code,postal_code,location_zip,address_zip
     match: text
     type: field
   streetknown:
@@ -76,7 +82,7 @@ rules:
     key: city
     is_pii: True
     name: City/town name by field name
-    rule: town,city,cityname,location (city)
+    rule: town,city,cityname,location (city),location_city,location_1_city,address_city,address_city
     match: text
     type: field
   countryknown:
@@ -85,3 +91,5 @@ rules:
     rule: country,countryname,country_name
     match: text
     type: field
+
+ 
