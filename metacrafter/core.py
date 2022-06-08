@@ -105,7 +105,9 @@ class CrafterCmd(object):
                     outres = prepared
                     headers = ["key", "ftype", "tags", "matches", 'datatype_url']
                 if len(outres) > 0:
+                    print('Table: %s' % (table))
                     print(tabulate(outres, headers=headers))
+                    print()
         if output:
             print("Output written to %s" % (output))
             f = open(output, "w", encoding="utf8")
@@ -335,6 +337,7 @@ class CrafterCmd(object):
         for table in tables:
             print("- table %s" % (table))
             items = list(db[table].find().limit(limit))
+#            print(items)
             prepared, results = self.scan_data(items, limit, contexts, langs)
             db_results[table] = [prepared, results]
         self._write_db_results(db_results, dformat, output)
@@ -426,12 +429,12 @@ def cli5():
 
 
 @cli5.command()
-@click.option("--host", "-h", default="localhost", help="SQLAlchemy connection string")
-@click.option("--port", "-p", default=27017, help="Database schema. For Postgres DBs")
-@click.option("--dbname", "-d", default="test", help="Database name")
+@click.option("--host", "-h", default="localhost", help="MongoDB hostname, default localhost")
+@click.option("--port", "-p", default=27017, help="MongoDB port, default 27017")
+@click.option("--dbname", "-d", default="test", help="Database name, default test")
 @click.option("--username", "-u", default=None, help="Username. Optional")
 @click.option("--password", "-P", default=None, help="Password. Optional")
-@click.option("--limit", "-n", default="1000", help="Limit of records")
+@click.option("--limit", "-n", default="1000", help="Limit of records, default 1000")
 @click.option(
     "--contexts", "-x", default=None, help="List of contexts to use. Comma separates"
 )

@@ -11,7 +11,7 @@ rules:
     type: field
     match: text
   deathdayknown:
-    key: datetime
+    key: deathday
     is_pii: True
     name: Deathday by known field names
     rule: deathday,day_of_death
@@ -46,7 +46,7 @@ rules:
     type: field
     match: text
   creditcardbyknown:
-    key: creditcard
+    key: bankcard
     is_pii: True
     name: Credit card by known name
     rule: creditcard,credit_card

@@ -3,6 +3,14 @@ description: Internet infrastructure identifiers
 context: internet
 lang: common
 rules:
+  ipvaddr:
+    key: ipaddr
+    name: IP address (IPv4 or IPv6)
+    rule: ipaddr,ipaddress,ip_addr,ip_address
+    match: ppr
+    type: field
+    match: text
+    is_pii: True
   ipv4:
     key: ipv4
     name: IPv4 address

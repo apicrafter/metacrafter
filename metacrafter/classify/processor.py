@@ -38,8 +38,8 @@ BASE_URL = "https://registry.apicrafter.io/datatype/{dataclass}"
 class TableScanResult:
     """Results of table scan classification"""
 
-    def __init__(self, results=[]):
-        self.results = results
+    def __init__(self):
+        self.results = []
         pass
 
     def add(self, result):
