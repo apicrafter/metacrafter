@@ -147,5 +147,5 @@ Example Russian cadastral number
 
 ## Commercial support
 
-Please write apicrafter@apicrafter.ru or ivan@begtin.tech to request beta access to commercial API.
+Please write ibegtin@apicrafter.io or ivan@begtin.tech to request beta access to commercial API.
 Commercial API support 195 fields and data rules and provided with dedicated support.
