@@ -1,0 +1,20 @@
+name: en-ukgeo
+description: English (UK) geographic locations and codes
+context: geo
+lang: en
+rules:
+  ukwardcodebyknown:
+    key: ukwardcode
+    name: UK ward code by known name
+    match: text
+    type: field
+    rule: ward code,ward_code
+  ukwardnamebyknown:
+    key: ukwardname
+    name: UK ward name by known name
+    match: text
+    type: field
+    rule: ward name,ward_name,wardname,ward
+
+
+  

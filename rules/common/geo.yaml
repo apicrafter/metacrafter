@@ -82,7 +82,7 @@ rules:
     key: city
     is_pii: True
     name: City/town name by field name
-    rule: town,city,cityname,location (city),location_city,location_1_city,address_city,address_city
+    rule: town,city,cityname,location (city),location_city,location_1_city,address_city,city_name
     match: text
     type: field
   countryknown:

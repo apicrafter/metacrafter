@@ -28,7 +28,7 @@ rules:
     key: person_midname
     is_pii: True
     name: Person midname by known
-    rule: midname,secondname,middlename,mid_name,middle_name,second_name,
+    rule: midname,secondname,middlename,mid_name,middle_name,second_name
     type: field
     match: text
   firstnamepat:

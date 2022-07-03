@@ -1,0 +1,12 @@
+name: eu-industry
+description: EU industry classifiers and identifiers
+context: industry
+lang: en
+rules:
+  cpvcodeknown:
+    key: cpvcode
+    is_pii: False
+    name: CPV code
+    rule: codecpv,codecpv_original,cpv_code,code_cpv_principal,cpv,code_cpv
+    match: text
+    type: field

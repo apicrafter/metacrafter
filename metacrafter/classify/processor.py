@@ -127,6 +127,7 @@ class RulesProcessor:
 
     def import_rules(self, filename):
         """Import rules from file"""
+        logging.debug('Loading rules file %s' % (filename))
         f = open(filename, "r", encoding="utf8")
         ruledata = yaml.load(f, Loader=yaml.FullLoader)
         f.close()

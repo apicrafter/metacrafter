@@ -3,7 +3,7 @@ description: Basic identifiers
 context: identifiers
 lang: common
 rules:
-  uuid:
+  uuidbyvalue:
     key: uuid
     name: Universally unique identifier (UUID)
     rule: Word(hexnums, exact=8) + Literal('-').suppress() + Word(hexnums, exact=4) + Literal('-').suppress() + Word(hexnums, exact=4) + Literal('-').suppress() + Word(hexnums, exact=4) + Literal('-').suppress() + Word(hexnums, exact=12)
@@ -12,6 +12,12 @@ rules:
     priority: 1
     match: ppr
     type: data
+  uuidbyname:
+    key: uuidb
+    name: Universally unique identifier (UUID) by name
+    rule: uuid
+    match: text
+    type: field
   guid:
     key: guid
     name: Globally unique identifier (GUID)

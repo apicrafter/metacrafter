@@ -1,0 +1,14 @@
+name: en-ukmedical
+description: English (UK) medical codes
+context: medical
+lang: en
+rules:
+  bnfcode:
+    key: ukbnfcode
+    name: UK BNF drug code
+    match: text
+    type: field
+    rule: bnf code
+
+
+  

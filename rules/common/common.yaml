@@ -1,0 +1,84 @@
+name: common
+description: Common data types (email, url's and etc)
+context: common
+lang: common
+rules:
+  filenamebyvalue:
+    key: filename
+    name: Name of the file
+    maxlen: 512
+    minlen: 5
+    priority: 1
+    match: func
+    type: data
+    rule: metacrafterext.rules.common.common._validate_filename
+  filenamebyknown:
+    key: filename
+    name: Name of the file by known name
+    maxlen: 512
+    minlen: 5
+    priority: 1
+    match: text
+    type: data
+    rule: filename,file_name
+  phone:
+    key: phone
+    is_pii: True
+    name: Phone number
+    maxlen: 100
+    minlen: 3
+    priority: 1
+    type: data
+    match: func
+    rule: metacrafterext.rules.common.common._validate_phone
+  mimetypebyknown:
+    key: mimetype
+    name: Mimetype / content type by known names
+    priority: 1
+    match: text
+    type: field
+    rule: mimetype,mime_type,content_type
+  mimetypebyvalue:
+    key: mimetype
+    name: Mimetype / content type by value
+    priority: 1
+    maxlen: 100
+    minlen: 10
+    match: text
+    type: data
+    rule: application/pdf,application/json,application/octet-stream,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/tiff,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip,text/csv,text/plain,application/vnd.google-earth.kml+xml,application/x-zip-compressed,application/vnd.geo+json,application/vnd.ms-excel.sheet.macroenabled.12,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/xml
+  phoneknown:
+    key: phone
+    is_pii: True
+    name: Phone number by known name
+    rule: phone,fax,phoneNumber,contact_phone,telephone,phone number,phone_number,business_phone,phonenumber,phone_no,contactphone,phone_1,phone1,phone2,fax_number,contact_fax
+    type: field
+    match: text
+  phoneknownpat:
+    key: phone
+    is_pii: True
+    name: Phone number by known pattern
+    rule: Word(printables) + "phone" +  lineEnd
+    type: field
+    match: ppr
+  phoneknownprefix:
+    key: phone
+    is_pii: True
+    name: Phone number by known pattern
+    rule: '"phone" + Word(printables) + lineEnd'
+    type: field
+    match: ppr
+  faxknownpat:
+    key: phone
+    is_pii: True    
+    name: Phone number by known pattern (Fax)
+    rule: Word(printables) + "fax" +  lineEnd
+    type: field
+    match: ppr
+  uniqueidbyknown:
+    key: id
+    name: Unique id by known names
+    priority: 1
+    match: text
+    type: field
+    rule: id,uniqueid,unique_id,uniqid,uniq_id,unique_key,uniquekey,uniqkey,record_id,objectid,object_id,id_unique,id_uniq,globalid,global_id

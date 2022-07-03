@@ -3,6 +3,18 @@ description: Common date and time related rules
 context: datetime
 lang: common
 rules:
+  datetimeknown:
+    key: datetime
+    name: DateTime known names
+    rule: created_at,updated_at,created,updated,createdAt,updatedAt,creat_dt,createddate,deleted_at,creation_date,end_date
+    type: field
+    match: text
+  dateknown:
+    key: date
+    name: Date by known name
+    rule: date
+    type: field
+    match: text
   yearbydatafiltered:
     key: year
     name: Modern years in range 1001-2199 by data and fieldname
@@ -26,13 +38,13 @@ rules:
     type: field
     match: ppr
   timestampknown:
-    key: timestamp
+    key: unixtime
     name: Timestamp by known name
     rule: timestamp
     type: field
     match: text
   timestampknownpat:
-    key: timestamp
+    key: unixtime
     name: Timestamp by known name pattern
     rule: Word(printables) + "timestamp" +  lineEnd
     type: field

@@ -1,0 +1,13 @@
+name: en-geo
+description: Geographic names in English
+context: geo
+lang: en
+rules:
+  encountrynamebyvalue:
+    key: encountryname
+    name: Country name by value
+    rule: China,India,United States,Indonesia,Pakistan,Brazil,Nigeria,Bangladesh,Russia,Mexico,Japan,Ethiopia,Philippines,Egypt,Vietnam,DR Congo,Iran,Turkey,Germany,France,United Kingdom,Thailand,South Africa,Tanzania,Italy,Myanmar,South Korea,Colombia,Kenya,Argentina,Spain,Algeria,Sudan,Uganda,Iraq,Ukraine,Canada,Poland,Morocco,Uzbekistan,Saudi Arabia,Peru,Afghanistan,Malaysia,Angola,Mozambique,Ghana,Yemen,Nepal,Venezuela,Ivory Coast,Madagascar,Australia,North Korea,Cameroon,Niger,Taiwan,Sri Lanka,Burkina Faso,Mali,Chile,Kazakhstan,Romania,Malawi,Zambia,Syria,Ecuador,Netherlands,Senegal,Guatemala,Chad,Somalia,Zimbabwe,Cambodia,South Sudan,Rwanda,Guinea,Burundi,Benin,Bolivia,Tunisia,Haiti,Belgium,Jordan,Cuba,Greece,Dominican Republic,Czech Republic,Sweden,Portugal,Azerbaijan,Hungary,Honduras,Israel,Tajikistan,Belarus,United Arab Emirates,Papua New Guinea,Austria,Switzerland,Sierra Leone,Togo,Paraguay,Laos,Libya,Serbia,El Salvador,Lebanon,Kyrgyzstan,Nicaragua,Bulgaria,Turkmenistan,Denmark,Congo,Central African Republic,Finland,Singapore,Slovakia,Norway,Palestine,Costa Rica,New Zealand,Ireland,Kuwait,Liberia,Oman,Panama,Mauritania,Croatia,Georgia,Eritrea,Uruguay,Mongolia,Bosnia and Herzegovina,Armenia,Albania,Qatar,Lithuania,Jamaica,Moldova,Namibia,Gambia,Botswana,Gabon,Lesotho,Slovenia,Latvia,North Macedonia,Kosovo,Guinea-Bissau,Equatorial Guinea,Bahrain,Trinidad and Tobago,Estonia,East Timor,Mauritius,Eswatini,Djibouti,Fiji,Cyprus,Comoros,Bhutan,Guyana,Solomon Islands,Luxembourg,Montenegro,Western Sahara,Suriname,Cape Verde,Malta,Belize,Brunei,Bahamas,Maldives,Northern Cyprus,Iceland,Transnistria,Vanuatu,Barbados,Abkhazia
+    maxlen: 24
+    minlen: 4
+    type: data
+    match: text

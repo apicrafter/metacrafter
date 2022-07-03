@@ -44,7 +44,8 @@ install_requires = [
     'sqlalchemy',
     'validators',
     'click',
-    'tabulate'
+    'tabulate',
+    'pydantic'
 ]
 
 

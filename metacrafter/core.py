@@ -27,6 +27,11 @@ DEFAULT_RULEPATH = [
 
 class CrafterCmd(object):
     def __init__(self):
+        #logging.getLogger().addHandler(logging.StreamHandler())
+        logging.basicConfig(
+          format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+          level=logging.DEBUG)
+ 
         self.processor = RulesProcessor()
         self.prepare()
         pass
@@ -40,8 +45,15 @@ class CrafterCmd(object):
 
     def prepare(self):
         rulepath = []
+        filepath = None
         if os.path.exists(DEFAULT_METACRAFTER_CONFIGFILE):
-            f = open(DEFAULT_METACRAFTER_CONFIGFILE, "r", encoding="utf8")
+            logging.debug('Local .metacrafter config exists. Using it')
+            filepath = DEFAULT_METACRAFTER_CONFIGFILE
+        elif os.path.exists(os.path.join(os.path.expanduser('~'), DEFAULT_METACRAFTER_CONFIGFILE)):
+            logging.debug('Home dir .metacrafter config exists. Using it')
+            filepath = os.path.join(os.path.expanduser('~'), DEFAULT_METACRAFTER_CONFIGFILE)
+        if filepath:
+            f = open(filepath, "r", encoding="utf8")
             config = yaml.load(f, Loader=yaml.FullLoader)
             f.close()
             if config:

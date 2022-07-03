@@ -1,0 +1,11 @@
+name: us-govfinances
+description: US known field names used in government finances
+context: government
+lang: en
+rules:
+ cfdanumberbyknown:
+    key: cfdanumber
+    name: CFDA number by known name
+    rule: cfda_number,cfda,cfda_program_number,federal_cfda_number
+    type: field
+    match: text

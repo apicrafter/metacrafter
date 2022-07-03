@@ -9,3 +9,4 @@ PyYAML
 click
 tabulate
 chardet
+pydantic

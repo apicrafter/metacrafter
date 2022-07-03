@@ -3,11 +3,16 @@ description: Internet infrastructure identifiers
 context: internet
 lang: common
 rules:
+  domainname:
+    key: domainname
+    name: Domain or host name
+    rule: domainname,domain_name,host_name,hostname
+    match: text
+    type: field
   ipvaddr:
     key: ipaddr
     name: IP address (IPv4 or IPv6)
     rule: ipaddr,ipaddress,ip_addr,ip_address
-    match: ppr
     type: field
     match: text
     is_pii: True
@@ -44,3 +49,55 @@ rules:
     priority: 1
     match: ppr
     type: data
+  emailknown:
+    key: email
+    is_pii: True
+    name: Email
+    rule: email,e_mail,e-mail,contact e-mail,email address,contactemail,email_address,contact_email,email_comercial
+    type: field
+    match: text
+  emailknownpat:
+    key: email
+    is_pii: True
+    name: Email by pattern
+    rule: Word(alphanums) + "email" +  lineEnd
+    type: field
+    match: ppr
+  emailknownprefix:
+    key: email
+    is_pii: True
+    name: Email by prefix pat
+    rule: '"email_" + Word(alphanums) +  lineEnd'
+    type: field
+    match: ppr
+  websiteknown:
+    key: url
+    name: URL/website by known name
+    rule: url,website,uri,web_site,website address,website_address,website_url,image_url,download_url,site_url
+    type: field
+    match: text
+  urlknownpat:
+    key: url
+    name: URL/website by known name pattern
+    rule: Word(printables) + "url" +  lineEnd
+    type: field
+    match: ppr
+  url:
+    key: url
+    name: Web URL
+    maxlen: 1024
+    minlen: 5
+    priority: 1
+    match: func
+    type: data
+    rule: metacrafterext.rules.common.common._validate_url
+  email:
+    key: email
+    is_pii: True
+    name: Email
+    maxlen: 1024
+    minlen: 3
+    priority: 1
+    type: data
+    match: func
+    rule: metacrafterext.rules.common.common._validate_email
