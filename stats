@@ -1,0 +1,25 @@
+Rule types:
+- field based rules 70
+- data based rules 39
+Context:
+- common 18
+- companies 1
+- crypto 3
+- datetime 20
+- geo 23
+- government 1
+- identifiers 3
+- industry 1
+- internet 10
+- medical 1
+- objectids 3
+- persons 8
+- pii 14
+- science 2
+- vehicles 1
+Language:
+- common 85
+- en 18
+- fr 1
+- ru 5
+Data/time patterns (qddate): 312
