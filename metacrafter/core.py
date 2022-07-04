@@ -316,7 +316,7 @@ class CrafterCmd(object):
             for table in inspector.get_table_names(schema=schema):
                 print("- table %s" % (table))
                 try:
-                    query = "SELECT * FROM %s LIMIT %d" % (table, limit)
+                    query = "SELECT * FROM '%s' LIMIT %d" % (table, limit)
                     queryres = con.execute(query)
                 except sqlalchemy.exc.ProgrammingError as e:
                     print("Error processing table %s: %s" % (table, str(e)))

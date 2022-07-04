@@ -1,5 +1,5 @@
 name: common
-description: Common data types (email, url's and etc)
+description: Common data types (email, url and etc)
 context: common
 lang: common
 rules:
@@ -19,7 +19,7 @@ rules:
     minlen: 5
     priority: 1
     match: text
-    type: data
+    type: field
     rule: filename,file_name
   phone:
     key: phone
