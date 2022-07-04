@@ -24,7 +24,7 @@ Databases support:
 * MongoDB
 
 Metacrafter key features:
-* 25 basic and PII data labeling rules
+* 109 labeling rules
 * all labels metadata collected into [Metacrafter registry](https://github.com/apicrafter/metacrafter-registry ) public repository
 * 312 date detection rules/patterns, date detection using [qddate](https://github.com/ivbeg/qddate), "quick and dirty" date detection library
 * extendable set of rules using PyParsing, exact text match and validation functions
@@ -144,6 +144,38 @@ Example Russian cadastral number
     match: ppr
     type: data
 ```
+
+## Detailed stats
+
+Rule types:
+- field based rules 70
+- data based rules 39
+
+Context:
+- common 18
+- companies 1
+- crypto 3
+- datetime 20
+- geo 23
+- government 1
+- identifiers 3
+- industry 1
+- internet 10
+- medical 1
+- objectids 3
+- persons 8
+- pii 14
+- science 2
+- vehicles 1
+
+Language:
+- common 85
+- en 18
+- fr 1
+- ru 5
+
+Data/time patterns (qddate): 312
+
 
 ## Commercial support
 
