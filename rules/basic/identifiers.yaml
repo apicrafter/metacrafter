@@ -13,7 +13,7 @@ rules:
     match: ppr
     type: data
   uuidbyname:
-    key: uuidb
+    key: uuid
     name: Universally unique identifier (UUID) by name
     rule: uuid
     match: text
