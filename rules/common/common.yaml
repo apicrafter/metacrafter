@@ -1,5 +1,5 @@
 name: common
-description: Common data types (email, url and etc)
+description: Common data types (email, urls and etc)
 context: common
 lang: common
 rules:

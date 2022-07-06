@@ -3,9 +3,9 @@ description: Internet infrastructure identifiers
 context: internet
 lang: common
 rules:
-  domainname:
-    key: domainname
-    name: Domain or host name
+  fqdnbyknown:
+    key: fqdn
+    name: Domain or host name (FQDN) by known names
     rule: domainname,domain_name,host_name,hostname
     match: text
     type: field
@@ -82,22 +82,3 @@ rules:
     rule: Word(printables) + "url" +  lineEnd
     type: field
     match: ppr
-  url:
-    key: url
-    name: Web URL
-    maxlen: 1024
-    minlen: 5
-    priority: 1
-    match: func
-    type: data
-    rule: metacrafterext.rules.common.common._validate_url
-  email:
-    key: email
-    is_pii: True
-    name: Email
-    maxlen: 1024
-    minlen: 3
-    priority: 1
-    type: data
-    match: func
-    rule: metacrafterext.rules.common.common._validate_email

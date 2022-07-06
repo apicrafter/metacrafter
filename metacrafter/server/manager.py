@@ -1,21 +1,10 @@
-from flask import (
-    Flask,
-    json,
-    jsonify,
-    redirect,
-    render_template,
-    send_file,
-    send_from_directory,
-    request,
-    url_for,
-    flash,
-    Response,
-)
-
 import logging
 
-from .api import add_api_rules
+from flask import (
+    Flask,
+)
 
+from .api import add_api_rules
 
 MANAGE_PREFIX = ""
 CLASSIFY_HOST = "127.0.0.1"

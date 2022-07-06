@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 import typer
-from metacrafter.classify.processor import RulesProcessor
 import yaml
+
+from metacrafter.classify.processor import RulesProcessor
 
 RULEPATHS = [
 			'..\/rules', 

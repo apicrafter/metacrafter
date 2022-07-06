@@ -1,30 +1,18 @@
-import logging
-
-from pyparsing import (
-    Literal,
-    Optional,
-    ParseException,
-    White,
-    Word,
-    alphanums,
-    alphas,
-    hexnums,
-    lineEnd,
-    lineStart,
-    nums,
-    oneOf,
-    CaselessLiteral,
-    Group,
-    OneOrMore,
-    Combine,
-    printables,
-)
-import yaml
 import glob
 import importlib
+import logging
 from pathlib import Path
 
-from .utils import headers, get_dict_value, dict_to_columns
+import yaml
+from pyparsing import (
+    ParseException,
+    lineEnd,
+    lineStart,
+    oneOf,
+)
+
+from .utils import headers, dict_to_columns
+from pyparsing import LineEnd, LineStart, Word, oneOf, Literal, CaselessLiteral, alphas, alphanums, hexnums, Optional, printables, nums
 
 DEFAULT_MAX_LEN = 100
 DEFAULT_MIN_LEN = 3
@@ -429,7 +417,7 @@ class RulesProcessor:
                                 try:
                                     res = rule["f_compiled"].parseString(shortfield)
                                     rules.append(rule)
-                                except ParseException:
+                                except ParseException as e:
                                     pass
                             elif rule["fieldrulematch"] == "text":
                                 if shortfield.lower() in rule["fieldkeywords"]:

@@ -1,9 +1,10 @@
-from datetime import datetime, date
+import csv
 import logging
+import zipfile
+from datetime import datetime, date
+
 import bson
 import orjson
-import csv
-import zipfile
 from qddate import DateParser
 
 DEFAULT_DICT_SHARE = 10

@@ -1,0 +1,11 @@
+name: softwarecommon
+description: Software identifiers
+context: software
+lang: common
+rules:
+  filesizebyknown:
+    key: filesize
+    name: File size by name
+    rule: file_size,filesize
+    type: field
+    match: text

@@ -35,7 +35,7 @@ rules:
     key: password
     is_pii: True
     name: Password by known field name
-    rule: password,passwd,user_password,encrypted_password,user_password,password_digest,password_salt
+    rule: password,passwd,user_password,encrypted_password,user_password,password_digest,password_salt,password_hash,encryptedpassword,passwordfieldZ
     type: field
     match: text
   passportbyknown:
@@ -56,6 +56,6 @@ rules:
     key: username
     is_pii: True
     name: User name by known name
-    rule: username,userid,login,user_name,user_id,user_nm,login_username
+    rule: username,userid,login,user_name,user_id,user_nm,login_username,usernamefield
     type: field
     match: text

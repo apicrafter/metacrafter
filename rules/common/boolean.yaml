@@ -15,3 +15,58 @@ rules:
     rule: yes,no
     match: text
     type: data
+  participleprefixrule:
+    key: boolean
+    name: Boolean with number of common prefixes and integer
+    rule: '0,1'
+    maxlen: 1
+    minlen: 1
+    priority: 1
+    match: text
+    type: data
+    fieldrule: valid,enabled,active,included,enabled,confirmed,deleted,changed,added,updated,modified
+    fieldrulematch: text
+  isprefixrule:
+    key: boolean
+    name: Boolean with "is_" prefix
+    rule: '0,1'
+    maxlen: 1
+    minlen: 1
+    priority: 1
+    match: text
+    type: data
+    fieldrule: CaselessLiteral('is') + Optional("_") + Optional(Word(printables))
+    fieldrulematch: ppr
+  showprefixrule:
+    key: boolean
+    name: Boolean with "show_" prefix
+    rule: '0,1'
+    maxlen: 1
+    minlen: 1
+    priority: 1
+    match: text
+    type: data
+    fieldrule: CaselessLiteral('show')+ Optional("_") + Optional(Word(printables))
+    fieldrulematch: ppr
+  hasprefixrule:
+    key: boolean
+    name: Boolean with "has_" prefix
+    rule: '0,1'
+    maxlen: 1
+    minlen: 1
+    priority: 1
+    match: text
+    type: data
+    fieldrule: CaselessLiteral('has') + Optional("_") + Optional(Word(printables))
+    fieldrulematch: ppr
+  flagpostfixrule:
+    key: boolean
+    name: Boolean with "_flag" postfix
+    rule: '0,1'
+    maxlen: 10
+    minlen: 1
+    priority: 1
+    match: text
+    type: data
+    fieldrule: Word(alphanums) + Optional("_") + CaselessLiteral('flag')
+    fieldrulematch: ppr

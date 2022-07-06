@@ -1,8 +1,10 @@
 #!/usr/bin/env python
-import typer
-from collections import Counter, defaultdict
 import re
+from collections import Counter, defaultdict
 from functools import reduce
+
+import typer
+
 
 def collection_all_digits(c):
   'Returns True if all elements of the collection are digits.'

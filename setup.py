@@ -1,7 +1,7 @@
 # This is purely the result of trial and error.
 
-import sys
 import codecs
+import sys
 
 from setuptools import setup, find_packages
 from setuptools.command.test import test as TestCommand

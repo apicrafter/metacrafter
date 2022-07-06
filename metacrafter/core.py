@@ -1,20 +1,22 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
-import os
-import logging
 import csv
-import qddate.patterns
-import qddate
+import json
+import logging
+import os
+
+import bson
 import click
 import orjson
+import pandas
+import qddate
+import qddate.patterns
+import yaml
 from tabulate import tabulate
+
 from metacrafter.classify.processor import RulesProcessor, BASE_URL
 from metacrafter.classify.stats import Analyzer
 from metacrafter.classify.utils import detect_delimiter, detect_encoding
-import yaml
-import bson
-import pandas
-import json
 
 SUPPORTED_FILE_TYPES = ["jsonl", "bson", "csv", "json"]
 BINARY_DATA_FORMATS = ["bson", "parquet"]
