@@ -10,3 +10,4 @@ click
 tabulate
 chardet
 pydantic
+pytest
