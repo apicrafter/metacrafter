@@ -15,7 +15,7 @@ class RegistryClient:
         """Preloads all semantic data types from registry"""
         self.cached = requests.get(self.connstr + '/registry.json').json()
 
-    def list(self):
+    def getlist(self):
         """List all semantic types ids"""
         if not self.cached:
             self.preload()
