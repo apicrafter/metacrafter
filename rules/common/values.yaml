@@ -1,0 +1,11 @@
+name: values
+description: Numerical/float values
+context: values
+lang: common
+rules:
+  percentagebyfield:
+    key: percentage
+    name: Percentage field
+    rule: Literal('_').suppress() + (Literal('percentage') ^ Literal('percent'))
+    type: field
+    match: ppr
