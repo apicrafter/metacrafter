@@ -3,26 +3,6 @@ description: Objects unique identifiers
 context: objectids
 lang: common
 rules:
-  isbn13:
-    key: isbn13
-    name: International Standard Book Number (ISBN)
-    rule: Word(nums, exact=3) + Literal('-').suppress() + Word(nums, exact=1) + Literal('-').suppress() + Word(nums, exact=2) + Literal('-').suppress() + Word(nums, exact=6) + Literal('-').suppress() + Word(nums, exact=1)
-    validator: metacrafterext.rules.common.objects.valid_isbn13
-    maxlen: 17
-    minlen: 17
-    priority: 1
-    match: ppr
-    type: data
-  isbn10:
-    key: isbn10
-    name: International Standard Book Number (ISBN)
-    rule: Word(nums, exact=1) + Literal('-').suppress() + Word(nums, exact=2) + Literal('-').suppress() + Word(nums, exact=6) + Literal('-').suppress() + Word(nums, exact=1)
-    validator: metacrafterext.rules.common.objects.valid_isbn10
-    maxlen: 13
-    minlen: 13
-    priority: 1
-    match: ppr
-    type: data
   isbnbyname:
     key: isbn13
     name: International Standard Book Number (ISBN) by known name

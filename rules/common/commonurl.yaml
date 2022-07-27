@@ -3,7 +3,16 @@ description: Common URL data types
 context: common
 lang: common
 rules:
-  url:
+  fqdnbyvalidators:
+    key: fqdn
+    name: Full qualified domain name using validators
+    maxlen: 1024
+    minlen: 5
+    priority: 1
+    match: func
+    type: data
+    rule: validators.domain
+  urlbyvalidators:
     key: url
     name: Web URL
     maxlen: 1024
@@ -12,7 +21,7 @@ rules:
     match: func
     type: data
     rule: validators.url
-  urlknownpat:
+  urlbyknownpat:
     key: url
     name: URL/website by known name pattern
     rule: Word(printables) + "url" +  lineEnd

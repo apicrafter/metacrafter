@@ -3,15 +3,6 @@ description: Common data types (email, urls and etc)
 context: common
 lang: common
 rules:
-  filenamebyvalue:
-    key: filename
-    name: Name of the file
-    maxlen: 512
-    minlen: 5
-    priority: 1
-    match: func
-    type: data
-    rule: metacrafterext.rules.common.common._validate_filename
   filenamebyknown:
     key: filename
     name: Name of the file by known name
@@ -21,16 +12,6 @@ rules:
     match: text
     type: field
     rule: filename,file_name
-  phone:
-    key: phone
-    is_pii: True
-    name: Phone number
-    maxlen: 100
-    minlen: 3
-    priority: 1
-    type: data
-    match: func
-    rule: metacrafterext.rules.common.common._validate_phone
   mimetypebyknown:
     key: mimetype
     name: Mimetype / content type by known names

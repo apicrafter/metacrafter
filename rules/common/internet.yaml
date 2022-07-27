@@ -2,7 +2,31 @@ name: internet
 description: Internet infrastructure identifiers
 context: internet
 lang: common
-rules:
+rules: 
+  subnetbyknown:
+    key: ipsubnet
+    name: IP v4/v6 subnet by known name
+    rule: cidr
+    match: text
+    type: field
+  asnbyprefixname:
+    key: asn
+    name: Autonomous system network (ASN) by value and name
+    maxlen: 8
+    minlen: 3
+    rule: Literal('AS') + Word(nums, max=5)
+    type: data
+    match: ppr
+  asnbyvalue:
+    key: asn
+    name: Autonomous system network (ASN) by value and name
+    maxlen: 7
+    minlen: 1
+    rule: Word(nums, max=5)
+    type: data
+    match: ppr
+    fieldrule: asn
+    fieldrulematch: text  
   fqdnbyknown:
     key: fqdn
     name: Domain or host name (FQDN) by known names
@@ -16,39 +40,6 @@ rules:
     type: field
     match: text
     is_pii: True
-  ipv4:
-    key: ipv4
-    name: IPv4 address
-    rule: Word(nums, min=1, max=3) + 3*('.'+Word(nums, min=1, max=4))
-    validator: metacrafterext.rules.common.internet.validate_ipv4
-    maxlen: 15
-    minlen: 7
-    priority: 1
-    match: ppr
-    type: data
-    is_pii: True
-  ipv6:
-    key: ipv6
-    is_pii: True
-    name: IPv6 address
-    rule: ((Word('0123456789abcdefABCDEF', min = 1, max = 4) + Literal(':').suppress()) * 7 + Word('0123456789abcdefABCDEF', min = 1, max = 4)) ^ (Word('0123456789abcdefABCDEF', min = 1, max = 4) + (Literal(':').suppress() + Word('0123456789abcdefABCDEF', min = 1, max = 4)) * (0, 6) + Literal('::')) ^ (Word('0123456789abcdefABCDEF', min = 1, max = 4) + (Literal(':').suppress() + Word('0123456789abcdefABCDEF', min = 1, max = 4)) * (0, 5) + Literal('::') + Word('0123456789abcdefABCDEF', min = 1, max = 4)) ^ (Word('0123456789abcdefABCDEF', min = 1, max = 4) + (Literal(':').suppress() + Word('0123456789abcdefABCDEF', min = 1, max = 4)) * (0, 4) + Literal('::') + (Word('0123456789abcdefABCDEF', min = 1, max = 4) + Literal(':').suppress()) + Word('0123456789abcdefABCDEF', min = 1, max = 4)) ^ (Word('0123456789abcdefABCDEF', min = 1, max = 4) + (Literal(':').suppress() + Word('0123456789abcdefABCDEF', min = 1, max = 4)) * (0, 3) + Literal('::') + (Word('0123456789abcdefABCDEF', min = 1, max = 4) + Literal(':').suppress()) * 2 + Word('0123456789abcdefABCDEF', min = 1, max = 4)) ^ (Word('0123456789abcdefABCDEF', min = 1, max = 4) + (Literal(':').suppress() + Word('0123456789abcdefABCDEF', min = 1, max = 4)) * (0, 2) + Literal('::') + (Word('0123456789abcdefABCDEF', min = 1, max = 4) + Literal(':').suppress()) * 3 + Word('0123456789abcdefABCDEF', min = 1, max = 4)) ^ (Word('0123456789abcdefABCDEF', min = 1, max = 4) + (Literal(':').suppress() + Word('0123456789abcdefABCDEF', min = 1, max = 4)) * (0, 1) + Literal('::') + (Word('0123456789abcdefABCDEF', min = 1, max = 4) + Literal(':').suppress()) * 4 + Word('0123456789abcdefABCDEF', min = 1, max = 4)) ^ (Word('0123456789abcdefABCDEF', min = 1, max = 4) + Literal('::') + (Word('0123456789abcdefABCDEF', min = 1, max = 4) + Literal(':').suppress()) * 5 + Word('0123456789abcdefABCDEF', min = 1, max = 4))
-    validator: metacrafterext.rules.common.internet.validate_ipv6
-    maxlen: 39
-    minlen: 15
-    priority: 1
-    match: ppr
-    type: data
-  eui48:
-    key: eui48
-    is_pii: True
-    name: MAC address (EUI48)
-    rule:  Word(hexnums, min=2, max=2) + 5*(':'+Word(hexnums, min=2, max=2))
-    validator: metacrafterext.rules.common.internet.validate_macaddr
-    maxlen: 17
-    minlen: 17
-    priority: 1
-    match: ppr
-    type: data
   emailknown:
     key: email
     is_pii: True
