@@ -1,24 +1,26 @@
 Rule types:
-- field based rules 70
-- data based rules 39
+- field based rules 75
+- data based rules 36
 Context:
-- common 18
+- common 22
 - companies 1
 - crypto 3
-- datetime 20
+- datetime 17
 - geo 23
 - government 1
 - identifiers 3
 - industry 1
-- internet 10
+- internet 11
 - medical 1
-- objectids 3
+- objectids 1
 - persons 8
 - pii 14
 - science 2
+- software 1
+- values 1
 - vehicles 1
 Language:
-- common 85
+- common 87
 - en 18
 - fr 1
 - ru 5

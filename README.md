@@ -3,6 +3,7 @@
 Python command line tool and python engine to label table fields and fields in data files.
 It could help to find meaningful data in your tables and data files or to find Personal identifable information (PII).
 
+
 ## Installation
 
 To install Python library use `pip install metacrafter` via pip or `python setup.py install` 
@@ -15,16 +16,18 @@ These rules written as .yaml files and could be easily extended.
 File formats supported:
 * CSV
 * JSON lines
-* JSON (array of dicts)
+* JSON (array of records)
 * BSON
 * Parquet
+* XML
 
 Databases support:
-* Any database supported by [SQLAlchemy](https://www.sqlalchemy.org/) 
-* MongoDB
+* Any SQL database supported by [SQLAlchemy](https://www.sqlalchemy.org/) 
+* NoSQL databases: 
+  * MongoDB
 
 Metacrafter key features:
-* 109 labeling rules
+* 111 labeling rules
 * all labels metadata collected into [Metacrafter registry](https://github.com/apicrafter/metacrafter-registry ) public repository
 * 312 date detection rules/patterns, date detection using [qddate](https://github.com/ivbeg/qddate), "quick and dirty" date detection library
 * extendable set of rules using PyParsing, exact text match and validation functions
@@ -148,34 +151,35 @@ Example Russian cadastral number
 ## Detailed stats
 
 Rule types:
-- field based rules 70
-- data based rules 39
+- field based rules 75
+- data based rules 36
 
 Context:
-- common 18
+- common 22
 - companies 1
 - crypto 3
-- datetime 20
+- datetime 17
 - geo 23
 - government 1
 - identifiers 3
 - industry 1
-- internet 10
+- internet 11
 - medical 1
-- objectids 3
+- objectids 1
 - persons 8
 - pii 14
 - science 2
+- software 1
+- values 1
 - vehicles 1
 
 Language:
-- common 85
+- common 87
 - en 18
 - fr 1
 - ru 5
 
 Data/time patterns (qddate): 312
-
 
 
 ## Commercial support
