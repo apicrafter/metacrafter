@@ -229,13 +229,18 @@ class CrafterCmd(object):
                 items.append(row)
             f.close()
         elif ext == "xml":
+            filetype = "xml"
             items = []
             f = open(filename, "rb")
+            n = 0
             for event, elem in etree.iterparse(f):
                 shorttag = elem.tag.rsplit('}', 1)[-1]
                 if shorttag == tagname:
                     j = etree_to_dict(elem, prefix_strip=True)
                     items.append(j[shorttag])
+                    n += 1
+                    if n > limit:
+                        break
             f.close()
             if len(items) == 0:
                 print('No object with tag %s found in %s' % (str(tagname), filename))
