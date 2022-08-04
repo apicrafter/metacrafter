@@ -1,4 +1,6 @@
+# -*- coding: utf-8 -*-
 import chardet
+from collections import defaultdict
 
 
 def dict_generator(indict, pre=None):
@@ -117,3 +119,30 @@ def detect_delimiter(filename, encoding="utf8"):
     }
     delimiter = max(dict1, key=dict1.get)
     return delimiter
+
+
+def etree_to_dict(t, prefix_strip=True):
+    """Lxml etree converted to Python dictionary for JSON serialization"""
+    tag = t.tag if not prefix_strip else t.tag.rsplit('}', 1)[-1]
+    d = {tag: {} if t.attrib else None}
+    children = list(t)
+    if children:
+        dd = defaultdict(list)
+        for dc in map(etree_to_dict, children):
+            #            print(dir(dc))
+            for k, v in dc.items():
+                if prefix_strip:
+                    k = k.rsplit('}', 1)[-1]
+                dd[k].append(v)
+        d = {tag: {k: v[0] if len(v) == 1 else v for k, v in dd.items()}}
+    if t.attrib:
+        d[tag].update(('@' + k.rsplit('}', 1)[-1], v) for k, v in t.attrib.items())
+    if t.text:
+        text = t.text.strip()
+        if children or t.attrib:
+            tag = tag.rsplit('}', 1)[-1]
+            if text:
+                d[tag]['#text'] = text
+        else:
+            d[tag] = text
+    return d

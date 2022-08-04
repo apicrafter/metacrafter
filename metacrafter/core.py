@@ -13,12 +13,14 @@ import qddate
 import qddate.patterns
 import yaml
 from tabulate import tabulate
+import xml.etree.ElementTree as etree
+
 
 from metacrafter.classify.processor import RulesProcessor, BASE_URL
 from metacrafter.classify.stats import Analyzer
-from metacrafter.classify.utils import detect_delimiter, detect_encoding
+from metacrafter.classify.utils import detect_delimiter, detect_encoding, etree_to_dict
 
-SUPPORTED_FILE_TYPES = ["jsonl", "bson", "csv", "json"]
+SUPPORTED_FILE_TYPES = ["jsonl", "bson", "csv", "json", 'xml']
 BINARY_DATA_FORMATS = ["bson", "parquet"]
 
 DEFAULT_METACRAFTER_CONFIGFILE = ".metacrafter"
@@ -197,6 +199,7 @@ class CrafterCmd(object):
         self,
         filename,
         delimiter=",",
+        tagname=None,
         limit=1000,
         encoding="utf8",
         contexts=None,
@@ -225,6 +228,18 @@ class CrafterCmd(object):
                     break
                 items.append(row)
             f.close()
+        elif ext == "xml":
+            items = []
+            f = open(filename, "rb")
+            for event, elem in etree.iterparse(f):
+                shorttag = elem.tag.rsplit('}', 1)[-1]
+                if shorttag == tagname:
+                    j = etree_to_dict(elem, prefix_strip=True)
+                    items.append(j[shorttag])
+            f.close()
+            if len(items) == 0:
+                print('No object with tag %s found in %s' % (str(tagname), filename))
+                return
         elif ext == "jsonl":
             filetype = "jsonl"
             f = open(filename, "r", encoding=encoding)
@@ -281,8 +296,10 @@ class CrafterCmd(object):
                 "Unsupported file type. Supported file types are CSV, JSON lines, BSON, Parquet, JSON. Empty results"
             )
             return []
-
         print("Filetype idenfied as %s" % (filetype))
+        if len(items) == 0:
+            print('No object found to process')
+            return
         print("Processing file %s" % (filename))
 
         prepared, results = self.scan_data(items, limit, contexts, langs)
@@ -389,6 +406,7 @@ def cli3():
 @cli3.command()
 @click.argument("filename")
 @click.option("--delimiter", "-d", default=",", help="CSV delimiter")
+@click.option("--tagname", "-t", default=None, help="Name of the XML tag, required to process XML")
 @click.option("--limit", "-n", default="1000", help="Limit of records")
 @click.option(
     "--contexts", "-x", default=None, help="List of contexts to use. Comma separates"
@@ -398,11 +416,11 @@ def cli3():
 )
 @click.option("--format", "-f", default="full", help="Output format: short, full")
 @click.option("--output", "-o", default=None, help="Output JSON filename")
-def scan_file(filename, delimiter, limit, contexts, langs, format, output):
+def scan_file(filename, delimiter, tagname, limit, contexts, langs, format, output):
     """Match file"""
     acmd = CrafterCmd()
     acmd.scan_file(
-        filename, delimiter, int(limit), contexts, langs, dformat=format, output=output
+        filename, delimiter, tagname, int(limit), contexts, langs, dformat=format, output=output
     )
 
 

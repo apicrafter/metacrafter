@@ -26,7 +26,17 @@ rules:
     type: data
     match: ppr
     fieldrule: asn
-    fieldrulematch: text  
+    fieldrulematch: text
+  asnbyvalueandpostfix:
+    key: asn
+    name: Autonomous system network (ASN) by value and postfix
+    maxlen: 7
+    minlen: 1
+    rule: Word(nums, max=6)
+    type: data
+    match: ppr
+    fieldrule: '"_asn" + lineEnd'
+    fieldrulematch: ppr
   fqdnbyknown:
     key: fqdn
     name: Domain or host name (FQDN) by known names
