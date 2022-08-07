@@ -18,7 +18,7 @@ import xml.etree.ElementTree as etree
 
 from metacrafter.classify.processor import RulesProcessor, BASE_URL
 from metacrafter.classify.stats import Analyzer
-from metacrafter.classify.utils import detect_delimiter, detect_encoding, etree_to_dict
+from metacrafter.classify.utils import detect_delimiter, detect_encoding, etree_to_dict, xml_quick_analyzer
 
 SUPPORTED_FILE_TYPES = ["jsonl", "bson", "csv", "json", 'xml']
 BINARY_DATA_FORMATS = ["bson", "parquet"]
@@ -80,7 +80,7 @@ class CrafterCmd(object):
             out = []
             f.write(
                 json.dumps(
-                    {"table": filename, "fields": results}, indent=4, sort_keys=True
+                    {"table": filename, "fields": results}, indent=4, sort_keys=True, ensure_ascii=False
                 )
             )
             f.close()
@@ -230,6 +230,12 @@ class CrafterCmd(object):
             f.close()
         elif ext == "xml":
             filetype = "xml"
+            if not tagname:
+                result = xml_quick_analyzer(filename)
+                if result is None:
+                    print('No tag provided and no array tag found for file %s' % (filename))
+                    return
+                tagname = result['short']
             items = []
             f = open(filename, "rb")
             n = 0

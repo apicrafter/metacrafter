@@ -45,7 +45,8 @@ install_requires = [
     'validators',
     'click',
     'tabulate',
-    'pydantic'
+    'pydantic',
+    'xmltodict'
 ]
 
 

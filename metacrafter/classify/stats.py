@@ -21,7 +21,7 @@ SUPPORTED_FILE_TYPES = [
     "bson",
 ]
 
-DEFAULT_EMPTY_VALUES = [None, "", "None", "NaN", "-"]
+DEFAULT_EMPTY_VALUES = [None, "", "None", "NaN", "-", 'N/A']
 
 
 DEFAULT_OPTIONS = {

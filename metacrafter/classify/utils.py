@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 import chardet
 from collections import defaultdict
-
+from collections import OrderedDict
+import xmltodict
 
 def dict_generator(indict, pre=None):
     pre = pre[:] if pre else []
@@ -146,3 +147,32 @@ def etree_to_dict(t, prefix_strip=True):
         else:
             d[tag] = text
     return d
+
+
+def _seek_xml_lists(data, level=0, path=None, candidates=OrderedDict()):
+    for key, value in data.items():
+        if isinstance(value, list):
+            key = path + '.%s' % (key) if path is not None else key
+            if key not in candidates.keys():
+                candidates[key] = {'key' : key, 'num' : len(value)}
+        elif isinstance(value, OrderedDict) or isinstance(value, dict):
+            res = _seek_xml_lists(value, level + 1, path + '.' + key if path else key, candidates)
+            for k, v in res.items():
+                if k not in candidates.keys():
+                    candidates[k] = v
+        else:
+            continue
+    return candidates
+
+
+def xml_quick_analyzer(filename):
+    """Analyzes single XML file and returns tag objects"""
+    f = open(filename, 'rb')  # , encoding=encoding)
+    data = xmltodict.parse(f, process_namespaces=False)
+    f.close()
+    candidates = _seek_xml_lists(data, level=0)
+    if len(candidates) > 0:
+        fullkey = str(list(candidates.keys())[0])
+        shortkey = fullkey.rsplit('.', 1)[-1]
+        return {'full' : fullkey, 'short' : shortkey}
+    return None
