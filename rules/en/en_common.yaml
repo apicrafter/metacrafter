@@ -4,7 +4,7 @@ context: common
 lang: en
 rules:
   entitleknown:
-    key: title
+    key: name
     name: English name/title by name
     rule: title,name,shortname,fullname,short name,title_en
     type: field
