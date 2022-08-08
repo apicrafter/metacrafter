@@ -174,5 +174,7 @@ def xml_quick_analyzer(filename):
     if len(candidates) > 0:
         fullkey = str(list(candidates.keys())[0])
         shortkey = fullkey.rsplit('.', 1)[-1]
+        if len(shortkey.split(':')) > 0:
+            shortkey = shortkey.rsplit(':', 1)[-1]
         return {'full' : fullkey, 'short' : shortkey}
     return None
