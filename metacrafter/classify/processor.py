@@ -323,12 +323,12 @@ class RulesProcessor:
                             pass
                     if res:
                         m_result.add(
-                            {
-                                "dataclass": rule["key"],
-                                "confidence": 100,
-                                "ruleid": rule["id"],
-                                "ruletype": "field",
-                            }
+                            RuleResult(
+                                ruleid=rule["id"],
+                                confidence=100,
+                                dataclass=rule["key"],
+                                ruletype="field",
+                            )
                         )
                         if stop_on_match:
                             break

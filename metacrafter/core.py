@@ -150,9 +150,14 @@ class CrafterCmd(object):
             "maxlen",
             "avglen",
             "tags",
+            'has_digit',
+            'has_alphas',
+            'has_special',
+            'dictvalues'
         ]
         datastats_dict = {}
         for row in datastats:
+#            print(row)
             datastats_dict[row[0]] = {}
             for n in range(0, len(headers)):
                 datastats_dict[row[0]][headers[n]] = row[n]
@@ -191,6 +196,7 @@ class CrafterCmd(object):
             record["tags"] = datastats_dict[res.field]["tags"]
             record["ftype"] = datastats_dict[res.field]["ftype"]
             record['datatype_url'] = BASE_URL.format(dataclass=res.matches[0].dataclass) if len(res.matches) > 0 else ""
+            record['stats'] = datastats_dict[res.field]
 
             outdata.append(record)
         return output, outdata
