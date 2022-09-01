@@ -356,6 +356,7 @@ class CrafterCmd(object):
                     queryres = con.execute(query)
                 except sqlalchemy.exc.ProgrammingError as e:
                     print("Error processing table %s: %s" % (table, str(e)))
+                    continue
                 items = [dict(u) for u in queryres.fetchall()]
                 prepared, results = self.scan_data(items, limit, contexts, langs)
                 db_results[table] = [prepared, results]
