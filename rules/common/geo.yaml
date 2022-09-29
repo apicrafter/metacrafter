@@ -91,11 +91,5 @@ rules:
     rule: country,countryname,country_name
     match: text
     type: field
-  wbregionbyvalue:
-    key: wbregion
-    name: World Bank region
-    rule: South Asia,Europe & Central Asia,Sub-Saharan Africa,Latin America & Caribbean,East Asia & Pacific,North America,Middle East & North Africa
-    match: text
-    type: data
 
  
