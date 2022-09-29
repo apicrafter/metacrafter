@@ -12,7 +12,20 @@ from pyparsing import (
 )
 
 from .utils import headers, dict_to_columns
-from pyparsing import LineEnd, LineStart, Word, oneOf, Literal, CaselessLiteral, alphas, alphanums, hexnums, Optional, printables, nums
+from pyparsing import (
+    LineEnd,
+    LineStart,
+    Word,
+    oneOf,
+    Literal,
+    CaselessLiteral,
+    alphas,
+    alphanums,
+    hexnums,
+    Optional,
+    printables,
+    nums,
+)
 
 DEFAULT_MAX_LEN = 100
 DEFAULT_MIN_LEN = 3
@@ -81,7 +94,6 @@ class RuleResult:
         self.is_pii = is_pii
         self.format = format
 
-
     def class_url(self):
         return BASE_URL.format(dataclass=self.dataclass)
 
@@ -115,7 +127,7 @@ class RulesProcessor:
 
     def import_rules(self, filename):
         """Import rules from file"""
-        logging.debug('Loading rules file %s' % (filename))
+        logging.debug("Loading rules file %s" % (filename))
         f = open(filename, "r", encoding="utf8")
         ruledata = yaml.load(f, Loader=yaml.FullLoader)
         f.close()
@@ -191,7 +203,11 @@ class RulesProcessor:
             rule["context"] = contexts
 
             # Add more than one context
-            if "is_pii" in rule.keys() and rule["is_pii"] == "True" and "pii" not in rule["context"]:
+            if (
+                "is_pii" in rule.keys()
+                and rule["is_pii"] == "True"
+                and "pii" not in rule["context"]
+            ):
                 rule["context"].append("pii")
 
             for context in contexts:
@@ -410,7 +426,7 @@ class RulesProcessor:
                 for rule in data_rules:
                     #                    print('Field %s %d %d, rule %s %d %d' % (field, min_len, max_len, rule['key'], rule['minlen'], rule['maxlen']))
                     if (rule["minlen"] <= min_len <= rule["maxlen"]) or (
-                            min_len <= rule["minlen"] <= max_len
+                        min_len <= rule["minlen"] <= max_len
                     ):
                         if "f_compiled" in rule.keys():
                             if rule["fieldrulematch"] == "ppr":

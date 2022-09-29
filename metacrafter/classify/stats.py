@@ -21,8 +21,7 @@ SUPPORTED_FILE_TYPES = [
     "bson",
 ]
 
-DEFAULT_EMPTY_VALUES = [None, "", "None", "NaN", "-", 'N/A']
-
+DEFAULT_EMPTY_VALUES = [None, "", "None", "NaN", "-", "N/A"]
 
 DEFAULT_OPTIONS = {
     "encoding": "utf8",
@@ -77,7 +76,7 @@ def guess_datatype(s, qd):
         return {"base": "typed"}
     #    s = s.decode('utf8', 'ignore')
     if s.isdigit():
-        if s[0] == '0':
+        if s[0] == "0":
             attrs = {"base": "numstr"}
         else:
             attrs = {"base": "int", "subtype": guess_int_size(int(s))}
@@ -225,14 +224,14 @@ class Analyzer:
                         "maxlen": 0,
                         "avglen": 0,
                         "totallen": 0,
-                        "has_digit" : 0,
-                        "has_alphas" : 0,
-                        "has_special" : 0,
+                        "has_digit": 0,
+                        "has_alphas": 0,
+                        "has_special": 0,
                     }
                 fd = fielddata[k]
                 uniqval = fd["uniq"].get(v, 0)
                 fd["uniq"][v] = uniqval + 1
-                fd["total"] += 1                
+                fd["total"] += 1
                 if uniqval == 0:
                     fd["n_uniq"] += 1
                     fd["share_uniq"] = (fd["n_uniq"] * 100.0) / fd["total"]
@@ -248,10 +247,16 @@ class Analyzer:
                     fieldtypes[k] = {"key": k, "types": {}}
                 fd = fieldtypes[k]
                 thetype = guess_datatype(v, self.qd)["base"]
-                if thetype == 'str':
-                    fielddata[k]['has_digit'] += 1 if any(char.isdigit() for char in v) else 0
-                    fielddata[k]['has_alphas'] += 1 if any(char.isalpha() for char in v) else 0
-                    fielddata[k]['has_special'] += 1 if any(not char.isalnum() for char in v) else 0                     
+                if thetype == "str":
+                    fielddata[k]["has_digit"] += (
+                        1 if any(char.isdigit() for char in v) else 0
+                    )
+                    fielddata[k]["has_alphas"] += (
+                        1 if any(char.isalpha() for char in v) else 0
+                    )
+                    fielddata[k]["has_special"] += (
+                        1 if any(not char.isalnum() for char in v) else 0
+                    )
                 uniqval = fd["types"].get(thetype, 0)
                 fd["types"][thetype] = uniqval + 1
                 fieldtypes[k] = fd
@@ -327,7 +332,7 @@ class Analyzer:
             field.append(fd["has_digit"])
             field.append(fd["has_alphas"])
             field.append(fd["has_special"])
-            field.append(list(fd['uniq'].keys()) if fd["key"] in dictkeys else None)
+            field.append(list(fd["uniq"].keys()) if fd["key"] in dictkeys else None)
             table.append(field)
         return table
 

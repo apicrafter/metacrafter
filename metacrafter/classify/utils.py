@@ -4,6 +4,7 @@ from collections import defaultdict
 from collections import OrderedDict
 import xmltodict
 
+
 def dict_generator(indict, pre=None):
     pre = pre[:] if pre else []
     if isinstance(indict, dict):
@@ -124,7 +125,7 @@ def detect_delimiter(filename, encoding="utf8"):
 
 def etree_to_dict(t, prefix_strip=True):
     """Lxml etree converted to Python dictionary for JSON serialization"""
-    tag = t.tag if not prefix_strip else t.tag.rsplit('}', 1)[-1]
+    tag = t.tag if not prefix_strip else t.tag.rsplit("}", 1)[-1]
     d = {tag: {} if t.attrib else None}
     children = list(t)
     if children:
@@ -133,17 +134,17 @@ def etree_to_dict(t, prefix_strip=True):
             #            print(dir(dc))
             for k, v in dc.items():
                 if prefix_strip:
-                    k = k.rsplit('}', 1)[-1]
+                    k = k.rsplit("}", 1)[-1]
                 dd[k].append(v)
         d = {tag: {k: v[0] if len(v) == 1 else v for k, v in dd.items()}}
     if t.attrib:
-        d[tag].update(('@' + k.rsplit('}', 1)[-1], v) for k, v in t.attrib.items())
+        d[tag].update(("@" + k.rsplit("}", 1)[-1], v) for k, v in t.attrib.items())
     if t.text:
         text = t.text.strip()
         if children or t.attrib:
-            tag = tag.rsplit('}', 1)[-1]
+            tag = tag.rsplit("}", 1)[-1]
             if text:
-                d[tag]['#text'] = text
+                d[tag]["#text"] = text
         else:
             d[tag] = text
     return d
@@ -152,11 +153,13 @@ def etree_to_dict(t, prefix_strip=True):
 def _seek_xml_lists(data, level=0, path=None, candidates=OrderedDict()):
     for key, value in data.items():
         if isinstance(value, list):
-            key = path + '.%s' % (key) if path is not None else key
+            key = path + ".%s" % (key) if path is not None else key
             if key not in candidates.keys():
-                candidates[key] = {'key' : key, 'num' : len(value)}
+                candidates[key] = {"key": key, "num": len(value)}
         elif isinstance(value, OrderedDict) or isinstance(value, dict):
-            res = _seek_xml_lists(value, level + 1, path + '.' + key if path else key, candidates)
+            res = _seek_xml_lists(
+                value, level + 1, path + "." + key if path else key, candidates
+            )
             for k, v in res.items():
                 if k not in candidates.keys():
                     candidates[k] = v
@@ -167,14 +170,14 @@ def _seek_xml_lists(data, level=0, path=None, candidates=OrderedDict()):
 
 def xml_quick_analyzer(filename):
     """Analyzes single XML file and returns tag objects"""
-    f = open(filename, 'rb')  # , encoding=encoding)
+    f = open(filename, "rb")  # , encoding=encoding)
     data = xmltodict.parse(f, process_namespaces=False)
     f.close()
     candidates = _seek_xml_lists(data, level=0)
     if len(candidates) > 0:
         fullkey = str(list(candidates.keys())[0])
-        shortkey = fullkey.rsplit('.', 1)[-1]
-        if len(shortkey.split(':')) > 0:
-            shortkey = shortkey.rsplit(':', 1)[-1]
-        return {'full' : fullkey, 'short' : shortkey}
+        shortkey = fullkey.rsplit(".", 1)[-1]
+        if len(shortkey.split(":")) > 0:
+            shortkey = shortkey.rsplit(":", 1)[-1]
+        return {"full": fullkey, "short": shortkey}
     return None

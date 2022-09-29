@@ -15,12 +15,16 @@ import yaml
 from tabulate import tabulate
 import xml.etree.ElementTree as etree
 
-
 from metacrafter.classify.processor import RulesProcessor, BASE_URL
 from metacrafter.classify.stats import Analyzer
-from metacrafter.classify.utils import detect_delimiter, detect_encoding, etree_to_dict, xml_quick_analyzer
+from metacrafter.classify.utils import (
+    detect_delimiter,
+    detect_encoding,
+    etree_to_dict,
+    xml_quick_analyzer,
+)
 
-SUPPORTED_FILE_TYPES = ["jsonl", "bson", "csv", "json", 'xml']
+SUPPORTED_FILE_TYPES = ["jsonl", "bson", "csv", "json", "xml"]
 BINARY_DATA_FORMATS = ["bson", "parquet"]
 
 DEFAULT_METACRAFTER_CONFIGFILE = ".metacrafter"
@@ -31,11 +35,12 @@ DEFAULT_RULEPATH = [
 
 class CrafterCmd(object):
     def __init__(self):
-        #logging.getLogger().addHandler(logging.StreamHandler())
+        # logging.getLogger().addHandler(logging.StreamHandler())
         logging.basicConfig(
-          format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-          level=logging.DEBUG)
- 
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            level=logging.DEBUG,
+        )
+
         self.processor = RulesProcessor()
         self.prepare()
         pass
@@ -51,11 +56,15 @@ class CrafterCmd(object):
         rulepath = []
         filepath = None
         if os.path.exists(DEFAULT_METACRAFTER_CONFIGFILE):
-            logging.debug('Local .metacrafter config exists. Using it')
+            logging.debug("Local .metacrafter config exists. Using it")
             filepath = DEFAULT_METACRAFTER_CONFIGFILE
-        elif os.path.exists(os.path.join(os.path.expanduser('~'), DEFAULT_METACRAFTER_CONFIGFILE)):
-            logging.debug('Home dir .metacrafter config exists. Using it')
-            filepath = os.path.join(os.path.expanduser('~'), DEFAULT_METACRAFTER_CONFIGFILE)
+        elif os.path.exists(
+            os.path.join(os.path.expanduser("~"), DEFAULT_METACRAFTER_CONFIGFILE)
+        ):
+            logging.debug("Home dir .metacrafter config exists. Using it")
+            filepath = os.path.join(
+                os.path.expanduser("~"), DEFAULT_METACRAFTER_CONFIGFILE
+            )
         if filepath:
             f = open(filepath, "r", encoding="utf8")
             config = yaml.load(f, Loader=yaml.FullLoader)
@@ -80,7 +89,10 @@ class CrafterCmd(object):
             out = []
             f.write(
                 json.dumps(
-                    {"table": filename, "fields": results}, indent=4, sort_keys=True, ensure_ascii=False
+                    {"table": filename, "fields": results},
+                    indent=4,
+                    sort_keys=True,
+                    ensure_ascii=False,
                 )
             )
             f.close()
@@ -91,18 +103,18 @@ class CrafterCmd(object):
                 for r in prepared:
                     if len(r[3]) > 0:
                         outres.append(r)
-                headers = ["key", "ftype", "tags", "matches", 'datatype_url']
-            elif dformat in ["full", 'long']:
+                headers = ["key", "ftype", "tags", "matches", "datatype_url"]
+            elif dformat in ["full", "long"]:
                 outres = prepared
                 headers = ["key", "ftype", "tags", "matches", "datatype_url"]
             else:
-                print('Unknown output format %s' % (dformat))
+                print("Unknown output format %s" % (dformat))
             if len(outres) > 0:
                 print(tabulate(outres, headers=headers))
             else:
-                print('No results')
+                print("No results")
         else:
-            print('No results')
+            print("No results")
 
     def _write_db_results(self, db_results, dformat, output):
         out = []
@@ -116,12 +128,12 @@ class CrafterCmd(object):
                     for r in prepared:
                         if len(r[3]) > 0:
                             outres.append(r)
-                    headers = ["key", "ftype", "tags", "matches", 'datatype_url']
+                    headers = ["key", "ftype", "tags", "matches", "datatype_url"]
                 elif dformat == "full":
                     outres = prepared
-                    headers = ["key", "ftype", "tags", "matches", 'datatype_url']
+                    headers = ["key", "ftype", "tags", "matches", "datatype_url"]
                 if len(outres) > 0:
-                    print('Table: %s' % (table))
+                    print("Table: %s" % (table))
                     print(tabulate(outres, headers=headers))
                     print()
         if output:
@@ -150,14 +162,14 @@ class CrafterCmd(object):
             "maxlen",
             "avglen",
             "tags",
-            'has_digit',
-            'has_alphas',
-            'has_special',
-            'dictvalues'
+            "has_digit",
+            "has_alphas",
+            "has_special",
+            "dictvalues",
         ]
         datastats_dict = {}
         for row in datastats:
-#            print(row)
+            #            print(row)
             datastats_dict[row[0]] = {}
             for n in range(0, len(headers)):
                 datastats_dict[row[0]][headers[n]] = row[n]
@@ -189,14 +201,20 @@ class CrafterCmd(object):
                     datastats_dict[res.field]["ftype"],
                     ",".join(datastats_dict[res.field]["tags"]),
                     ",".join(matches),
-                    BASE_URL.format(dataclass=res.matches[0].dataclass) if len(res.matches) > 0 else ""
+                    BASE_URL.format(dataclass=res.matches[0].dataclass)
+                    if len(res.matches) > 0
+                    else "",
                 ]
             )
             record = res.asdict()
             record["tags"] = datastats_dict[res.field]["tags"]
             record["ftype"] = datastats_dict[res.field]["ftype"]
-            record['datatype_url'] = BASE_URL.format(dataclass=res.matches[0].dataclass) if len(res.matches) > 0 else ""
-            record['stats'] = datastats_dict[res.field]
+            record["datatype_url"] = (
+                BASE_URL.format(dataclass=res.matches[0].dataclass)
+                if len(res.matches) > 0
+                else ""
+            )
+            record["stats"] = datastats_dict[res.field]
 
             outdata.append(record)
         return output, outdata
@@ -239,14 +257,17 @@ class CrafterCmd(object):
             if not tagname:
                 result = xml_quick_analyzer(filename)
                 if result is None:
-                    print('No tag provided and no array tag found for file %s' % (filename))
+                    print(
+                        "No tag provided and no array tag found for file %s"
+                        % (filename)
+                    )
                     return
-                tagname = result['short']
+                tagname = result["short"]
             items = []
             f = open(filename, "rb")
             n = 0
             for event, elem in etree.iterparse(f):
-                shorttag = elem.tag.rsplit('}', 1)[-1]
+                shorttag = elem.tag.rsplit("}", 1)[-1]
                 if shorttag == tagname:
                     j = etree_to_dict(elem, prefix_strip=True)
                     items.append(j[shorttag])
@@ -255,7 +276,7 @@ class CrafterCmd(object):
                         break
             f.close()
             if len(items) == 0:
-                print('No object with tag %s found in %s' % (str(tagname), filename))
+                print("No object with tag %s found in %s" % (str(tagname), filename))
                 return
         elif ext == "jsonl":
             filetype = "jsonl"
@@ -315,7 +336,7 @@ class CrafterCmd(object):
             return []
         print("Filetype idenfied as %s" % (filetype))
         if len(items) == 0:
-            print('No object found to process')
+            print("No object found to process")
             return
         print("Processing file %s" % (filename))
 
@@ -386,7 +407,7 @@ class CrafterCmd(object):
         for table in tables:
             print("- table %s" % (table))
             items = list(db[table].find().limit(limit))
-#            print(items)
+            #            print(items)
             prepared, results = self.scan_data(items, limit, contexts, langs)
             db_results[table] = [prepared, results]
         self._write_db_results(db_results, dformat, output)
@@ -424,7 +445,9 @@ def cli3():
 @cli3.command()
 @click.argument("filename")
 @click.option("--delimiter", "-d", default=",", help="CSV delimiter")
-@click.option("--tagname", "-t", default=None, help="Name of the XML tag, required to process XML")
+@click.option(
+    "--tagname", "-t", default=None, help="Name of the XML tag, required to process XML"
+)
 @click.option("--limit", "-n", default="1000", help="Limit of records")
 @click.option(
     "--contexts", "-x", default=None, help="List of contexts to use. Comma separates"
@@ -438,7 +461,14 @@ def scan_file(filename, delimiter, tagname, limit, contexts, langs, format, outp
     """Match file"""
     acmd = CrafterCmd()
     acmd.scan_file(
-        filename, delimiter, tagname, int(limit), contexts, langs, dformat=format, output=output
+        filename,
+        delimiter,
+        tagname,
+        int(limit),
+        contexts,
+        langs,
+        dformat=format,
+        output=output,
     )
 
 
@@ -479,7 +509,9 @@ def cli5():
 
 
 @cli5.command()
-@click.option("--host", "-h", default="localhost", help="MongoDB hostname, default localhost")
+@click.option(
+    "--host", "-h", default="localhost", help="MongoDB hostname, default localhost"
+)
 @click.option("--port", "-p", default=27017, help="MongoDB port, default 27017")
 @click.option("--dbname", "-d", default="test", help="Database name, default test")
 @click.option("--username", "-u", default=None, help="Username. Optional")
