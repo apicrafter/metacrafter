@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+"""Statistics module"""
 import csv
 import logging
 import zipfile
@@ -32,6 +34,7 @@ DEFAULT_OPTIONS = {
 
 
 def get_file_type(filename):
+    """Returns is file type supported"""
     ext = filename.rsplit(".", 1)[-1].lower()
     if ext in SUPPORTED_FILE_TYPES:
         return ext
@@ -42,12 +45,13 @@ def get_option(options, name):
     """Returns value of the option"""
     if name in options.keys():
         return options[name]
-    elif name in DEFAULT_OPTIONS.keys():
+    elif name in DEFAULT_OPTIONS:
         return DEFAULT_OPTIONS[name]
     return None
 
 
 def guess_int_size(i):
+    """Identifies size of the integer"""
     if i < 255:
         return "uint8"
     if i < 65535:
@@ -55,51 +59,52 @@ def guess_int_size(i):
     return "uint32"
 
 
-def guess_datatype(s, qd):
+def guess_datatype(value, qd_object=None):
     """Guesses type of data by string provided"""
     attrs = {"base": "str"}
     #    s = unicode(s)
-    if s is None:
+    if value is None:
         return {"base": "empty"}
-    elif isinstance(s, bool):
+    elif isinstance(value, bool):
         return {"base": "bool"}
-    elif isinstance(s, int):
+    elif isinstance(value, int):
         return {"base": "int"}
-    elif isinstance(s, float):
+    elif isinstance(value, float):
         return {"base": "float"}
-    elif isinstance(s, datetime):
+    elif isinstance(value, datetime):
         return {"base": "datetime"}
-    elif isinstance(s, date):
+    elif isinstance(value, date):
         return {"base": "date"}
-    elif type(s) != type(""):
+    elif not isinstance(value, str):
         #        print((type(s)))
         return {"base": "typed"}
     #    s = s.decode('utf8', 'ignore')
-    if s.isdigit():
-        if s[0] == "0":
+    if value.isdigit():
+        if value[0] == "0":
             attrs = {"base": "numstr"}
         else:
-            attrs = {"base": "int", "subtype": guess_int_size(int(s))}
+            attrs = {"base": "int", "subtype": guess_int_size(int(value))}
     else:
         try:
-            i = float(s)
+            temp = float(value)
             attrs = {"base": "float"}
             return attrs
         except ValueError:
             pass
-        if qd:
+        if qd_object:
             is_date = False
-            res = qd.match(s)
+            res = qd_object.match(value)
             if res:
                 attrs = {"base": "date", "pat": res["pattern"]}
                 is_date = True
             if not is_date:
-                if len(s.strip()) == 0:
+                if len(value.strip()) == 0:
                     attrs = {"base": "empty"}
     return attrs
 
 
 def dict_generator(indict, pre=None):
+    """Generates keys from dictionary"""
     pre = pre[:] if pre else []
     if isinstance(indict, dict):
         for key, value in list(indict.items()):
@@ -124,6 +129,7 @@ def dict_generator(indict, pre=None):
 
 
 class Analyzer:
+    """Analyzer class to process data files and generate stats"""
     def __init__(self, nodates=True):
         if nodates:
             self.qd = None
@@ -132,7 +138,7 @@ class Analyzer:
         pass
 
     def analyze(self, fromfile=None, itemlist=None, options=DEFAULT_OPTIONS):
-        """Analyzes JSON file and produces stats"""
+        """Analyzes JSON or another data file and produces stats"""
         if fromfile == None and itemlist == None:
             return None
 

@@ -1,11 +1,12 @@
 # -*- coding: utf-8 -*-
+"""Utility functions that help to work with data"""
 import chardet
-from collections import defaultdict
-from collections import OrderedDict
+from collections import defaultdict, OrderedDict
 import xmltodict
 
 
 def dict_generator(indict, pre=None):
+    """Generates schema from dictionary object"""
     pre = pre[:] if pre else []
     if isinstance(indict, dict):
         for key, value in list(indict.items()):
@@ -30,46 +31,49 @@ def dict_generator(indict, pre=None):
 
 
 def headers(data, limit=1000):
-    n = 0
+    """Returns headers of list of dict objects"""
+    iter_num = 0
     keys = []
     for item in data:
-        n += 1
-        if n > limit:
+        iter_num += 1
+        if iter_num > limit:
             break
-        dk = dict_generator(item)
-        for i in dk:
+        dict_gen = dict_generator(item)
+        for i in dict_gen:
             k = ".".join(i[:-1])
             if k not in keys:
                 keys.append(k)
     return keys
 
 
-def get_dict_value(d, keys):
+def get_dict_value(object, keys):
+    """Returns single value from dictionary object"""
     out = []
-    if d is None:
+    if object is None:
         return out
     #    keys = key.split('.')
     if len(keys) == 1:
-        if type(d) == type({}):
-            if keys[0] in d.keys():
-                out.append(d[keys[0]])
+        if isinstance(object, dict):
+            if keys[0] in object.keys():
+                out.append(object[keys[0]])
         else:
-            for r in d:
-                if r and keys[0] in r.keys():
-                    out.append(r[keys[0]])
+            for record in object:
+                if record and keys[0] in record.keys():
+                    out.append(record[keys[0]])
     #        return out
     else:
-        if type(d) == type({}):
-            if keys[0] in d.keys():
-                out.extend(get_dict_value(d[keys[0]], keys[1:]))
+        if isinstance(object, dict):
+            if keys[0] in object.keys():
+                out.extend(get_dict_value(object[keys[0]], keys[1:]))
         else:
-            for r in d:
-                if keys[0] in r.keys():
-                    out.extend(get_dict_value(r[keys[0]], keys[1:]))
+            for record in object:
+                if keys[0] in record.keys():
+                    out.extend(get_dict_value(record[keys[0]], keys[1:]))
     return out
 
 
 def dict_to_columns(data):
+    """Converts list of dictionary objects to list of columns"""
     columns = {}
     for row in data:
         dk = dict_generator(row)
@@ -85,6 +89,7 @@ def dict_to_columns(data):
 
 
 def string_to_charrange(s):
+    """Returns array of chars from string"""
     chars = {}
     for ch in s:
         v = chars.get(ch, 0)
@@ -93,6 +98,7 @@ def string_to_charrange(s):
 
 
 def string_array_to_charrange(sarr):
+    """Returns char map from array"""
     chars = {}
     for s in sarr:
         for ch in s:
@@ -102,6 +108,7 @@ def string_array_to_charrange(sarr):
 
 
 def detect_encoding(filename, limit=1000000):
+    """Detects encoding of the filename"""
     f = open(filename, "rb")
     chunk = f.read(limit)
     f.close()
@@ -110,6 +117,7 @@ def detect_encoding(filename, limit=1000000):
 
 
 def detect_delimiter(filename, encoding="utf8"):
+    """Detects CSV file delimiter by first line"""
     f = open(filename, "r", encoding=encoding)
     line = f.readline()
     f.close()
@@ -151,6 +159,7 @@ def etree_to_dict(t, prefix_strip=True):
 
 
 def _seek_xml_lists(data, level=0, path=None, candidates=OrderedDict()):
+    """Seeks XML lists to find items tags"""
     for key, value in data.items():
         if isinstance(value, list):
             key = path + ".%s" % (key) if path is not None else key
