@@ -234,9 +234,10 @@ class Analyzer:
                         "has_alphas": 0,
                         "has_special": 0,
                     }
-                fd = fielddata[k]
-                uniqval = fd["uniq"].get(v, 0)
-                fd["uniq"][v] = uniqval + 1
+                fd = fielddata[k]                
+                val_s = str(v)
+                uniqval = fd["uniq"].get(val_s, 0)
+                fd["uniq"][val_s] = uniqval + 1
                 fd["total"] += 1
                 if uniqval == 0:
                     fd["n_uniq"] += 1

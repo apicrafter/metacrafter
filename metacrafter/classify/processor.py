@@ -448,7 +448,7 @@ class RulesProcessor:
                     empty = 0
                     total = len(slice)
                     for value in slice:
-                        if not value:
+                        if value is not None:
                             if except_empty:
                                 empty += 1
                             continue
