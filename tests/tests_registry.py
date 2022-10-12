@@ -25,7 +25,7 @@ class TestRegistry:
 
     def test_registry_list(self):
         client = RegistryClient(preload=False)
-        assert len(client.list()) > 0
+        assert len(client.getlist()) > 0
 
     def test_registry_has(self):
         client = RegistryClient(preload=True)
