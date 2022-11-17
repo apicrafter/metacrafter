@@ -1,0 +1,36 @@
+name: ru-common
+description: Russian common identifiers
+context: common
+lang: ru
+rules:
+  rusyesnobool:
+    key: boolean
+    name: Russian yes no boolean
+    match: text
+    type: data
+    rule: да,нет
+  ruphoneknown:
+    key: phone
+    is_pii: True
+    name: Russian phone code
+    rule: телефон,факс,publicphone,chiefphone,контактный телефон,telefon,номер телефона,рабочий телефон,номер факса
+    type: field
+    match: text
+  rutitleknown:
+    key: name
+    name: Russian name/title by name
+    rule: наименование,naimenovanie,полное наименование,название,краткое наименование,polnoe_naimenovanie,sokrashchennoe_naimenovanie,naimenovanie_obekta,наименование объекта,короткое название
+    type: field
+    match: text
+  rucommentknown:
+    key: comment
+    name: Russian comment/note by name
+    rule: примечание,primechanie,комментарий,комментарии,примечания
+    type: field
+    match: text
+  rucategoryknown:
+    key: category
+    name: Russian category by known
+    rule: kategoriya,категория
+    type: field
+    match: text

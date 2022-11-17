@@ -1,0 +1,29 @@
+name: fr-common
+description: French common data types detection
+context: common
+lang: fr
+rules:
+  frtitleknown:
+    key: name
+    name: French name/title by name
+    rule: title_fr,nom,intitule,titre
+    type: field
+    match: text
+  frcommentknown:
+    key: comment
+    name: French comment/note by known
+    rule: commentaire,commentair,commentaires,remarque,remarques
+    type: field
+    match: text
+  frdescriptionknown:
+    key: description
+    name: French description by known
+    rule: description_fr,descriptif,description_longue,descriptionlongue
+    type: field
+    match: text
+  frcategoryknown:
+    key: category
+    name: French category by known
+    rule: categorie
+    type: field
+    match: text

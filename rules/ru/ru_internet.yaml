@@ -1,0 +1,18 @@
+name: ru-internet
+description: Russian Internet codes
+context: internet
+lang: ru
+rules:
+  ruurlknown:
+    key: url
+    name: Russian website/url field names
+    rule: сайт,адрес сайта,adres_sayta,официальный сайт,адрес официального сайта,веб-сайт,sayt
+    type: field
+    match: text
+  ruemail:
+    key: email
+    is_pii: True
+    name: Russian email field names
+    rule: адрес электронной почты,электронная почта,электронный адрес,adres_elektronnoy_pochty,эл.почта,эл. почта
+    type: field
+    match: text

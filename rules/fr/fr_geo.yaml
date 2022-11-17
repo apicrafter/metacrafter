@@ -1,0 +1,32 @@
+name: fr-geo
+description: French geographic identifiers
+context: geo
+lang: fr
+rules:
+  frpostindexbyknown:
+    key: postindex
+    is_pii: True
+    name: French post index code (ZIP code and e.t.c) by known name
+    match: text
+    rule: adresse_codepostal,adresse_code_postal,adressecodepostal
+    type: field
+  frinseecodebyknown:
+    key: inseecode
+    is_pii: False
+    name: French INSEE code
+    match: text
+    rule: code_insee, insee, insee_com,  code_insee_region,code_insee_commune, codeinsee,com_insee,insee_reg,insee_dep,code_insee_etab,code_insee_into,code_commune_insee,commune_insee,code_insee_ancienne_commune,insee_commune,city_insee_code,code_insee_departement,region_insee_code,department_insee_code,num_insee,code_insee_de_la_commune,codinsee
+    type: field
+  frepcicodebyknown:
+    key: epcicode
+    is_pii: False
+    name: French EPCI code
+    match: text
+    rule: code_epci_metropole,code_epci,nom_epci,epci_code,epci_metropole,epci_current_code,epci_area_code,nom_officiel_epci,code_insee_epci,code_officiel_epci,epci_nom
+    type: field
+  frsiretcodeknown:
+    key: siretcode
+    name: French SIRET code by name
+    rule: coll_siret,siret,num_siret,numero_siret,code_siret
+    type: field
+    match: text  

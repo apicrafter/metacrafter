@@ -1,0 +1,12 @@
+name: us-industry
+description: US industry classifiers and identifiers
+context: industry
+lang: en
+rules:
+  naicscodeknown:
+    key: naicscode
+    is_pii: False
+    name: NAICS code
+    rule: naics,naics_sector,naics_code,naics_industry_code,naics_major_sector,naicscode
+    match: text
+    type: field

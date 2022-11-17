@@ -1,0 +1,36 @@
+name: ru-medical
+description: Russian objects
+context: medical
+lang: ru
+rules:
+  rumnnknownfull:
+    key: rumedmnn
+    name: Russian international unpatented name of pharm
+    match: text
+    type: field
+    rule: международное непатентованное название (мнн)
+  rumnnknownshort:
+    key: rumedmnn
+    name: Russian international unpatented name of pharm short name
+    match: text
+    type: field
+    rule: мнн,mnn
+  rumedicinetradenamebyknown:
+    key: rumedicinetradename
+    name: Russian name of medicines
+    match: text
+    type: field
+    rule: торговое наименование лекарственного препарата,название лекарственного препарата
+  rumedicineregnumber:
+    key: rumedicineregnum
+    name: Russian registration code of the medicine
+    match: ppr
+    type: data
+    rule: ((Literal("ЛС") | Literal("ЛП")) + Literal("-") + Word(nums, exact=6)) | (Literal("ЛСР") + Literal("-") + Word(nums, exact=6) + Literal("\/") + Word(nums, exact=2))
+  rumedicineatcbyknown:
+    key: atccode
+    name: Russian ATC code name by field name
+    match: text
+    type: field
+    rule: код атх
+
