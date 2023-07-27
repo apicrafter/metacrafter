@@ -27,7 +27,7 @@ rules:
     minlen: 10
     match: text
     type: data
-    rule: application/pdf,application/json,application/octet-stream,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/tiff,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip,text/csv,text/plain,application/vnd.google-earth.kml+xml,application/x-zip-compressed,application/vnd.geo+json,application/vnd.ms-excel.sheet.macroenabled.12,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/xml
+    rule: application/pdf,application/json,application/octet-stream,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/tiff,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip,text/csv,text/plain,application/vnd.google-earth.kml+xml,application/x-zip-compressed,application/vnd.geo+json,application/vnd.ms-excel.sheet.macroenabled.12,application/vnd.openxmlformats-officedocument.presentationml.presentation,text/xml,application/csv,text/html,application/rdf+xml,image/png,text/tab-separated-values,application/geo+json,application/vnd.geo+json,application/gzip,application/vnd.google-earth.kmz,application/x-tar
   phoneknown:
     key: phone
     is_pii: True
