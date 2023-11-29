@@ -106,7 +106,7 @@ def make_regex(identifiers, collapse_threshold=5):
 
 
 def process(filename):
-  f = open(filename, 'r', encoding='cp1251')
+  f = open(filename, 'r', encoding='utf8')
   data = alist = [line.rstrip() for line in f]
   f.close()
   make_regex(data)

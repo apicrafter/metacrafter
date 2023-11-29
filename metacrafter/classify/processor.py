@@ -444,11 +444,12 @@ class RulesProcessor:
                 #                for rule in rules:
                 #                    print('- %s' %(rule['key']))
                 for rule in rules:
+#                    print(rule)
                     success = 0
                     empty = 0
                     total = len(slice)
                     for value in slice:
-                        if value is not None:
+                        if value is None:
                             if except_empty:
                                 empty += 1
                             continue
