@@ -53,33 +53,29 @@ Metacrafter key features:
 
 Result example of 'full' type of formatting
 ```    
-key                   ftype    tags    matches
---------------------  -------  ------  -------------------------------
-name                  str      uniq
-addressresidence      str      uniq    address 59.80
-addressactivities     str              address 50.98
-addressobjects        str              address 28.00
-bin                   int              ogrn 99.02
-inn                   str              inn 100.00,inn 99.02
-purposeaudit          str              runpa 8.82
-dateregistration      str              datetime 94.12 (dt:date:date_2)
-expirydate            str              datetime 18.63 (dt:date:date_2)
-startdateactivity     str              datetime 28.43 (dt:date:date_2)
-othergrounds          str      dict
-startdateaudit        str              datetime 65.69 (dt:date:date_2)
-workdays              int      dict
-workhours             str      dict
-formaudit             str      dict
-namestatecontrol      str
-assignment decree     str      dict
-effectivedate         str      dict
-Inspectionenddate     str      empty
-riskcategory          str      dict
-expirationdate        str      empty
-startupnotifications  str      empty
-daylastcheck          str      empty
-otherreasonsrefusal   str      empty
-numbersystem          str      empty
+key               ftype    tags    matches                                                                datatype_url
+----------------  -------  ------  ---------------------------------------------------------------------  ----------------------------------------------------------
+Domain            str              fqdn 99.90                                                             https://registry.apicrafter.io/datatype/fqdn
+Primary domain    str              fqdn 100.00                                                            https://registry.apicrafter.io/datatype/fqdn
+Name              str              name 100.00                                                            https://registry.apicrafter.io/datatype/name
+Domain type       str      dict
+Organization      str
+Status            str      dict
+Region            str      dict    rusregion 22.95                                                        https://registry.apicrafter.io/datatype/rusregion
+GovSystem         str      dict
+HTTP Support      str      dict    boolean 100.00                                                         https://registry.apicrafter.io/datatype/boolean
+HTTPS Support     str      dict    boolean 100.00                                                         https://registry.apicrafter.io/datatype/boolean
+Statuscode        str      dict
+Is archived       str      empty
+Archives          str      empty
+Archive priority  str      dict
+Archive Strategy  str      dict
+ASN               str              asn 93.77                                                              https://registry.apicrafter.io/datatype/asn
+ASN Country code  str      dict    countrycode_alpha2 100.00,countrycode_alpha2 100.00,languagetag 99.56  https://registry.apicrafter.io/datatype/countrycode_alpha2
+IPs               str              ipv4 96.28                                                             https://registry.apicrafter.io/datatype/ipv4
+GovType           str      dict
+
+
 
 ```
 
@@ -150,34 +146,38 @@ Example Russian cadastral number
 
 ## Detailed stats
 
+
 Rule types:
-- field based rules 75
-- data based rules 36
+- field based rules 146
+- data based rules 102
 
 Context:
-- common 22
-- companies 1
+- common 47
+- companies 15
 - crypto 3
-- datetime 17
-- geo 23
-- government 1
+- datetime 29
+- finances 5
+- geo 58
+- government 19
 - identifiers 3
-- industry 1
-- internet 11
-- medical 1
-- objectids 1
-- persons 8
-- pii 14
+- industry 2
+- internet 18
+- medical 6
+- objectids 3
+- persons 19
+- pii 16
 - science 2
 - software 1
 - values 1
 - vehicles 1
 
 Language:
-- common 87
-- en 18
-- fr 1
-- ru 5
+- common 100
+- de 4
+- en 24
+- es 1
+- fr 11
+- ru 108
 
 Data/time patterns (qddate): 312
 
