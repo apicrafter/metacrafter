@@ -24,7 +24,7 @@ from metacrafter.classify.utils import (
     xml_quick_analyzer,
 )
 
-SUPPORTED_FILE_TYPES = ["jsonl", "bson", "csv", "json", "xml"]
+SUPPORTED_FILE_TYPES = ["jsonl", "bson", "csv", "tsv", "json", "xml"]
 BINARY_DATA_FORMATS = ["bson", "parquet"]
 
 DEFAULT_METACRAFTER_CONFIGFILE = ".metacrafter"
@@ -85,18 +85,26 @@ class CrafterCmd(object):
 
     def _write_results(self, prepared, results, filename, dformat, output):
         if output:
-            f = open(output, "w", encoding="utf8")
-            out = []
-            f.write(
-                json.dumps(
-                    {"table": filename, "fields": results},
-                    indent=4,
-                    sort_keys=True,
-                    ensure_ascii=False,
+            if isinstance(output, str):
+                f = open(output, "w", encoding="utf8")
+                out = []
+                f.write(
+                    json.dumps(
+                        {"table": filename, "fields": results},
+                        indent=4,
+                        sort_keys=True,
+                        ensure_ascii=False,
+                    )
                 )
-            )
-            f.close()
-            print("Output written to %s" % (output))
+                f.close()
+                print("Output written to %s" % (output))
+            else:
+                    output.write(
+                        json.dumps(
+                            {"table": filename, "fields": results},
+                            ensure_ascii=False,
+                        ) + '\n'
+                    )
         elif len(prepared) > 0:
             outres = []
             if dformat == "short":
@@ -237,7 +245,7 @@ class CrafterCmd(object):
             if encoding_dec:
                 encoding = encoding_dec["encoding"]
         filetype = None
-        if ext == "csv":
+        if ext in ["csv", 'tsv']:
             filetype = "csv"
             detected_delimiter = detect_delimiter(filename, encoding)
             if detected_delimiter:
@@ -331,7 +339,7 @@ class CrafterCmd(object):
 
         else:
             print(
-                "Unsupported file type. Supported file types are CSV, JSON lines, BSON, Parquet, JSON. Empty results"
+                "Unsupported file type. Supported file types are CSV, TSV, JSON lines, BSON, Parquet, JSON. Empty results"
             )
             return []
         print("Filetype idenfied as %s" % (filetype))
@@ -342,6 +350,26 @@ class CrafterCmd(object):
 
         prepared, results = self.scan_data(items, limit, contexts, langs)
         self._write_results(prepared, results, filename, dformat, output)
+
+    def scan_bulk(
+        self,
+        dirname,
+        delimiter=",",
+        tagname=None,
+        limit=1000,
+        encoding="utf8",
+        contexts=None,
+        langs=None,
+        output=None,
+    ):
+        fobj = open(output, 'w', encoding='utf8')
+        filelist = [os.path.join(dp, f) for dp, dn, filenames in os.walk(dirname) for f in filenames]
+        
+        for filename in filelist:                
+            try:
+                self.scan_file(filename, delimiter=delimiter, tagname=tagname, limit=limit, encoding=encoding,contexts=contexts, langs=langs, dformat='full', output=fobj)
+            except Exception as e:
+                print(f'Error occured {e} on {filename}')
 
     def scan_db(
         self,
@@ -382,6 +410,7 @@ class CrafterCmd(object):
                 prepared, results = self.scan_data(items, limit, contexts, langs)
                 db_results[table] = [prepared, results]
         self._write_db_results(db_results, dformat, output)
+
 
     def scan_mongodb(
         self,
@@ -544,4 +573,37 @@ def scan_mongodb(
     )
 
 
-cli = click.CommandCollection(sources=[cli1, cli2, cli3, cli4, cli5])
+@click.group()
+def cli6():
+    pass
+
+
+@cli6.command()
+@click.argument("dirname")
+@click.option("--delimiter", "-d", default=",", help="CSV delimiter")
+@click.option(
+    "--tagname", "-t", default=None, help="Name of the XML tag, required to process XML"
+)
+@click.option("--limit", "-n", default="1000", help="Limit of records")
+@click.option(
+    "--contexts", "-x", default=None, help="List of contexts to use. Comma separates"
+)
+@click.option(
+    "--langs", "-l", default=None, help="List of languages to use. Comma separated"
+)
+@click.option("--output", "-o", default="results.jsonl", help="Output NDJSON filename")
+def scan_bulk(dirname, delimiter, tagname, limit, contexts, langs, output):
+    """Match group of files in a directory"""
+    acmd = CrafterCmd()
+    acmd.scan_bulk(
+        dirname,
+        delimiter,
+        tagname,
+        int(limit),
+        contexts,
+        langs,
+        output=output,
+    )
+
+
+cli = click.CommandCollection(sources=[cli1, cli2, cli3, cli4, cli5, cli6])
