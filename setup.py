@@ -70,7 +70,7 @@ extras_require = {
 
 
 def long_description():
-    with codecs.open('README.rst', encoding='utf8') as f:
+    with codecs.open('README.md', encoding='utf8') as f:
         return f.read()
 
 
@@ -78,8 +78,8 @@ setup(
     name='metacrafter',
     version=metacrafter.classify.__version__,
     description=metacrafter.classify.__doc__.strip(),
-    long_description=metacrafter.classify.__doc__.strip(),
-#    long_description_content_type='text/rst',
+    long_description=long_description(),
+    long_description_content_type='text/markdown',
     url='https://github.com/apicrafter/metacrafter/',
     download_url='https://github.com/apicrafter/metacrafter/',
     packages=find_packages(exclude=('tests', 'tests.*')),
