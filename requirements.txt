@@ -12,3 +12,4 @@ chardet
 pydantic
 pytest
 xmltodict
+pyiterable
