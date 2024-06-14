@@ -15,6 +15,8 @@ import yaml
 from tabulate import tabulate
 import xml.etree.ElementTree as etree
 
+from iterable.helpers.detect import open_iterable
+
 from metacrafter.classify.processor import RulesProcessor, BASE_URL
 from metacrafter.classify.stats import Analyzer
 from metacrafter.classify.utils import (
@@ -24,7 +26,9 @@ from metacrafter.classify.utils import (
     xml_quick_analyzer,
 )
 
-SUPPORTED_FILE_TYPES = ["jsonl", "bson", "csv", "tsv", "json", "xml"]
+
+SUPPORTED_FILE_TYPES = ["jsonl", "bson", "csv", "tsv", "json", "xml", 'ndjson', 'avro', 'parquet', 'xls', 'xlsx', 'orc']
+CODECS = ["lz4", 'gz', 'xz', 'bz2', 'zst', 'br']
 BINARY_DATA_FORMATS = ["bson", "parquet"]
 
 DEFAULT_METACRAFTER_CONFIGFILE = ".metacrafter"
@@ -227,7 +231,42 @@ class CrafterCmd(object):
             outdata.append(record)
         return output, outdata
 
+
     def scan_file(
+        self,
+        filename,
+        delimiter=",",
+        tagname=None,
+        limit=1000,
+        encoding="utf8",
+        contexts=None,
+        langs=None,
+        dformat="short",
+        output=None,
+    ):
+        iterableargs = {}
+        if tagname is not None:
+            iterableargs['tagname'] = tagname
+                   
+        try:
+            data_file = open_iterable(filename, iterableargs=iterableargs) 
+        except Exception as e:
+            print('Exception', e)                 
+            print(
+                "Unsupported file type. Supported file types are CSV, TSV, JSON lines, BSON, Parquet, JSON. Empty results"
+            )
+            return []
+        items = list(data_file)            
+        print("Filetype idenfied as %s" % (data_file.__class__))
+        if len(items) == 0:
+            print("No object found to process")
+            return
+        print("Processing file %s" % (filename))
+
+        prepared, results = self.scan_data(items, limit, contexts, langs)
+        self._write_results(prepared, results, filename, dformat, output)
+
+    def scan_file_old(
         self,
         filename,
         delimiter=",",

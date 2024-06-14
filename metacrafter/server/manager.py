@@ -17,7 +17,7 @@ SECRET_KEY = "change_this_a_very_unique_secret_key"
 def run_server():
     #    global app
 
-    app = Flask("Datacrafter", static_url_path="/assets")
+    app = Flask("Metacrafter", static_url_path="/assets")
     app.config["SECRET_KEY"] = SECRET_KEY
     app.config["PROPAGATE_EXCEPTIONS"] = True
 
