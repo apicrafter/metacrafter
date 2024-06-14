@@ -46,7 +46,8 @@ install_requires = [
     'click',
     'tabulate',
     'pydantic',
-    'xmltodict'
+    'xmltodict',
+    'pyiterable'
 ]
 
 
@@ -64,7 +65,7 @@ if 'bdist_wheel' not in sys.argv:
 # bdist_wheel
 extras_require = {
     # https://wheel.readthedocs.io/en/latest/#defining-conditional-dependencies
-    'python_version == "3.0" or python_version == "3.1"': ['argparse>=1.2.1'],
+#    'python_version == "3.0" or python_version == "3.1"': ['argparse>=1.2.1'],
 }
 
 
