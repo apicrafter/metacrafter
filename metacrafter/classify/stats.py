@@ -203,7 +203,10 @@ class Analyzer:
                     itemlist.append(r)
 
         # process data items one by one
-        logging.debug("Start processing %s" % (fromfile))
+        if fromfile is not None:
+            logging.debug("Started analyzing %s" % (fromfile))
+        elif itemlist is not None:
+            logging.debug("Started analyzing array with  %d records" % (len(itemlist)))                
         for item in itemlist:
             count += 1
             dk = dict_generator(item)

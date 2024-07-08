@@ -46,13 +46,13 @@ File analysis examples
 ::
 
    # Scan CSV file
-   $ metacrafter scan-file --format short somefile.csv
+   $ metacrafter scan file --format short somefile.csv
 
    # Scan CSV file with delimiter ';' and windows-1251 encoding
-   $ metacrafter scan-file --format short --encoding windows-1251 --delimiter ';' somefile.csv
+   $ metacrafter scan file --format short --encoding windows-1251 --delimiter ';' somefile.csv
 
    # Scan JSON lines file, output results as stats table to file file
-   $ metacrafter scan-file --format stats -o somefile_result.json somefile.jsonl
+   $ metacrafter scan file --format stats -o somefile_result.json somefile.jsonl
 
 Result example of ‘full’ type of formatting
 

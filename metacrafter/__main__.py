@@ -7,9 +7,9 @@ import sys
 
 def main():
     try:
-        from .core import cli
+        from .core import app
 
-        exit_status = cli()
+        exit_status = app()
     except KeyboardInterrupt:
         print("Ctrl-C pressed. Aborting")
     sys.exit(0)

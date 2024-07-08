@@ -6,7 +6,7 @@ pymongo
 validators
 sqlalchemy
 PyYAML
-click
+typer
 tabulate
 chardet
 pydantic

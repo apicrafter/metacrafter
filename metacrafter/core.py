@@ -1,34 +1,28 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
-import csv
 import json
 import logging
 import os
 
-import bson
-import click
-import orjson
-import pandas
+
+import typer
+
 import qddate
 import qddate.patterns
 import yaml
 from tabulate import tabulate
-import xml.etree.ElementTree as etree
+
+import requests
 
 from iterable.helpers.detect import open_iterable
 
 from metacrafter.classify.processor import RulesProcessor, BASE_URL
 from metacrafter.classify.stats import Analyzer
-from metacrafter.classify.utils import (
-    detect_delimiter,
-    detect_encoding,
-    etree_to_dict,
-    xml_quick_analyzer,
-)
 
 
-SUPPORTED_FILE_TYPES = ["jsonl", "bson", "csv", "tsv", "json", "xml", 'ndjson', 'avro', 'parquet', 'xls', 'xlsx', 'orc']
-CODECS = ["lz4", 'gz', 'xz', 'bz2', 'zst', 'br']
+
+SUPPORTED_FILE_TYPES = ["jsonl", "bson", "csv", "tsv", "json", "xml", 'ndjson', 'avro', 'parquet', 'xls', 'xlsx', 'orc', 'ndjson']
+CODECS = ["lz4", 'gz', 'xz', 'bz2', 'zst', 'br', 'snappy']
 BINARY_DATA_FORMATS = ["bson", "parquet"]
 
 DEFAULT_METACRAFTER_CONFIGFILE = ".metacrafter"
@@ -37,24 +31,31 @@ DEFAULT_RULEPATH = [
 ]
 
 
+app = typer.Typer()
+rules_app = typer.Typer()
+app.add_typer(rules_app, name='rules')
+
+scan_app = typer.Typer()
+app.add_typer(scan_app, name='scan')
+
+server_app = typer.Typer()
+app.add_typer(server_app, name='server')
+
+
 class CrafterCmd(object):
-    def __init__(self):
+    def __init__(self, remote:str=None, debug:bool=False):
         # logging.getLogger().addHandler(logging.StreamHandler())
-        logging.basicConfig(
-            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-            level=logging.DEBUG,
-        )
-
-        self.processor = RulesProcessor()
-        self.prepare()
+        if debug:
+            logging.basicConfig(
+                format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+                level=logging.DEBUG,
+            )
+        self.remote = remote
+        if remote is None:
+            self.processor = RulesProcessor()
+            self.prepare()
+      
         pass
-
-    def run_classifier_server(self):
-        logging.info("Run server with classifier API")
-        from metacrafter.server.manager import run_server
-
-        self.prepare()
-        run_server()
 
     def prepare(self):
         rulepath = []
@@ -84,8 +85,44 @@ class CrafterCmd(object):
             patterns=qddate.patterns.PATTERNS_EN + qddate.patterns.PATTERNS_RU
         )
 
-    def rules_load(self):
-        self.processor.dumpStats()
+    def rules_list(self):
+        """Rules list"""
+        headers = ['id', 'name', 'type', 'match', 'group', 'group_desc', 'lang']
+        all_rules = []
+        for item in self.processor.field_rules:
+            rule = []
+            for h in headers:
+                rule.append(item[h])
+            rule.append(','.join(item['context']))                             
+            all_rules.append(rule)
+
+        for item in self.processor.data_rules:
+            rule = []
+            for h in headers:
+                rule.append(item[h])
+            rule.append(','.join(item['context']))        
+            all_rules.append(rule)
+
+        for pat in self.dparser.patterns:
+            rule = [pat['key'], pat['name'], 'data', 'ppr', 'datetime', "qddate datetime patterns", 'common', 'datetime']    
+            all_rules.append(rule) 
+        headers.append('context')            
+#        print(all_rules)
+        print(tabulate(all_rules, headers=headers))            
+
+    def rules_dumpstats(self):
+        """Dump rules statistics"""
+
+        print("Rule types:")
+        print("- field based rules %d" % (len(self.processor.field_rules)))
+        print("- data based rules %d" % (len(self.processor.data_rules)))
+        print("Context:")
+        for key in sorted(self.processor.contexts.keys()):
+            print("- %s %d" % (key, self.processor.contexts[key]))
+        print("Language:")
+        for key in sorted(self.processor.langs.keys()):
+            print("- %s %d" % (key, self.processor.langs[key]))
+        print("Data/time patterns (qddate): %d" % (len(self.dparser.patterns)))
 
     def _write_results(self, prepared, results, filename, dformat, output):
         if output:
@@ -153,6 +190,20 @@ class CrafterCmd(object):
             f = open(output, "w", encoding="utf8")
             f.write(json.dumps(out, indent=4, sort_keys=True))
             f.close()
+
+
+    def scan_data_client(self, api_root, items, limit=1000, contexts=None, langs=None):
+        params = {'langs' : ','.join(langs) if langs else None, 'contexts' : ','.join(contexts) if contexts else None}
+
+        url = api_root + '/api/v1/scan_data'
+
+        headers = {
+        'Content-Type': 'application/json'
+        }
+        payload = json.dumps(items)
+                
+        report = requests.request("POST", url, headers=headers, data=payload, params=params).json()
+        return report
 
     def scan_data(self, items, limit=1000, contexts=None, langs=None):
         # load rules since file is acceptable
@@ -229,16 +280,17 @@ class CrafterCmd(object):
             record["stats"] = datastats_dict[res.field]
 
             outdata.append(record)
-        return output, outdata
+        report = {'results' : output, 'data' : outdata}            
+        return report
 
 
     def scan_file(
         self,
         filename,
-        delimiter=",",
+        delimiter=None,
         tagname=None,
         limit=1000,
-        encoding="utf8",
+        encoding=None,
         contexts=None,
         langs=None,
         dformat="short",
@@ -247,6 +299,11 @@ class CrafterCmd(object):
         iterableargs = {}
         if tagname is not None:
             iterableargs['tagname'] = tagname
+        if delimiter is not None:
+            iterableargs['delimiter'] = delimiter            
+
+        if encoding is not None:
+            iterableargs['encoding'] = encoding                         
                    
         try:
             data_file = open_iterable(filename, iterableargs=iterableargs) 
@@ -257,138 +314,19 @@ class CrafterCmd(object):
             )
             return []
         items = list(data_file)            
-        print("Filetype idenfied as %s" % (data_file.__class__))
         if len(items) == 0:
-            print("No object found to process")
+            print("No records found to process")
             return
         print("Processing file %s" % (filename))
-
-        prepared, results = self.scan_data(items, limit, contexts, langs)
-        self._write_results(prepared, results, filename, dformat, output)
-
-    def scan_file_old(
-        self,
-        filename,
-        delimiter=",",
-        tagname=None,
-        limit=1000,
-        encoding="utf8",
-        contexts=None,
-        langs=None,
-        dformat="short",
-        output=None,
-    ):
-        ext = filename.rsplit(".", 1)[-1]
-        if ext not in BINARY_DATA_FORMATS:
-            encoding_dec = detect_encoding(filename)
-            if encoding_dec:
-                encoding = encoding_dec["encoding"]
-        filetype = None
-        if ext in ["csv", 'tsv']:
-            filetype = "csv"
-            detected_delimiter = detect_delimiter(filename, encoding)
-            if detected_delimiter:
-                delimiter = detected_delimiter
-            items = []
-            f = open(filename, "r", encoding=encoding)
-            reader = csv.DictReader(f, delimiter=delimiter)
-            n = 0
-            for row in reader:
-                n += 1
-                if n > limit:
-                    break
-                items.append(row)
-            f.close()
-        elif ext == "xml":
-            filetype = "xml"
-            if not tagname:
-                result = xml_quick_analyzer(filename)
-                if result is None:
-                    print(
-                        "No tag provided and no array tag found for file %s"
-                        % (filename)
-                    )
-                    return
-                tagname = result["short"]
-            items = []
-            f = open(filename, "rb")
-            n = 0
-            for event, elem in etree.iterparse(f):
-                shorttag = elem.tag.rsplit("}", 1)[-1]
-                if shorttag == tagname:
-                    j = etree_to_dict(elem, prefix_strip=True)
-                    items.append(j[shorttag])
-                    n += 1
-                    if n > limit:
-                        break
-            f.close()
-            if len(items) == 0:
-                print("No object with tag %s found in %s" % (str(tagname), filename))
-                return
-        elif ext == "jsonl":
-            filetype = "jsonl"
-            f = open(filename, "r", encoding=encoding)
-            items = []
-            n = 0
-            for l in f:
-                n += 1
-                if n > limit:
-                    break
-                items.append(orjson.loads(l))
-            f.close()
-        elif ext == "bson":
-            filetype = "bson"
-            f = open(filename, "rb")
-            items = []
-            n = 0
-            for l in bson.decode_file_iter(f):
-                n += 1
-                if n > limit:
-                    break
-                items.append(l)
-            f.close()
-        elif ext == "json":
-            filetype = "json"
-            f = open(filename, "r", encoding=encoding)
-            items = []
-            n = 0
-            data = json.load(f)
-            if not isinstance(data, list) and not isinstance(data[0], dict):
-                print(
-                    'Unsupported JSON file. It should be "array JSON" with list of objects. Please preprocess data to this format'
-                )
-                return []
-            for l in data:
-                n += 1
-                if n > limit:
-                    break
-                items.append(l)
-            f.close()
-        elif ext == "parquet":
-            filetype = "parquet"
-            tbl = pandas.read_parquet(filename)
-            items = []
-            n = 0
-            ad = tbl.to_dict("records")
-            for l in ad:
-                n += 1
-                if n > limit:
-                    break
-                items.append(l)
-
+        print("Filetype identified as %s" % (data_file.id()))
+        if self.remote is None:
+            report = self.scan_data(items, limit, contexts, langs)      
         else:
-            print(
-                "Unsupported file type. Supported file types are CSV, TSV, JSON lines, BSON, Parquet, JSON. Empty results"
-            )
-            return []
-        print("Filetype idenfied as %s" % (filetype))
-        if len(items) == 0:
-            print("No object found to process")
-            return
-        print("Processing file %s" % (filename))
+            report = self.scan_data_client(self.remote, items, limit, contexts, langs)      
+        self._write_results(report['results'], report['data'], filename, dformat, output)                  
+        data_file.close()
+        del items
 
-        prepared, results = self.scan_data(items, limit, contexts, langs)
-        self._write_results(prepared, results, filename, dformat, output)
 
     def scan_bulk(
         self,
@@ -446,9 +384,13 @@ class CrafterCmd(object):
                     print("Error processing table %s: %s" % (table, str(e)))
                     continue
                 items = [dict(u) for u in queryres.fetchall()]
-                prepared, results = self.scan_data(items, limit, contexts, langs)
-                db_results[table] = [prepared, results]
+                if self.remote is None:
+                    report = self.scan_data(items, limit, contexts, langs)      
+                else:
+                    report = self.scan_data_client(self.remote, items, limit, contexts, langs)                      
+                db_results[table] = [report['results'], report['data']]
         self._write_db_results(db_results, dformat, output)
+
 
 
     def scan_mongodb(
@@ -476,58 +418,39 @@ class CrafterCmd(object):
             print("- table %s" % (table))
             items = list(db[table].find().limit(limit))
             #            print(items)
-            prepared, results = self.scan_data(items, limit, contexts, langs)
-            db_results[table] = [prepared, results]
+            if self.remote is None:
+                report = self.scan_data(items, limit, contexts, langs)      
+            else:
+                report = self.scan_data_client(self.remote, items, limit, contexts, langs)
+            db_results[table] = [report['results'], report['data']]
         self._write_db_results(db_results, dformat, output)
 
 
-@click.group()
-def cli1():
-    pass
-
-
-@cli1.command()
-def server():
+@server_app.command('run')
+def server_run(host='127.0.0.1', port=10399, debug:bool=False):
     """Starts API and web interface for data management"""
-    acmd = CrafterCmd()
-    acmd.run_classifier_server()
+    logging.info("Run server with classifier API")
+    from metacrafter.server.manager import run_server
+
+    run_server(host, port, debug)
 
 
-@click.group()
-def cli2():
-    pass
+@rules_app.command('stats')
+def rules_stats(debug:bool=False):
+    """Generates rules statistics """
+    acmd = CrafterCmd(debug=debug)
+    acmd.rules_dumpstats()
 
+@rules_app.command('list')
+def rules_list(debug:bool=False):
+    """List rules"""
+    acmd = CrafterCmd(debug=debug)
+    acmd.rules_list()
 
-@cli2.command()
-def rules():
-    """Rules load and test"""
-    acmd = CrafterCmd()
-    acmd.rules_load()
-
-
-@click.group()
-def cli3():
-    pass
-
-
-@cli3.command()
-@click.argument("filename")
-@click.option("--delimiter", "-d", default=",", help="CSV delimiter")
-@click.option(
-    "--tagname", "-t", default=None, help="Name of the XML tag, required to process XML"
-)
-@click.option("--limit", "-n", default="1000", help="Limit of records")
-@click.option(
-    "--contexts", "-x", default=None, help="List of contexts to use. Comma separates"
-)
-@click.option(
-    "--langs", "-l", default=None, help="List of languages to use. Comma separated"
-)
-@click.option("--format", "-f", default="full", help="Output format: short, full")
-@click.option("--output", "-o", default=None, help="Output JSON filename")
-def scan_file(filename, delimiter, tagname, limit, contexts, langs, format, output):
+@scan_app.command('file')
+def scan_file(filename:str, delimiter:str=',', tagname:str=None, limit:int=100, contexts:str=None, langs:str=None, format:str="short", output:str=None, remote:str=None, debug:bool = False):
     """Match file"""
-    acmd = CrafterCmd()
+    acmd = CrafterCmd(remote, debug)
     acmd.scan_file(
         filename,
         delimiter,
@@ -539,27 +462,10 @@ def scan_file(filename, delimiter, tagname, limit, contexts, langs, format, outp
         output=output,
     )
 
-
-@click.group()
-def cli4():
-    pass
-
-
-@cli4.command()
-@click.option("--connstr", "-c", default=None, help="SQLAlchemy connection string")
-@click.option("--schema", "-s", default=None, help="Database schema. For Postgres DBs")
-@click.option("--limit", "-n", default="1000", help="Limit of records")
-@click.option(
-    "--contexts", "-x", default=None, help="List of contexts to use. Comma separates"
-)
-@click.option(
-    "--langs", "-l", default=None, help="List of languages to use. Comma separated"
-)
-@click.option("--format", "-f", default="full", help="Output format: short, full")
-@click.option("--output", "-o", default=None, help="Output JSON filename")
-def scan_db(connstr, schema, limit, contexts, langs, format, output):
+@scan_app.command('sql')
+def scan_db(connstr:str, schema:str=None, limit:int=1000, contexts:str=None, langs:str=None, format:str="short", output:str=None, remote:str=None, debug:bool=False):
     """Scan database using SQL alchemy connection string"""
-    acmd = CrafterCmd()
+    acmd = CrafterCmd(remote, debug)
     acmd.scan_db(
         connstr,
         schema,
@@ -571,33 +477,10 @@ def scan_db(connstr, schema, limit, contexts, langs, format, output):
     )
 
 
-@click.group()
-def cli5():
-    pass
-
-
-@cli5.command()
-@click.option(
-    "--host", "-h", default="localhost", help="MongoDB hostname, default localhost"
-)
-@click.option("--port", "-p", default=27017, help="MongoDB port, default 27017")
-@click.option("--dbname", "-d", default="test", help="Database name, default test")
-@click.option("--username", "-u", default=None, help="Username. Optional")
-@click.option("--password", "-P", default=None, help="Password. Optional")
-@click.option("--limit", "-n", default="1000", help="Limit of records, default 1000")
-@click.option(
-    "--contexts", "-x", default=None, help="List of contexts to use. Comma separates"
-)
-@click.option(
-    "--langs", "-l", default=None, help="List of languages to use. Comma separated"
-)
-@click.option("--format", "-f", default="full", help="Output format: short, full")
-@click.option("--output", "-o", default=None, help="Output JSON filename")
-def scan_mongodb(
-    host, port, dbname, username, password, limit, contexts, langs, format, output
-):
+@scan_app.command('mongodb')
+def scan_mongodb(host:str, port:int=27017, dbname:str=None, username:str=None, password:str=None, limit:int=1000, contexts:str=None, langs:str=None, format:str="short", output:str=None, remote:str=None, debug:bool=False):
     """Scan MongoDB database"""
-    acmd = CrafterCmd()
+    acmd = CrafterCmd(remote, debug)
     acmd.scan_mongodb(
         host,
         int(port),
@@ -612,26 +495,8 @@ def scan_mongodb(
     )
 
 
-@click.group()
-def cli6():
-    pass
-
-
-@cli6.command()
-@click.argument("dirname")
-@click.option("--delimiter", "-d", default=",", help="CSV delimiter")
-@click.option(
-    "--tagname", "-t", default=None, help="Name of the XML tag, required to process XML"
-)
-@click.option("--limit", "-n", default="1000", help="Limit of records")
-@click.option(
-    "--contexts", "-x", default=None, help="List of contexts to use. Comma separates"
-)
-@click.option(
-    "--langs", "-l", default=None, help="List of languages to use. Comma separated"
-)
-@click.option("--output", "-o", default="results.jsonl", help="Output NDJSON filename")
-def scan_bulk(dirname, delimiter, tagname, limit, contexts, langs, output):
+@scan_app.command('bulk')
+def scan_bulk(dirname:str, delimiter:str=',', tagname:str=None, limit:int=100, contexts:str=None, langs:str=None, format:str=None, output:str=None, remote:str=None, debug:bool=False):
     """Match group of files in a directory"""
     acmd = CrafterCmd()
     acmd.scan_bulk(
@@ -644,5 +509,3 @@ def scan_bulk(dirname, delimiter, tagname, limit, contexts, langs, output):
         output=output,
     )
 
-
-cli = click.CommandCollection(sources=[cli1, cli2, cli3, cli4, cli5, cli6])

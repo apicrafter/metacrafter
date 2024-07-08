@@ -42,13 +42,13 @@ Metacrafter key features:
 ### File analysis examples
 
     # Scan CSV file
-    $ metacrafter scan-file --format short somefile.csv
+    $ metacrafter scan file --format short somefile.csv
 
     # Scan CSV file with delimiter ';' and windows-1251 encoding
-    $ metacrafter scan-file --format short --encoding windows-1251 --delimiter ';' somefile.csv
+    $ metacrafter scan file --format short --encoding windows-1251 --delimiter ';' somefile.csv
 
     # Scan JSON lines file, output results as stats table to file file
-    $ metacrafter scan-file --format stats -o somefile_result.json somefile.jsonl
+    $ metacrafter scan file --format stats -o somefile_result.json somefile.jsonl
 
 
 Result example of 'full' type of formatting
@@ -74,9 +74,6 @@ ASN               str              asn 93.77                                    
 ASN Country code  str      dict    countrycode_alpha2 100.00,countrycode_alpha2 100.00,languagetag 99.56  https://registry.apicrafter.io/datatype/countrycode_alpha2
 IPs               str              ipv4 96.28                                                             https://registry.apicrafter.io/datatype/ipv4
 GovType           str      dict
-
-
-
 ```
 
 
@@ -89,10 +86,19 @@ GovType           str      dict
     $ metacrafter scan-db --schema public --connstr postgresql+psycopg2://username:password@127.0.0.1:15432/dbname
 
 
+### Use server mode
+
+    # Launch server
+    $ metacrafter server run
+
+    # Use server to scan CSV file
+    $ metacrafter scan file --format full somefile.csv --remote https://127.0.0.1:10399
+
 
 # Rules
 
-All rules described as YAML files and by default rules loaded from directory 'rules' or from list of directories provided in .metacrafter file with YAML format
+All rules described as YAML files and by default rules loaded from directory 'rules' or from list of directories provided in .metacrafter file with YAML format.
+
 
 All rules could be applied to **fields** or **data** .
 
@@ -143,43 +149,6 @@ Example Russian cadastral number
     match: ppr
     type: data
 ```
-
-## Detailed stats
-
-
-Rule types:
-- field based rules 146
-- data based rules 102
-
-Context:
-- common 47
-- companies 15
-- crypto 3
-- datetime 29
-- finances 5
-- geo 58
-- government 19
-- identifiers 3
-- industry 2
-- internet 18
-- medical 6
-- objectids 3
-- persons 19
-- pii 16
-- science 2
-- software 1
-- values 1
-- vehicles 1
-
-Language:
-- common 100
-- de 4
-- en 24
-- es 1
-- fr 11
-- ru 108
-
-Data/time patterns (qddate): 312
 
 
 ## Commercial support

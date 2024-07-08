@@ -43,7 +43,7 @@ install_requires = [
     'pandas',
     'sqlalchemy',
     'validators',
-    'click',
+    'typer',
     'tabulate',
     'pydantic',
     'xmltodict',
