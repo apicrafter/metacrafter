@@ -22,6 +22,9 @@ written as .yaml files and could be easily extended.
 File formats supported: \* CSV \* JSON lines \* JSON (array of records)
 \* BSON \* Parquet \* XML
 
+Metacrafter uses `iterable data <https://github.com/apicrafter/pyiterable>`__ python library 
+that allows to process most data files with almost any compression Gzip, Bzip2, Snappy, Brotli and etc. 
+
 Databases support: \* Any SQL database supported by
 `SQLAlchemy <https://www.sqlalchemy.org/>`__ \* NoSQL databases: \*
 MongoDB
@@ -158,19 +161,22 @@ Example Russian cadastral number
        match: ppr
        type: data
 
-Detailed stats
+
+Advanced rules
 --------------
 
-Rule types: - field based rules 146 - data based rules 102
+Metacrafter is looking for rules using .metacrafter file located in current or user home directory
 
-Context: - common 47 - companies 15 - crypto 3 - datetime 29 - finances
-5 - geo 58 - government 19 - identifiers 3 - industry 2 - internet 18 -
-medical 6 - objectids 3 - persons 19 - pii 16 - science 2 - software 1 -
-values 1 - vehicles 1
+Windows example of the _.metacrafter_ file
+```yaml
+rulepath:
+   - C:\workspace\public\apicrafter\metacrafter-rules\rules\ 
+```
 
-Language: - common 100 - de 4 - en 24 - es 1 - fr 11 - ru 108
+You could write your own ruleset or to use already prepared rules from metacrafter-rules repository
+For now you need to install rules code manually since there are some extensions and Python code to match certain rules
+Please follow instructions in https://github.com/apicrafter/metacrafter-rules repository.
 
-Data/time patterns (qddate): 312
 
 Commercial support
 ------------------
