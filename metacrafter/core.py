@@ -11,7 +11,7 @@ import qddate
 import qddate.patterns
 import yaml
 from tabulate import tabulate
-
+import csv
 import requests
 
 from iterable.helpers.detect import open_iterable
@@ -129,14 +129,27 @@ class CrafterCmd(object):
             if isinstance(output, str):
                 f = open(output, "w", encoding="utf8")
                 out = []
-                f.write(
-                    json.dumps(
-                        {"table": filename, "fields": results},
-                        indent=4,
-                        sort_keys=True,
-                        ensure_ascii=False,
+                if output.rsplit('.', 1)[-1].lower() == 'csv':
+                    if dformat == "short":
+                        for r in prepared:
+                            if len(r[3]) > 0:
+                                outres.append(r)
+                        headers = ["key", "ftype", "tags", "matches", "datatype_url"]
+                    elif dformat in ["full", "long"]:
+                        outres = prepared
+                        headers = ["key", "ftype", "tags", "matches", "datatype_url"]
+                    writer = csv.writer(f)
+                    writer.writerow(headers)
+                    writer.writerows(outres)
+                else:
+                    f.write(
+                        json.dumps(
+                            {"table": filename, "fields": results},
+                            indent=4,
+                            sort_keys=True,
+                            ensure_ascii=False,
+                        )
                     )
-                )
                 f.close()
                 print("Output written to %s" % (output))
             else:
@@ -331,7 +344,7 @@ class CrafterCmd(object):
     def scan_bulk(
         self,
         dirname,
-        delimiter=",",
+        delimiter=None,
         tagname=None,
         limit=1000,
         encoding="utf8",
@@ -448,7 +461,7 @@ def rules_list(debug:bool=False):
     acmd.rules_list()
 
 @scan_app.command('file')
-def scan_file(filename:str, delimiter:str=',', tagname:str=None, limit:int=100, contexts:str=None, langs:str=None, format:str="short", output:str=None, remote:str=None, debug:bool = False):
+def scan_file(filename:str, delimiter:str=None, tagname:str=None, limit:int=100, contexts:str=None, langs:str=None, format:str="short", output:str=None, remote:str=None, debug:bool = False):
     """Match file"""
     acmd = CrafterCmd(remote, debug)
     acmd.scan_file(
@@ -496,7 +509,7 @@ def scan_mongodb(host:str, port:int=27017, dbname:str=None, username:str=None, p
 
 
 @scan_app.command('bulk')
-def scan_bulk(dirname:str, delimiter:str=',', tagname:str=None, limit:int=100, contexts:str=None, langs:str=None, format:str=None, output:str=None, remote:str=None, debug:bool=False):
+def scan_bulk(dirname:str, delimiter:str=None, tagname:str=None, limit:int=100, contexts:str=None, langs:str=None, format:str=None, output:str=None, remote:str=None, debug:bool=False):
     """Match group of files in a directory"""
     acmd = CrafterCmd()
     acmd.scan_bulk(
