@@ -108,19 +108,39 @@ def string_array_to_charrange(sarr):
 
 
 def detect_encoding(filename, limit=1000000):
-    """Detects encoding of the filename"""
-    f = open(filename, "rb")
-    chunk = f.read(limit)
-    f.close()
+    """Detects encoding of the filename.
+    
+    Args:
+        filename: Path to the file to analyze
+        limit: Maximum bytes to read for detection (default: 1MB)
+        
+    Returns:
+        Dictionary with encoding detection results from chardet
+        
+    Raises:
+        IOError: If file cannot be read
+    """
+    with open(filename, "rb") as f:
+        chunk = f.read(limit)
     detected = chardet.detect(chunk)
     return detected
 
 
 def detect_delimiter(filename, encoding="utf8"):
-    """Detects CSV file delimiter by first line"""
-    f = open(filename, "r", encoding=encoding)
-    line = f.readline()
-    f.close()
+    """Detects CSV file delimiter by analyzing first line.
+    
+    Args:
+        filename: Path to the CSV file
+        encoding: File encoding (default: utf8)
+        
+    Returns:
+        Most likely delimiter character (',', ';', '\t', or '|')
+        
+    Raises:
+        IOError: If file cannot be read
+    """
+    with open(filename, "r", encoding=encoding) as f:
+        line = f.readline()
     dict1 = {
         ",": line.count(","),
         ";": line.count(";"),
@@ -178,10 +198,20 @@ def _seek_xml_lists(data, level=0, path=None, candidates=OrderedDict()):
 
 
 def xml_quick_analyzer(filename):
-    """Analyzes single XML file and returns tag objects"""
-    f = open(filename, "rb")  # , encoding=encoding)
-    data = xmltodict.parse(f, process_namespaces=False)
-    f.close()
+    """Analyzes single XML file and returns tag objects.
+    
+    Args:
+        filename: Path to the XML file
+        
+    Returns:
+        Dictionary with 'full' and 'short' tag keys, or None if no candidates found
+        
+    Raises:
+        IOError: If file cannot be read
+        xml.parsers.expat.ExpatError: If XML is malformed
+    """
+    with open(filename, "rb") as f:
+        data = xmltodict.parse(f, process_namespaces=False)
     candidates = _seek_xml_lists(data, level=0)
     if len(candidates) > 0:
         fullkey = str(list(candidates.keys())[0])

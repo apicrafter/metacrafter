@@ -14,12 +14,25 @@ Metacrafter is a rule based tool that helps to label fields of the tables in dat
 These rules written as .yaml files and could be easily extended.
 
 File formats supported:
-* CSV
-* JSON lines
+* CSV (comma-separated values)
+* TSV (tab-separated values)
+* JSON Lines (.jsonl, .ndjson)
 * JSON (array of records)
-* BSON
+* BSON (Binary JSON)
 * Parquet
+* Avro
+* ORC
 * XML
+* Excel (.xls, .xlsx)
+
+Compression codecs supported:
+* gzip (.gz)
+* bzip2 (.bz2)
+* xz (.xz)
+* lz4 (.lz4)
+* zstandard (.zst)
+* Brotli (.br)
+* Snappy
 
 Databases support:
 * Any SQL database supported by [SQLAlchemy](https://www.sqlalchemy.org/) 
@@ -39,20 +52,44 @@ Metacrafter key features:
 
 ## Command line examples
 
-### File analysis examples
+### File analysis examples (CLI)
 
-    # Scan CSV file
-    $ metacrafter scan file --format short somefile.csv
+Basic CSV scan with a human‑readable table:
 
-    # Scan CSV file with delimiter ';' and windows-1251 encoding
-    $ metacrafter scan file --format short --encoding windows-1251 --delimiter ';' somefile.csv
+```bash
+metacrafter scan file somefile.csv --format short
+```
 
-    # Scan JSON lines file, output results as stats table to file file
-    $ metacrafter scan file --format stats -o somefile_result.json somefile.jsonl
+CSV scan with a custom delimiter and encoding:
 
+```bash
+metacrafter scan file somefile.csv \
+  --format short \
+  --encoding windows-1251 \
+  --delimiter ';'
+```
 
-Result example of 'full' type of formatting
-```    
+JSON Lines scan with machine‑readable JSON output:
+
+```bash
+metacrafter scan file somefile.jsonl \
+  --format full \
+  --output-format json \
+  --stdout \
+  --pretty
+```
+
+CSV scan with statistics only (no classification), written to file:
+
+```bash
+metacrafter scan file somefile.csv \
+  --stats-only \
+  --output-format json \
+  -o somefile_stats.json
+```
+
+Result example of `--format full` table output:
+```
 key               ftype    tags    matches                                                                datatype_url
 ----------------  -------  ------  ---------------------------------------------------------------------  ----------------------------------------------------------
 Domain            str              fqdn 99.90                                                             https://registry.apicrafter.io/datatype/fqdn
@@ -77,27 +114,177 @@ GovType           str      dict
 ```
 
 
-### Database analysis examples
+### Database analysis examples (CLI)
 
-    # Scan MongoDB database 'fns', save results as result.json and format output as 'stats'
-    $ metacrafter scan-mongodb --dbname fns -o result.json -f full
+Scan a PostgreSQL database using a SQLAlchemy connection string (all schemas):
 
-    # Scan Postgres database 'dbname', with schema 'public'.
-    $ metacrafter scan-db --schema public --connstr postgresql+psycopg2://username:password@127.0.0.1:15432/dbname
+```bash
+metacrafter scan sql "postgresql+psycopg2://username:password@127.0.0.1:15432/dbname" \
+  --format short \
+  --output-format json \
+  --stdout
+```
 
+Scan a single schema (`public`) and write a CSV summary:
 
-### Use server mode
+```bash
+metacrafter scan sql "postgresql+psycopg2://username:password@127.0.0.1:15432/dbname" \
+  --schema public \
+  --format full \
+  --output-format csv \
+  -o db_results.csv
+```
 
-    # Launch server
-    $ metacrafter server run
+Scan a MongoDB database:
 
-    # Use server to scan CSV file
-    $ metacrafter scan file --format full somefile.csv --remote https://127.0.0.1:10399
+```bash
+metacrafter scan mongodb localhost \
+  --port 27017 \
+  --dbname fns \
+  --output-format json \
+  -o mongodb_results.json
+```
+
+Scan all supported files in a directory tree:
+
+```bash
+metacrafter scan bulk /path/to/data \
+  --limit 200 \
+  --output-format json \
+  -o bulk_results.json
+```
+
+### Server mode and remote scanning
+
+Launch the local API server:
+
+```bash
+metacrafter server run --host 127.0.0.1 --port 10399
+```
+
+Use the server from the CLI to scan a CSV file remotely:
+
+```bash
+metacrafter scan file somefile.csv \
+  --format full \
+  --remote http://127.0.0.1:10399 \
+  --output-format json \
+  --stdout
+```
+
+### Advanced CLI options (selection)
+
+All `scan` commands share a rich set of options. Some commonly used ones:
+
+- `--contexts` / `--langs`: filter rules by context and language (comma‑separated).
+- `--confidence`, `-c`: minimum confidence threshold for a match.
+- `--stop-on-match`: stop after the first matching rule per field.
+- `--no-dates`: disable automatic date/time pattern detection.
+- `--include-imprecise`: include imprecise rules that are ignored by default.
+- `--include-empty`: include empty values in statistics and confidence.
+- `--fields`: process only specific fields (comma‑separated).
+- `--output-format`: `table`, `json`, `yaml`, or `csv`.
+- `--stdout`, `--pretty`, `--indent`: control where and how JSON/YAML is written.
+- `--rulepath`: override default rule paths with your own YAML rule directories.
+- `--country-codes`: restrict rules to specific ISO country codes.
+
+Run `metacrafter --help`, `metacrafter scan file --help`, etc. for the full list.
+
+## Configuration
+
+Metacrafter can be configured using a `.metacrafter` configuration file. The configuration file is a YAML file that can be placed in:
+- The current working directory (`.metacrafter`)
+- Your home directory (`~/.metacrafter`)
+
+### Configuration file format
+
+```yaml
+rulepath:
+  - ./rules
+  - ./custom_rules
+  - /path/to/additional/rules
+```
+
+The `rulepath` option specifies a list of directories where Metacrafter should look for rule YAML files. If not specified, it defaults to `["rules"]`.
+
+You can also override the rule path using the `--rulepath` command-line option.
+
+## Python API examples
+
+Metacrafter can also be used as a Python library.
+
+### Scan in‑memory records (list of dicts)
+
+```python
+from metacrafter.core import CrafterCmd
+
+# Example in‑memory data (e.g. loaded from your own sources)
+items = [
+    {"email": "alice@example.com", "full_name": "Alice Example"},
+    {"email": "bob@example.com", "full_name": "Bob Example"},
+]
+
+cmd = CrafterCmd()
+
+report = cmd.scan_data(
+    items,
+    limit=100,
+    contexts="pii",        # optional: restrict to PII‑related rules
+    langs="en",            # optional: restrict to English rules
+    confidence=20.0,       # minimum confidence threshold
+    stop_on_match=False,   # consider multiple matches per field
+)
+
+# High‑level table‑like summary
+for row in report["results"]:
+    field, ftype, tags, matches, datatype_url = row
+    print(field, "=>", matches, "(", datatype_url, ")")
+
+# Detailed per‑field metadata and matches
+for field_info in report["data"]:
+    print(field_info["field"], field_info["matches"])
+```
+
+### Scan a file programmatically
+
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd()
+
+cmd.scan_file(
+    filename="somefile.csv",
+    delimiter=",",
+    encoding="utf8",
+    limit=500,
+    contexts="pii",
+    langs="en",
+    dformat="short",
+    output="results.json",
+    output_format="json",
+)
+```
+
+### Using custom rule paths or country filters
+
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd(
+    rulepath=["./rules", "./more_rules"],
+    country_codes=["us", "ca"],   # restrict to North‑American rules
+)
+
+report = cmd.scan_data(
+    items=[{"ssn": "123-45-6789"}],
+    contexts="pii",
+)
+```
 
 
 # Rules
 
-All rules described as YAML files and by default rules loaded from directory 'rules' or from list of directories provided in .metacrafter file with YAML format.
+All rules are described as YAML files. By default, rules are loaded from the `rules` directory or from a list of directories specified in the `.metacrafter` configuration file (see [Configuration](#configuration) section above).
 
 
 All rules could be applied to **fields** or **data** .

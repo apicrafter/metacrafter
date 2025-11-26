@@ -2,6 +2,8 @@ import glob
 import pickle
 import importlib
 import logging
+import warnings
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
@@ -27,6 +29,157 @@ from pyparsing import (
     printables,
     nums,
 )
+
+
+def _normalize_country_codes(country_value):
+    """Return normalized list of lower-cased country codes.
+
+    Accepts comma-separated string, single string, or list/tuple.
+    """
+    if not country_value:
+        return None
+    if isinstance(country_value, str):
+        parts = [country_value]
+    elif isinstance(country_value, (list, tuple, set)):
+        parts = list(country_value)
+    else:
+        return None
+    normalized = []
+    for token in parts:
+        if token is None:
+            continue
+        for piece in str(token).replace(";", ",").split(","):
+            code = piece.strip().lower()
+            if code:
+                normalized.append(code)
+    return normalized or None
+
+
+def _create_safe_namespace():
+    """Create a safe namespace for evaluating PyParsing rules.
+    
+    This restricts eval() to only allow PyParsing objects and basic operations,
+    preventing arbitrary code execution.
+    """
+    # Create a restricted namespace with only allowed PyParsing objects
+    safe_dict = {
+        # PyParsing classes
+        'Word': Word,
+        'Literal': Literal,
+        'CaselessLiteral': CaselessLiteral,
+        'Optional': Optional,
+        'oneOf': oneOf,
+        'LineStart': LineStart,
+        'LineEnd': LineEnd,
+        'lineStart': lineStart,
+        'lineEnd': lineEnd,
+        # Character sets
+        'alphas': alphas,
+        'alphanums': alphanums,
+        'hexnums': hexnums,
+        'nums': nums,
+        'printables': printables,
+        # Basic operations
+        '__builtins__': {
+            'len': len,
+            'str': str,
+            'int': int,
+            'float': float,
+            'min': min,
+            'max': max,
+            'abs': abs,
+        },
+    }
+    return safe_dict
+
+
+def _compile_rule_with_warning_capture(rule_string, rule_id, filename, rule_label):
+    """Compile rule while capturing SyntaxWarnings for debugging."""
+    with warnings.catch_warnings(record=True) as caught_warnings:
+        warnings.simplefilter("always", SyntaxWarning)
+        compiled_rule = _safe_eval_pyparsing_rule(
+            rule_string,
+            f"{filename}:{rule_id}:{rule_label}",
+        )
+    for warn in caught_warnings:
+        logging.warning(
+            "SyntaxWarning when compiling %s rule '%s' in %s: %s",
+            rule_label,
+            rule_id,
+            filename,
+            warn.message,
+        )
+    return compiled_rule
+
+@lru_cache(maxsize=256)
+def _safe_eval_pyparsing_rule(rule_string, rule_source="<string>"):
+    """Safely evaluate a PyParsing rule string.
+    
+    Cached to avoid recompiling the same rules multiple times.
+    
+    Args:
+        rule_string: String containing PyParsing expression
+        
+    Returns:
+        Compiled PyParsing expression
+        
+    Raises:
+        ValueError: If rule contains unsafe code
+        SyntaxError: If rule syntax is invalid
+    """
+    # Validate that the rule doesn't contain dangerous patterns
+    dangerous_patterns = [
+        '__',
+        'import',
+        'exec',
+        'eval',
+        'compile',
+        'open',
+        'file',
+        'input',
+        'raw_input',
+        'reload',
+        '__import__',
+        'getattr',
+        'setattr',
+        'delattr',
+        'hasattr',
+        'globals',
+        'locals',
+        'vars',
+        'dir',
+    ]
+    
+    rule_lower = rule_string.lower()
+    for pattern in dangerous_patterns:
+        if pattern in rule_lower:
+            raise ValueError(
+                f"Rule contains potentially dangerous pattern: {pattern}. "
+                "Only PyParsing expressions are allowed."
+            )
+    
+    # Use restricted namespace for eval
+    safe_dict = _create_safe_namespace()
+    rule_filename = rule_source or "<string>"
+    
+    try:
+        # Compile the rule in restricted namespace
+        code_obj = compile(rule_string, rule_filename, "eval")
+        compiled_rule = eval(code_obj, {"__builtins__": {}}, safe_dict)
+        return compiled_rule
+    except (SyntaxError, NameError, TypeError) as e:
+        # These are expected errors for invalid rule syntax
+        raise ValueError(
+            f"Failed to compile PyParsing rule: {rule_string}. "
+            f"Error: {str(e)}"
+        ) from e
+    except Exception as e:
+        # Catch-all for any other unexpected errors
+        logging.error(f"Unexpected error compiling rule '{rule_string}': {e}", exc_info=True)
+        raise ValueError(
+            f"Failed to compile PyParsing rule: {rule_string}. "
+            f"Unexpected error: {str(e)}"
+        ) from e
 
 DEFAULT_MAX_LEN = 100
 DEFAULT_MIN_LEN = 3
@@ -112,9 +265,12 @@ class RuleResult:
 class RulesProcessor:
     """Classification rules processor class"""
 
-    def __init__(self, langs=None, contexts=None):
+    def __init__(self, langs=None, contexts=None, countries=None):
         self.preset_langs = langs
         self.preset_contexts = contexts
+        self.preset_countries = (
+            [c.lower() for c in countries] if countries else None
+        )
         self.reset_rules()
         pass
 
@@ -125,19 +281,25 @@ class RulesProcessor:
         self.__rule_keys = []
         self.langs = {}
         self.contexts = {}
+        self.countries = {}
 
     def import_rules(self, filename):
         """Import rules from file"""
         logging.debug("Loading rules file %s" % (filename))
-        f = open(filename, "r", encoding="utf8")
-        ruledata = yaml.load(f, Loader=yaml.FullLoader)
-        f.close()
+        with open(filename, "r", encoding="utf8") as f:
+            ruledata = yaml.safe_load(f)
 
         # If group of rules context or lang not in allowed list, skip it
         if self.preset_langs and ruledata["lang"] not in self.preset_langs:
             return
         if self.preset_contexts and ruledata["context"] not in self.preset_contexts:
             return
+        rule_countries = _normalize_country_codes(ruledata.get("country_code"))
+        if self.preset_countries:
+            if not rule_countries:
+                return
+            if not any(code in self.preset_countries for code in rule_countries):
+                return
 
         for rulekey in ruledata["rules"].keys():
             if rulekey in self.__rule_keys:
@@ -151,7 +313,20 @@ class RulesProcessor:
             )
             #            print(rulekey, rule['imprecise'])
             if rule["match"] == "ppr":
-                rule["compiled"] = lineStart + eval(rule["rule"]) + lineEnd
+                try:
+                    compiled_rule = _compile_rule_with_warning_capture(
+                        rule["rule"],
+                        rulekey,
+                        filename,
+                        "data",
+                    )
+                    rule["compiled"] = lineStart + compiled_rule + lineEnd
+                except (ValueError, SyntaxError) as e:
+                    logging.error(
+                        f"Failed to compile PyParsing rule '{rulekey}': {e}. "
+                        "Skipping this rule."
+                    )
+                    continue
             elif rule["match"] == "func":
                 module, funcname = rule["rule"].rsplit(".", 1)
                 match_func = getattr(importlib.import_module(module), funcname)
@@ -161,7 +336,8 @@ class RulesProcessor:
                 ruledata["rules"][rulekey]["compiled"] = (
                     lineStart + oneOf(keywords, caseless=True) + lineEnd
                 )
-                ruledata["rules"][rulekey]["keywords"] = list(map(str.lower, keywords))
+                # Convert to set for O(1) membership testing instead of O(n) list lookup
+                ruledata["rules"][rulekey]["keywords"] = set(map(str.lower, keywords))
             if rule["match"] == "text":
                 rule["maxlen"] = len(max(keywords, key=len))
                 rule["minlen"] = len(min(keywords, key=len))
@@ -178,10 +354,24 @@ class RulesProcessor:
                 rule["vfunc"] = match_func
             if "fieldrule" in rule.keys() and "fieldrulematch" in rule.keys():
                 if rule["fieldrulematch"] == "ppr":
-                    rule["f_compiled"] = lineStart + eval(rule["fieldrule"]) + lineEnd
+                    try:
+                        compiled_field_rule = _compile_rule_with_warning_capture(
+                            rule["fieldrule"],
+                            rulekey,
+                            filename,
+                            "field",
+                        )
+                        rule["f_compiled"] = lineStart + compiled_field_rule + lineEnd
+                    except (ValueError, SyntaxError) as e:
+                        logging.error(
+                            f"Failed to compile field PyParsing rule '{rulekey}': {e}. "
+                            "Skipping field rule."
+                        )
+                        # Continue without field rule - data rule can still work
                 elif rule["fieldrulematch"] == "text":
                     keywords = rule["fieldrule"].split(",")
-                    ruledata["rules"][rulekey]["fieldkeywords"] = list(
+                    # Convert to set for O(1) membership testing instead of O(n) list lookup
+                    ruledata["rules"][rulekey]["fieldkeywords"] = set(
                         map(str.lower, keywords)
                     )
                     ruledata["rules"][rulekey]["f_compiled"] = (
@@ -192,6 +382,7 @@ class RulesProcessor:
                 rule[key] = ruledata[key]
             rule["group"] = ruledata["name"]
             rule["group_desc"] = ruledata["description"]
+            rule["country_code"] = rule_countries
             if rule["type"] == "field":
                 self.field_rules.append(rule)
             elif rule["type"] == "data":
@@ -214,6 +405,13 @@ class RulesProcessor:
             for context in contexts:
                 v = self.contexts.get(context, 0)
                 self.contexts[context] = v + 1
+            if rule_countries:
+                for code in rule_countries:
+                    v = self.countries.get(code, 0)
+                    self.countries[code] = v + 1
+            else:
+                v = self.countries.get(None, 0)
+                self.countries[None] = v + 1
 
         logging.debug("Loaded rules from %s" % filename)
 
@@ -240,6 +438,10 @@ class RulesProcessor:
         print("Language:")
         for key in sorted(self.langs.keys()):
             print("- %s %d" % (key, self.langs[key]))
+        if self.countries:
+            print("Country codes:")
+            for key in sorted(self.countries.keys()):
+                print("- %s %d" % (key or "unknown", self.countries[key]))
         dparser = qddate.DateParser(
             patterns=qddate.patterns.PATTERNS_EN + qddate.patterns.PATTERNS_RU
         )
@@ -350,11 +552,11 @@ class RulesProcessor:
                         if stop_on_match:
                             break
                 elif rule["match"] == "text":
-                    res = False
-                    if shortfield.lower() in rule["keywords"]:
-                        res = True
-                    if field.lower() in rule["keywords"]:
-                        res = True
+                    # Cache lowercase conversions to avoid repeated calls
+                    shortfield_lower = shortfield.lower()
+                    field_lower = field.lower()
+                    res = (shortfield_lower in rule["keywords"] or 
+                           field_lower in rule["keywords"])
                     if res:
                         m_result.add(
                             RuleResult(
@@ -437,6 +639,7 @@ class RulesProcessor:
                                 except ParseException as e:
                                     pass
                             elif rule["fieldrulematch"] == "text":
+                                # Cache lowercase conversion
                                 if shortfield.lower() in rule["fieldkeywords"]:
                                     rules.append(rule)
                         else:

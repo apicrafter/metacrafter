@@ -5,8 +5,8 @@ import yaml
 from metacrafter.classify.processor import RulesProcessor
 
 RULEPATHS = [
-			'..\/rules', 
-			'..\/..\/metacrafter-rules\/rules'
+			'../rules',
+			'../../metacrafter-rules/rules'
 		]
 
 

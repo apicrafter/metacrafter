@@ -52,9 +52,9 @@ def get_option(options, name):
 
 def guess_int_size(i):
     """Identifies size of the integer"""
-    if i < 255:
+    if i < 256:
         return "uint8"
-    if i < 65535:
+    if i < 65536:
         return "uint16"
     return "uint32"
 
@@ -137,8 +137,15 @@ class Analyzer:
             self.qd = DateParser(generate=True)
         pass
 
-    def analyze(self, fromfile=None, itemlist=None, options=DEFAULT_OPTIONS):
-        """Analyzes JSON or another data file and produces stats"""
+    def analyze(self, fromfile=None, itemlist=None, options=DEFAULT_OPTIONS, progress=None):
+        """Analyzes JSON or another data file and produces stats.
+
+        Args:
+            fromfile: Optional path to source file.
+            itemlist: Optional iterable with items to process.
+            options: Analyzer options dict.
+            progress: Optional progress bar with .update() that is advanced per record.
+        """
         if fromfile == None and itemlist == None:
             return None
 
@@ -146,8 +153,12 @@ class Analyzer:
             options["empty"] = DEFAULT_EMPTY_VALUES
 
         dictshare = get_option(options, "dictshare")
-        if dictshare and dictshare.isdigit():
+        if isinstance(dictshare, int):
+            pass
+        elif dictshare and dictshare.isdigit():
             dictshare = int(dictshare)
+        elif dictshare is None:
+            dictshare = DEFAULT_DICT_SHARE
         else:
             dictshare = DEFAULT_DICT_SHARE
 
@@ -169,7 +180,7 @@ class Analyzer:
                 print("Only JSON lines (.jsonl), .csv and .bson files supported now")
                 return
 
-            if options["zipfile"]:
+            if 'zipfile' in options.keys() and options["zipfile"]:
                 z = zipfile.ZipFile(fromfile, mode="r")
                 fnames = z.namelist()
                 finfilename = fnames[0]
@@ -209,6 +220,8 @@ class Analyzer:
             logging.debug("Started analyzing array with  %d records" % (len(itemlist)))                
         for item in itemlist:
             count += 1
+            if progress is not None:
+                progress.update(1)
             dk = dict_generator(item)
             if count % 1000 == 0:
                 logging.debug("Processing %d records of %s" % (count, fromfile))

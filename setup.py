@@ -47,7 +47,8 @@ install_requires = [
     'tabulate',
     'pydantic',
     'xmltodict',
-    'iterabledata'
+    'iterabledata',
+    'tqdm'
 ]
 
 

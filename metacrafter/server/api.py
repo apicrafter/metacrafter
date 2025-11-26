@@ -9,62 +9,73 @@ from flask import (
 )
 
 from metacrafter.classify.stats import Analyzer
+from metacrafter.config import ConfigLoader
 from ..classify.processor import RulesProcessor, BASE_URL
 
 RULES_PROCESSOR = None
 DATE_PARSER = None
 
-DEFAULT_METACRAFTER_CONFIGFILE = ".metacrafter"
-DEFAULT_RULEPATH = [
-    "rules",
-]
 MANAGE_PREFIX = ""
 DEFAULT_LIMIT = 1000
 
 
 def initialize_rules():
+    """Initialize rules processor and date parser from configuration.
+    
+    Loads rules from configured paths and initializes the date parser.
+    Raises exceptions if configuration cannot be loaded.
+    """
     global RULES_PROCESSOR
-    global DATE_PARSER    
-    RULES_PROCESSOR = RulesProcessor()
-    rulepath = []
-    filepath = None
-    if os.path.exists(DEFAULT_METACRAFTER_CONFIGFILE):
-        logging.debug("Local .metacrafter config exists. Using it")
-        filepath = DEFAULT_METACRAFTER_CONFIGFILE
-    elif os.path.exists(
-        os.path.join(os.path.expanduser("~"), DEFAULT_METACRAFTER_CONFIGFILE)
-    ):
-        logging.debug("Home dir .metacrafter config exists. Using it")
-        filepath = os.path.join(
-            os.path.expanduser("~"), DEFAULT_METACRAFTER_CONFIGFILE
-        )
-    if filepath:
-        f = open(filepath, "r", encoding="utf8")
-        config = yaml.load(f, Loader=yaml.FullLoader)
-        f.close()
-        if config:
-            if "rulepath" in config.keys():
-                rulepath = config["rulepath"]
-    else:
-        rulepath = DEFAULT_RULEPATH
-    for rp in rulepath:        
-        RULES_PROCESSOR.import_rules_path(rp, recursive=True)
+    global DATE_PARSER
+    
+    try:
+        RULES_PROCESSOR = RulesProcessor()
+        rulepath = ConfigLoader.get_rulepath()
+        for rp in rulepath:        
+            RULES_PROCESSOR.import_rules_path(rp, recursive=True)
 
-    DATE_PARSER = qddate.DateParser(
-        patterns=qddate.patterns.PATTERNS_EN + qddate.patterns.PATTERNS_RU
-    )
+        DATE_PARSER = qddate.DateParser(
+            patterns=qddate.patterns.PATTERNS_EN + qddate.patterns.PATTERNS_RU
+        )
+    except (yaml.YAMLError, IOError) as e:
+        logging.error(f"Error loading configuration: {e}")
+        # Fall back to default rulepath
+        rulepath = ConfigLoader.DEFAULT_RULEPATH
+        for rp in rulepath:        
+            RULES_PROCESSOR.import_rules_path(rp, recursive=True)
+        DATE_PARSER = qddate.DateParser(
+            patterns=qddate.patterns.PATTERNS_EN + qddate.patterns.PATTERNS_RU
+        )
 
 
 def scan_data():
+    """API endpoint to scan data items and return classification results.
+    
+    Accepts JSON array of items and returns classification results.
+    
+    Query Parameters:
+        format: Output format (short/full), default: short
+        langs: Comma-separated language filters
+        contexts: Comma-separated context filters
+        limit: Maximum records to process per field, default: 1000
+        
+    Returns:
+        JSON response with classification results
+        
+    Raises:
+        ValueError: If request data is invalid
+        KeyError: If required data is missing
+    """
     global RULES_PROCESSOR
     global DATE_PARSER
-    output = {}
+    
     format = request.args.get("format", default="short", type=str)
     langs = request.args.get("langs", default=None, type=str)
     contexts = request.args.get("contexts", default=None, type=str)
-    scan_limit = request.args.get("limit", default=1000, type=int) 
+    scan_limit = request.args.get("limit", default=DEFAULT_LIMIT, type=int) 
     langs = langs.split(".") if langs is not None else None
     contexts = contexts.split(".") if contexts is not None else None
+    
     try: 
         items = json.loads(request.data)
         analyzer = Analyzer()
@@ -96,10 +107,12 @@ def scan_data():
             for n in range(0, len(headers)):
                 datastats_dict[row[0]][headers[n]] = row[n]
 
+        # Use minimum confidence threshold (5%) for API requests
+        MIN_CONFIDENCE_FOR_MATCH = 5.0
         results = RULES_PROCESSOR.match_dict(
             items,
             datastats=datastats_dict,
-            confidence=5,
+            confidence=MIN_CONFIDENCE_FOR_MATCH,
             dateparser=DATE_PARSER,
             parse_dates=True,
             limit=scan_limit,
@@ -143,9 +156,18 @@ def scan_data():
 
             outdata.append(record)
         report = {'results' : output, 'data' : outdata}            
-    except KeyboardInterrupt as ex:
-        report = {"error": "Exception occured", "message": str(ex)}
-        logging.info(report)
+    except (ValueError, KeyError) as ex:
+        logging.error(f"Invalid request data: {ex}")
+        report = {"error": "Invalid request data", "message": str(ex)}
+        return jsonify(report), 400
+    except json.JSONDecodeError as ex:
+        logging.error(f"JSON decode error: {ex}")
+        report = {"error": "Invalid JSON", "message": str(ex)}
+        return jsonify(report), 400
+    except Exception as ex:
+        logging.error(f"Unexpected error in scan_data: {ex}", exc_info=True)
+        report = {"error": "Internal server error", "message": str(ex)}
+        return jsonify(report), 500
     return jsonify(report)
 
 

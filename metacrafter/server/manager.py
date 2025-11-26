@@ -1,4 +1,5 @@
 import logging
+import os
 
 from flask import (
     Flask,
@@ -11,7 +12,12 @@ CLASSIFY_HOST = "127.0.0.1"
 CLASSIFY_PORT = 10399
 DEBUG = True
 
-SECRET_KEY = "change_this_a_very_unique_secret_key"
+# Load secret key from environment variable, generate random one if not set
+# Never commit actual secret keys to version control
+SECRET_KEY = os.environ.get(
+    'METACRAFTER_SECRET_KEY',
+    os.urandom(32).hex() if hasattr(os, 'urandom') else 'change_this_a_very_unique_secret_key'
+)
 
 
 def run_server(host=CLASSIFY_HOST, port=CLASSIFY_PORT, debug=DEBUG):
