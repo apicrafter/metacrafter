@@ -6,10 +6,11 @@ import sys
 
 
 def main():
+    """Main entry point for metacrafter CLI."""
     try:
         from .core import app
 
-        exit_status = app()
+        app()
     except KeyboardInterrupt:
         print("Ctrl-C pressed. Aborting")
     sys.exit(0)

@@ -198,6 +198,68 @@ class TestDetectDelimiter:
             assert result == "\t"
 
 
+class TestFormatUtilities:
+    """Test format utility functions."""
+
+    def test_get_supported_formats(self):
+        """Test getting list of supported formats."""
+        from metacrafter.classify.utils import get_supported_formats
+
+        formats = get_supported_formats()
+        assert isinstance(formats, list)
+        assert len(formats) > 0
+        assert "csv" in formats
+        assert "json" in formats
+
+    def test_get_supported_codecs(self):
+        """Test getting list of supported codecs."""
+        from metacrafter.classify.utils import get_supported_codecs
+
+        codecs = get_supported_codecs()
+        assert isinstance(codecs, list)
+        assert len(codecs) > 0
+        assert "gz" in codecs
+
+    def test_is_format_supported(self):
+        """Test format support checking."""
+        from metacrafter.classify.utils import is_format_supported
+
+        assert is_format_supported("test.csv") is True
+        assert is_format_supported("test.json") is True
+        assert is_format_supported("test.jsonl") is True
+        assert is_format_supported("test.parquet") is True
+        assert is_format_supported("test.unknown") is False
+        assert is_format_supported("test") is False
+
+    def test_is_format_supported_compressed(self):
+        """Test format support checking with compression."""
+        from metacrafter.classify.utils import is_format_supported
+
+        assert is_format_supported("test.csv.gz") is True
+        assert is_format_supported("test.json.bz2") is True
+        assert is_format_supported("test.csv.xz") is True
+
+    def test_get_format_from_filename(self):
+        """Test format extraction from filename."""
+        from metacrafter.classify.utils import get_format_from_filename
+
+        format, codec = get_format_from_filename("test.csv")
+        assert format == "csv"
+        assert codec is None
+
+        format, codec = get_format_from_filename("test.csv.gz")
+        assert format == "csv"
+        assert codec == "gz"
+
+        format, codec = get_format_from_filename("test.json.bz2")
+        assert format == "json"
+        assert codec == "bz2"
+
+        format, codec = get_format_from_filename("test.unknown")
+        assert format is None
+        assert codec is None
+
+
 class TestEtreeToDict:
     def test_etree_simple(self):
         # Mock etree element

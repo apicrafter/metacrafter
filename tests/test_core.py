@@ -106,11 +106,10 @@ class TestCrafterCmd:
         )
         if os.path.exists(fixture_path):
             # This will print output, but we can test it doesn't crash
-            try:
-                cmd.scan_file(fixture_path, limit=10, dformat="short")
-            except Exception as e:
-                # Some exceptions might be expected (e.g., file format issues)
-                pass
+            result = cmd.scan_file(fixture_path, limit=10, dformat="short")
+            # scan_file returns None when output is written to stdout
+            # or returns empty list on error, so we just verify it doesn't raise
+            assert result is None or isinstance(result, list)
 
     def test_scan_file_jsonl(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -118,10 +117,10 @@ class TestCrafterCmd:
             os.path.dirname(__file__), "fixtures", "2cols6rows_flat.jsonl"
         )
         if os.path.exists(fixture_path):
-            try:
-                cmd.scan_file(fixture_path, limit=10, dformat="short")
-            except Exception as e:
-                pass
+            result = cmd.scan_file(fixture_path, limit=10, dformat="short")
+            # scan_file returns None when output is written to stdout
+            # or returns empty list on error
+            assert result is None or isinstance(result, list)
 
     def test_scan_file_with_delimiter(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -129,12 +128,10 @@ class TestCrafterCmd:
             os.path.dirname(__file__), "fixtures", "ru_utf8_semicolon.csv"
         )
         if os.path.exists(fixture_path):
-            try:
-                cmd.scan_file(
-                    fixture_path, delimiter=";", limit=10, dformat="short"
-                )
-            except Exception as e:
-                pass
+            result = cmd.scan_file(
+                fixture_path, delimiter=";", limit=10, dformat="short"
+            )
+            assert result is None or isinstance(result, list)
 
     def test_scan_file_with_encoding(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -142,12 +139,10 @@ class TestCrafterCmd:
             os.path.dirname(__file__), "fixtures", "ru_cp1251_comma.csv"
         )
         if os.path.exists(fixture_path):
-            try:
-                cmd.scan_file(
-                    fixture_path, encoding="cp1251", limit=10, dformat="short"
-                )
-            except Exception as e:
-                pass
+            result = cmd.scan_file(
+                fixture_path, encoding="cp1251", limit=10, dformat="short"
+            )
+            assert result is None or isinstance(result, list)
 
     def test_scan_file_invalid_file(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -244,32 +239,34 @@ rules:
 
     def test_write_results_no_output(self):
         cmd = CrafterCmd(remote=None, debug=False)
-        prepared = [
-            ["field1", "str", "tag1,tag2", "match1", "url1"],
-            ["field2", "int", "", "", ""],
-        ]
-        results = [
-            {"field": "field1", "matches": []},
-            {"field": "field2", "matches": []},
-        ]
+        report = {
+            "results": [
+                ["field1", "str", "tag1,tag2", "match1", "url1"],
+                ["field2", "int", "", "", ""],
+            ],
+            "data": [
+                {"field": "field1", "matches": []},
+                {"field": "field2", "matches": []},
+            ],
+        }
         # This prints to stdout, test doesn't crash
         try:
-            cmd._write_results(prepared, results, "test.csv", "short", None)
+            cmd._write_results(report, "test.csv", "short", None)
         except Exception as e:
             pass
 
     def test_write_results_with_output(self):
         cmd = CrafterCmd(remote=None, debug=False)
-        prepared = [
-            ["field1", "str", "tag1", "match1", "url1"],
-        ]
-        results = [{"field": "field1", "matches": []}]
+        report = {
+            "results": [["field1", "str", "tag1", "match1", "url1"]],
+            "data": [{"field": "field1", "matches": []}],
+        }
 
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:
             output_path = f.name
 
         try:
-            cmd._write_results(prepared, results, "test.csv", "short", output_path)
+            cmd._write_results(report, "test.csv", "short", output_path)
             if os.path.exists(output_path):
                 with open(output_path, "r") as f:
                     content = f.read()
@@ -280,16 +277,16 @@ rules:
 
     def test_write_results_csv_output(self):
         cmd = CrafterCmd(remote=None, debug=False)
-        prepared = [
-            ["field1", "str", "tag1", "match1", "url1"],
-        ]
-        results = [{"field": "field1", "matches": []}]
+        report = {
+            "results": [["field1", "str", "tag1", "match1", "url1"]],
+            "data": [{"field": "field1", "matches": []}],
+        }
 
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".csv") as f:
             output_path = f.name
 
         try:
-            cmd._write_results(prepared, results, "test.csv", "short", output_path)
+            cmd._write_results(report, "test.csv", "short", output_path)
             if os.path.exists(output_path):
                 with open(output_path, "r") as f:
                     content = f.read()
@@ -301,27 +298,29 @@ rules:
 
     def test_write_results_full_format(self):
         cmd = CrafterCmd(remote=None, debug=False)
-        prepared = [
-            ["field1", "str", "tag1", "match1", "url1"],
-            ["field2", "int", "", "", ""],
-        ]
-        results = [
-            {"field": "field1", "matches": []},
-            {"field": "field2", "matches": []},
-        ]
+        report = {
+            "results": [
+                ["field1", "str", "tag1", "match1", "url1"],
+                ["field2", "int", "", "", ""],
+            ],
+            "data": [
+                {"field": "field1", "matches": []},
+                {"field": "field2", "matches": []},
+            ],
+        }
 
         try:
-            cmd._write_results(prepared, results, "test.csv", "full", None)
+            cmd._write_results(report, "test.csv", "full", None)
         except Exception as e:
             pass
 
     def test_write_db_results(self):
         cmd = CrafterCmd(remote=None, debug=False)
         db_results = {
-            "table1": (
-                [["field1", "str", "tag1", "match1", "url1"]],
-                [{"field": "field1", "matches": []}],
-            )
+            "table1": {
+                "results": [["field1", "str", "tag1", "match1", "url1"]],
+                "data": [{"field": "field1", "matches": []}],
+            }
         }
 
         try:
@@ -332,10 +331,10 @@ rules:
     def test_write_db_results_with_output(self):
         cmd = CrafterCmd(remote=None, debug=False)
         db_results = {
-            "table1": (
-                [["field1", "str", "tag1", "match1", "url1"]],
-                [{"field": "field1", "matches": []}],
-            )
+            "table1": {
+                "results": [["field1", "str", "tag1", "match1", "url1"]],
+                "data": [{"field": "field1", "matches": []}],
+            }
         }
 
         with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".json") as f:

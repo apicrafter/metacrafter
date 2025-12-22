@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """Utility functions that help to work with data"""
-import chardet
 from collections import defaultdict, OrderedDict
+
+import chardet
 import xmltodict
 
 
@@ -14,14 +15,12 @@ def dict_generator(indict, pre=None):
                 continue
             if isinstance(value, dict):
                 #                print 'dgen', value, key, pre
-                for d in dict_generator(value, pre + [key]):
-                    yield d
-            elif isinstance(value, list) or isinstance(value, tuple):
+                yield from dict_generator(value, pre + [key])
+            elif isinstance(value, (list, tuple)):
                 for v in value:
                     if isinstance(v, dict):
                         #                print 'dgen', value, key, pre
-                        for d in dict_generator(v, pre + [key]):
-                            yield d
+                        yield from dict_generator(v, pre + [key])
             #                    for d in dict_generator(v, [key] + pre):
             #                        yield d
             else:
@@ -54,20 +53,20 @@ def get_dict_value(object, keys):
     #    keys = key.split('.')
     if len(keys) == 1:
         if isinstance(object, dict):
-            if keys[0] in object.keys():
+            if keys[0] in object:
                 out.append(object[keys[0]])
         else:
             for record in object:
-                if record and keys[0] in record.keys():
+                if record and keys[0] in record:
                     out.append(record[keys[0]])
     #        return out
     else:
         if isinstance(object, dict):
-            if keys[0] in object.keys():
+            if keys[0] in object:
                 out.extend(get_dict_value(object[keys[0]], keys[1:]))
         else:
             for record in object:
-                if keys[0] in record.keys():
+                if keys[0] in record:
                     out.extend(get_dict_value(record[keys[0]], keys[1:]))
     return out
 
@@ -79,7 +78,7 @@ def dict_to_columns(data):
         dk = dict_generator(row)
         for i in dk:
             k = ".".join(i[:-1])
-            if k in columns.keys():
+            if k in columns:
                 columns[k].append(i[-1])
             else:
                 columns[k] = [
@@ -182,15 +181,15 @@ def _seek_xml_lists(data, level=0, path=None, candidates=OrderedDict()):
     """Seeks XML lists to find items tags"""
     for key, value in data.items():
         if isinstance(value, list):
-            key = path + ".%s" % (key) if path is not None else key
-            if key not in candidates.keys():
+            key = f"{path}.{key}" if path is not None else key
+            if key not in candidates:
                 candidates[key] = {"key": key, "num": len(value)}
-        elif isinstance(value, OrderedDict) or isinstance(value, dict):
+        elif isinstance(value, (OrderedDict, dict)):
             res = _seek_xml_lists(
-                value, level + 1, path + "." + key if path else key, candidates
+                value, level + 1, f"{path}.{key}" if path else key, candidates
             )
             for k, v in res.items():
-                if k not in candidates.keys():
+                if k not in candidates:
                     candidates[k] = v
         else:
             continue
@@ -220,3 +219,80 @@ def xml_quick_analyzer(filename):
             shortkey = shortkey.rsplit(":", 1)[-1]
         return {"full": fullkey, "short": shortkey}
     return None
+
+
+def get_supported_formats():
+    """Get list of all supported file formats.
+    
+    Returns:
+        List of supported format strings (e.g., ['csv', 'json', 'parquet', ...])
+    """
+    from metacrafter.core import SUPPORTED_FILE_TYPES
+    return sorted(set(SUPPORTED_FILE_TYPES))
+
+
+def get_supported_codecs():
+    """Get list of all supported compression codecs.
+    
+    Returns:
+        List of supported codec strings (e.g., ['gz', 'bz2', 'xz', ...])
+    """
+    from metacrafter.core import CODECS
+    return sorted(set(CODECS))
+
+
+def is_format_supported(filename):
+    """Check if file format is supported based on extension.
+    
+    Args:
+        filename: Path to file or filename string
+        
+    Returns:
+        True if format is supported, False otherwise
+    """
+    from metacrafter.core import SUPPORTED_FILE_TYPES
+    
+    # Extract extension, handling compressed files
+    parts = filename.rsplit(".", 2)
+    if len(parts) >= 2:
+        # Check if it's a compressed file (e.g., .csv.gz)
+        if len(parts) >= 3 and parts[-1].lower() in get_supported_codecs():
+            ext = parts[-2].lower()
+        else:
+            ext = parts[-1].lower()
+    else:
+        return False
+    
+    return ext in SUPPORTED_FILE_TYPES
+
+
+def get_format_from_filename(filename):
+    """Extract format from filename, handling compression.
+    
+    Args:
+        filename: Path to file or filename string
+        
+    Returns:
+        Tuple of (format, codec) where format is the data format and
+        codec is the compression codec (or None if uncompressed).
+        Returns (None, None) if format cannot be determined.
+    """
+    from metacrafter.core import SUPPORTED_FILE_TYPES, CODECS
+    
+    parts = filename.rsplit(".", 2)
+    if len(parts) < 2:
+        return (None, None)
+    
+    # Check if last part is a compression codec
+    last_part = parts[-1].lower()
+    if last_part in CODECS and len(parts) >= 3:
+        codec = last_part
+        format_ext = parts[-2].lower()
+    else:
+        codec = None
+        format_ext = last_part
+    
+    if format_ext in SUPPORTED_FILE_TYPES:
+        return (format_ext, codec)
+    
+    return (None, None)

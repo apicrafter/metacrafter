@@ -1,3 +1,4 @@
+"""Server manager module for Metacrafter."""
 import logging
 import os
 
@@ -5,7 +6,7 @@ from flask import (
     Flask,
 )
 
-from .api import add_api_rules, initialize_rules
+from .api import MetacrafterApp
 
 MANAGE_PREFIX = ""
 CLASSIFY_HOST = "127.0.0.1"
@@ -21,13 +22,21 @@ SECRET_KEY = os.environ.get(
 
 
 def run_server(host=CLASSIFY_HOST, port=CLASSIFY_PORT, debug=DEBUG):
-    """Run classification server"""
-
-    app = Flask("Metacrafter", static_url_path="/assets")
+    """Run classification server using MetacrafterApp.
+    
+    Args:
+        host: Hostname or IP to bind the server to
+        port: Port number to listen on
+        debug: Enable debug mode if True
+    """
+    app_factory = MetacrafterApp()
+    app = app_factory.app
     app.config["SECRET_KEY"] = SECRET_KEY
     app.config["PROPAGATE_EXCEPTIONS"] = True
 
-    add_api_rules(app)
+    # Initialize rules (lazy initialization will happen on first request if not done here)
+    app_factory.initialize_rules()
+    
     if debug:
         logging.getLogger().addHandler(logging.StreamHandler())
         logging.basicConfig(
@@ -35,7 +44,5 @@ def run_server(host=CLASSIFY_HOST, port=CLASSIFY_PORT, debug=DEBUG):
             format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
             level=logging.DEBUG,
         )
-
-    initialize_rules()
 
     app.run(host=host, port=port, debug=debug)

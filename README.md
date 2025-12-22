@@ -14,25 +14,46 @@ Metacrafter is a rule based tool that helps to label fields of the tables in dat
 These rules written as .yaml files and could be easily extended.
 
 File formats supported:
-* CSV (comma-separated values)
-* TSV (tab-separated values)
-* JSON Lines (.jsonl, .ndjson)
-* JSON (array of records)
-* BSON (Binary JSON)
-* Parquet
-* Avro
-* ORC
-* XML
-* Excel (.xls, .xlsx)
 
-Compression codecs supported:
-* gzip (.gz)
-* bzip2 (.bz2)
-* xz (.xz)
-* lz4 (.lz4)
-* zstandard (.zst)
-* Brotli (.br)
-* Snappy
+Metacrafter supports a wide range of data file formats through the `iterabledata` package. Format detection is automatic based on file extension.
+
+**Text-based formats:**
+* **CSV** (`.csv`) - Comma-separated values
+* **TSV** (`.tsv`) - Tab-separated values
+* **JSON** (`.json`) - JSON array of objects
+* **JSONL/NDJSON** (`.jsonl`, `.ndjson`) - JSON Lines / Newline-delimited JSON
+* **XML** (`.xml`) - Extensible Markup Language
+
+**Binary formats:**
+* **BSON** (`.bson`) - Binary JSON
+* **Parquet** (`.parquet`) - Apache Parquet columnar storage
+* **Avro** (`.avro`) - Apache Avro data serialization
+* **ORC** (`.orc`) - Apache ORC columnar storage
+* **Excel** (`.xls`, `.xlsx`) - Microsoft Excel spreadsheets
+* **Pickle** (`.pickle`, `.pkl`) - Python pickle serialization
+
+**Compression codecs:**
+
+All supported formats can be compressed with the following codecs (automatically detected):
+* **gzip** (`.gz`) - GNU zip compression
+* **bzip2** (`.bz2`) - Bzip2 compression
+* **xz** (`.xz`) - XZ compression (LZMA2)
+* **lz4** (`.lz4`) - LZ4 fast compression
+* **zstandard** (`.zst`) - Zstandard compression
+* **Brotli** (`.br`) - Brotli compression
+* **Snappy** - Snappy compression
+* **ZIP** (`.zip`) - ZIP archive format
+
+**Format detection:**
+
+Metacrafter automatically detects file formats based on file extensions. For compressed files, both the compression codec and underlying format are detected automatically (e.g., `data.csv.gz` is detected as gzip-compressed CSV).
+
+**Format-specific options:**
+
+* **CSV/TSV**: Use `--delimiter` to specify custom delimiters (default: auto-detected)
+* **XML**: Use `--tagname` to specify the XML tag containing data records
+* **Encoding**: Use `--encoding` to specify character encoding (default: auto-detected)
+* **Compression**: Use `--compression` to force compression handling (`auto`, `none`, or specific codec)
 
 Databases support:
 * Any SQL database supported by [SQLAlchemy](https://www.sqlalchemy.org/) 
@@ -54,19 +75,12 @@ Metacrafter key features:
 
 ### File analysis examples (CLI)
 
+#### Basic file scanning
+
 Basic CSV scan with a human‑readable table:
 
 ```bash
 metacrafter scan file somefile.csv --format short
-```
-
-CSV scan with a custom delimiter and encoding:
-
-```bash
-metacrafter scan file somefile.csv \
-  --format short \
-  --encoding windows-1251 \
-  --delimiter ';'
 ```
 
 JSON Lines scan with machine‑readable JSON output:
@@ -79,6 +93,117 @@ metacrafter scan file somefile.jsonl \
   --pretty
 ```
 
+#### CSV/TSV files
+
+CSV scan with a custom delimiter and encoding:
+
+```bash
+metacrafter scan file somefile.csv \
+  --format short \
+  --encoding windows-1251 \
+  --delimiter ';'
+```
+
+TSV (tab-separated) file scan:
+
+```bash
+metacrafter scan file data.tsv \
+  --delimiter '\t' \
+  --format full \
+  -o results.json
+```
+
+#### JSON formats
+
+JSON array file:
+
+```bash
+metacrafter scan file data.json \
+  --format full \
+  --output-format json \
+  -o results.json
+```
+
+JSON Lines with PII detection:
+
+```bash
+metacrafter scan file users.jsonl \
+  --contexts pii \
+  --langs en \
+  --confidence 20.0 \
+  --format full
+```
+
+#### Binary formats
+
+Parquet file scan:
+
+```bash
+metacrafter scan file data.parquet \
+  --format full \
+  --output-format json \
+  -o parquet_results.json
+```
+
+Excel file scan (XLSX):
+
+```bash
+metacrafter scan file spreadsheet.xlsx \
+  --format full \
+  --limit 500 \
+  -o excel_results.json
+```
+
+BSON file scan:
+
+```bash
+metacrafter scan file data.bson \
+  --format full \
+  --output-format json \
+  -o bson_results.json
+```
+
+#### Compressed files
+
+Gzip-compressed CSV (auto-detected):
+
+```bash
+metacrafter scan file data.csv.gz \
+  --format full \
+  -o results.json
+```
+
+Bzip2-compressed JSONL:
+
+```bash
+metacrafter scan file data.jsonl.bz2 \
+  --compression bz2 \
+  --format full \
+  -o results.json
+```
+
+ZIP archive containing CSV:
+
+```bash
+metacrafter scan file archive.zip \
+  --compression zip \
+  --format full \
+  -o results.json
+```
+
+#### XML files
+
+XML file with custom tag name:
+
+```bash
+metacrafter scan file data.xml \
+  --tagname "record" \
+  --format full \
+  -o xml_results.json
+```
+
+#### Statistics only
+
 CSV scan with statistics only (no classification), written to file:
 
 ```bash
@@ -88,7 +213,31 @@ metacrafter scan file somefile.csv \
   -o somefile_stats.json
 ```
 
-Result example of `--format full` table output:
+#### Advanced file scanning options
+
+Scan with specific field filters and confidence threshold:
+
+```bash
+metacrafter scan file users.csv \
+  --fields email,phone,name \
+  --confidence 50.0 \
+  --contexts pii \
+  --format full \
+  -o filtered_results.json
+```
+
+Scan with custom empty values:
+
+```bash
+metacrafter scan file data.csv \
+  --empty-values "N/A,NA,NULL,empty" \
+  --format full
+```
+
+#### Output format examples
+
+**Table output (`--format full`):**
+
 ```
 key               ftype    tags    matches                                                                datatype_url
 ----------------  -------  ------  ---------------------------------------------------------------------  ----------------------------------------------------------
@@ -113,10 +262,108 @@ IPs               str              ipv4 96.28                                   
 GovType           str      dict
 ```
 
+**JSON output example:**
+
+```json
+{
+  "results": [
+    [
+      "email",
+      "str",
+      "",
+      "email 98.50",
+      "https://registry.apicrafter.io/datatype/email"
+    ],
+    [
+      "phone",
+      "str",
+      "",
+      "phone 95.20",
+      "https://registry.apicrafter.io/datatype/phone"
+    ]
+  ],
+  "data": [
+    {
+      "field": "email",
+      "matches": [
+        {
+          "ruleid": "email",
+          "dataclass": "email",
+          "confidence": 98.5,
+          "ruletype": "data",
+          "format": null,
+          "classurl": "https://registry.apicrafter.io/datatype/email"
+        }
+      ],
+      "tags": [],
+      "ftype": "str",
+      "datatype_url": "https://registry.apicrafter.io/datatype/email",
+      "stats": {
+        "key": "email",
+        "ftype": "str",
+        "is_dictkey": false,
+        "is_uniq": true,
+        "n_uniq": 100,
+        "share_uniq": 100.0,
+        "minlen": 10,
+        "maxlen": 50,
+        "avglen": 25.5,
+        "tags": [],
+        "has_digit": 0,
+        "has_alphas": 1,
+        "has_special": 1,
+        "dictvalues": null
+      }
+    }
+  ]
+}
+```
+
+**CSV output example:**
+
+```csv
+key,ftype,tags,matches,datatype_url
+email,str,,email 98.50,https://registry.apicrafter.io/datatype/email
+phone,str,,phone 95.20,https://registry.apicrafter.io/datatype/phone
+name,str,,name 100.00,https://registry.apicrafter.io/datatype/name
+```
+
+**Database scan JSON output (multiple tables):**
+
+```json
+[
+  {
+    "table": "users",
+    "results": [
+      ["email", "str", "", "email 98.50", "https://registry.apicrafter.io/datatype/email"],
+      ["phone", "str", "", "phone 95.20", "https://registry.apicrafter.io/datatype/phone"]
+    ],
+    "fields": [
+      {
+        "field": "email",
+        "matches": [...],
+        "tags": [],
+        "ftype": "str",
+        "stats": {...}
+      }
+    ],
+    "stats": {...}
+  },
+  {
+    "table": "orders",
+    "results": [...],
+    "fields": [...],
+    "stats": {...}
+  }
+]
+```
+
 
 ### Database analysis examples (CLI)
 
-Scan a PostgreSQL database using a SQLAlchemy connection string (all schemas):
+#### SQL databases
+
+**PostgreSQL** - Scan all schemas:
 
 ```bash
 metacrafter scan sql "postgresql+psycopg2://username:password@127.0.0.1:15432/dbname" \
@@ -125,7 +372,7 @@ metacrafter scan sql "postgresql+psycopg2://username:password@127.0.0.1:15432/db
   --stdout
 ```
 
-Scan a single schema (`public`) and write a CSV summary:
+**PostgreSQL** - Scan a single schema (`public`) and write a CSV summary:
 
 ```bash
 metacrafter scan sql "postgresql+psycopg2://username:password@127.0.0.1:15432/dbname" \
@@ -135,14 +382,122 @@ metacrafter scan sql "postgresql+psycopg2://username:password@127.0.0.1:15432/db
   -o db_results.csv
 ```
 
-Scan a MongoDB database:
+**SQLite** - Scan local database file:
+
+```bash
+metacrafter scan sql "sqlite:///path/to/database.db" \
+  --format full \
+  --output-format json \
+  -o sqlite_results.json
+```
+
+**SQLite** - Scan with PII detection:
+
+```bash
+metacrafter scan sql "sqlite:///users.db" \
+  --contexts pii \
+  --langs en \
+  --confidence 20.0 \
+  --format full \
+  -o pii_scan.json
+```
+
+**MySQL/MariaDB**:
+
+```bash
+metacrafter scan sql "mysql+pymysql://user:password@localhost:3306/dbname" \
+  --format full \
+  --output-format json \
+  -o mysql_results.json
+```
+
+**DuckDB** (requires `duckdb-engine`):
+
+```bash
+metacrafter scan sql "duckdb:///path/to/database.duckdb" \
+  --format full \
+  --output-format json \
+  -o duckdb_results.json
+```
+
+**SQL Server**:
+
+```bash
+metacrafter scan sql "mssql+pyodbc://user:password@server/dbname?driver=ODBC+Driver+17+for+SQL+Server" \
+  --format full \
+  --output-format json \
+  -o sqlserver_results.json
+```
+
+**Oracle**:
+
+```bash
+metacrafter scan sql "oracle+cx_oracle://user:password@host:1521/service_name" \
+  --format full \
+  --output-format json \
+  -o oracle_results.json
+```
+
+#### MongoDB
+
+Scan MongoDB database:
 
 ```bash
 metacrafter scan mongodb localhost \
   --port 27017 \
-  --dbname fns \
+  --dbname mydatabase \
   --output-format json \
   -o mongodb_results.json
+```
+
+Scan MongoDB with authentication:
+
+```bash
+metacrafter scan mongodb localhost \
+  --port 27017 \
+  --dbname mydatabase \
+  --username admin \
+  --password secret \
+  --format full \
+  -o mongodb_results.json
+```
+
+Scan MongoDB using connection URI:
+
+```bash
+metacrafter scan mongodb "mongodb://user:pass@host1:27017,host2:27017/dbname?replicaSet=rs0" \
+  --format full \
+  -o mongodb_results.json
+```
+
+#### Advanced database scanning options
+
+Scan with batch processing and progress bar:
+
+```bash
+metacrafter scan sql "postgresql://user:pass@localhost/db" \
+  --batch-size 1000 \
+  --progress \
+  --format full \
+  -o results.json
+```
+
+Scan specific fields only:
+
+```bash
+metacrafter scan sql "sqlite:///data.db" \
+  --fields email,phone,name,address \
+  --format full \
+  -o filtered_results.json
+```
+
+Scan with statistics only:
+
+```bash
+metacrafter scan sql "postgresql://user:pass@localhost/db" \
+  --stats-only \
+  --output-format csv \
+  -o stats_only.csv
 ```
 
 Scan all supported files in a directory tree:
@@ -247,6 +602,8 @@ for field_info in report["data"]:
 
 ### Scan a file programmatically
 
+**Basic file scan:**
+
 ```python
 from metacrafter.core import CrafterCmd
 
@@ -263,6 +620,194 @@ cmd.scan_file(
     output="results.json",
     output_format="json",
 )
+```
+
+**Scan Parquet file:**
+
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd()
+
+cmd.scan_file(
+    filename="data.parquet",
+    limit=1000,
+    dformat="full",
+    output="parquet_results.json",
+    output_format="json",
+)
+```
+
+**Scan compressed CSV:**
+
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd()
+
+cmd.scan_file(
+    filename="data.csv.gz",
+    compression="auto",  # or "gz" to force
+    limit=500,
+    output="compressed_results.json",
+    output_format="json",
+)
+```
+
+**Scan Excel file:**
+
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd()
+
+cmd.scan_file(
+    filename="spreadsheet.xlsx",
+    limit=1000,
+    dformat="full",
+    output="excel_results.json",
+    output_format="json",
+)
+```
+
+**Scan XML file:**
+
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd()
+
+cmd.scan_file(
+    filename="data.xml",
+    tagname="record",  # XML tag containing data records
+    limit=500,
+    output="xml_results.json",
+    output_format="json",
+)
+```
+
+**Get statistics only:**
+
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd()
+
+cmd.scan_file(
+    filename="data.csv",
+    stats_only=True,
+    output="stats.json",
+    output_format="json",
+)
+```
+
+### Scan a database programmatically
+
+**Scan SQLite database:**
+
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd()
+
+cmd.scan_db(
+    connectstr="sqlite:///path/to/database.db",
+    limit=1000,
+    dformat="full",
+    output="db_results.json",
+    output_format="json",
+)
+```
+
+**Scan PostgreSQL database:**
+
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd()
+
+cmd.scan_db(
+    connectstr="postgresql+psycopg2://user:password@localhost:5432/dbname",
+    schema="public",  # Optional: specific schema
+    limit=1000,
+    batch_size=500,  # Rows per batch
+    dformat="full",
+    output="postgres_results.json",
+    output_format="json",
+)
+```
+
+**Scan MongoDB database:**
+
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd()
+
+cmd.scan_mongodb(
+    host="localhost",
+    port=27017,
+    dbname="mydatabase",
+    username="admin",  # Optional
+    password="secret",  # Optional
+    limit=1000,
+    dformat="full",
+    output="mongodb_results.json",
+    output_format="json",
+)
+```
+
+**Scan database with filters:**
+
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd()
+
+cmd.scan_db(
+    connectstr="postgresql://user:pass@localhost/db",
+    schema="public",
+    contexts=["pii"],  # Only PII-related rules
+    langs=["en"],     # Only English rules
+    confidence=20.0,  # Minimum confidence threshold
+    fields=["email", "phone", "name"],  # Specific fields only
+    dformat="full",
+    output="filtered_results.json",
+    output_format="json",
+)
+```
+
+**Get database scan results as Python dict:**
+
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd()
+
+# When output=None, scan_db returns None (writes to stdout)
+# To get results programmatically, use scan_data() with data from database
+import sqlite3
+
+conn = sqlite3.connect("database.db")
+cursor = conn.cursor()
+cursor.execute("SELECT * FROM users LIMIT 100")
+rows = cursor.fetchall()
+columns = [description[0] for description in cursor.description]
+items = [dict(zip(columns, row)) for row in rows]
+
+report = cmd.scan_data(
+    items=items,
+    limit=100,
+    contexts="pii",
+)
+
+# Access results
+for row in report["results"]:
+    field, ftype, tags, matches, datatype_url = row
+    print(f"{field}: {matches}")
+
+for field_info in report["data"]:
+    print(f"{field_info['field']}: {field_info['matches']}")
 ```
 
 ### Using custom rule paths or country filters

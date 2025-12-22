@@ -5,7 +5,7 @@ import logging
 import os
 import sys
 import time
-from typing import List, Optional
+from typing import List, Optional, Dict, Any, Union
 
 import csv
 import requests
@@ -29,9 +29,25 @@ except ImportError:  # pragma: no cover
     tqdm = None
 
 # Constants
-SUPPORTED_FILE_TYPES = ["jsonl", "bson", "csv", "tsv", "json", "xml", 'ndjson', 'avro', 'parquet', 'xls', 'xlsx', 'orc', 'ndjson']
-CODECS = ["lz4", 'gz', 'xz', 'bz2', 'zst', 'br', 'snappy']
-BINARY_DATA_FORMATS = ["bson", "parquet"]
+# Supported file formats via iterabledata
+SUPPORTED_FILE_TYPES = [
+    "csv",      # Comma-separated values
+    "tsv",      # Tab-separated values
+    "json",     # JSON (array of objects)
+    "jsonl",    # JSON Lines
+    "ndjson",   # Newline-delimited JSON (alias for jsonl)
+    "bson",     # Binary JSON
+    "parquet",  # Apache Parquet
+    "avro",     # Apache Avro
+    "orc",      # Apache ORC
+    "xls",      # Excel 97-2003
+    "xlsx",     # Excel 2007+
+    "xml",      # XML
+    "pickle",   # Python pickle
+    "pkl",      # Python pickle (alternative extension)
+]
+CODECS = ["lz4", 'gz', 'xz', 'bz2', 'zst', 'br', 'snappy', 'zip']
+BINARY_DATA_FORMATS = ["bson", "parquet", "avro", "orc", "pickle", "pkl", "xls", "xlsx"]
 
 # Configuration constants
 DEFAULT_CONFIDENCE_THRESHOLD = 95.0  # Default confidence threshold for rule matching
@@ -111,7 +127,7 @@ class CrafterCmd(object):
     
     def __init__(
         self,
-        remote: str = None,
+        remote: Optional[str] = None,
         debug: bool = False,
         rulepath: Optional[List[str]] = None,
         country_codes: Optional[List[str]] = None,
@@ -182,11 +198,15 @@ class CrafterCmd(object):
             self.processor = RulesProcessor(countries=self.country_codes)
             self.prepare()
 
-    def prepare(self):
+    def prepare(self) -> None:
         """Prepare the processor by loading rules and initializing date parser.
         
         Loads configuration and imports rules from configured paths.
         Uses custom rulepath if provided, otherwise uses config file or defaults.
+        
+        Raises:
+            yaml.YAMLError: If configuration file is malformed
+            IOError: If rule files cannot be read
         """
         try:
             rulepath = self.custom_rulepath if self.custom_rulepath else ConfigLoader.get_rulepath()
@@ -205,8 +225,25 @@ class CrafterCmd(object):
                 patterns=qddate.patterns.PATTERNS_EN + qddate.patterns.PATTERNS_RU
             )
 
-    def _iter_with_progress(self, iterable, desc, unit="records", total=None):
-        """Wrap iterable with tqdm if progress reporting is enabled."""
+    def _iter_with_progress(
+        self,
+        iterable: Any,
+        desc: str,
+        unit: str = "records",
+        total: Optional[int] = None,
+    ) -> tuple:
+        """Wrap iterable with tqdm if progress reporting is enabled.
+        
+        Args:
+            iterable: Iterable to wrap with progress bar
+            desc: Description text for progress bar
+            unit: Unit label (e.g., "records", "files")
+            total: Total number of items (for progress calculation)
+            
+        Returns:
+            Tuple of (wrapped_iterable, progress_bar). If progress is disabled,
+            returns (original_iterable, None).
+        """
         if not self.progress_enabled or tqdm is None:
             return iterable, None
         progress_iter = tqdm(
@@ -218,8 +255,22 @@ class CrafterCmd(object):
         )
         return progress_iter, progress_iter
 
-    def _create_progress_bar(self, total=None, desc=None, unit="records"):
-        """Create a tqdm progress bar that the caller will update manually."""
+    def _create_progress_bar(
+        self,
+        total: Optional[int] = None,
+        desc: Optional[str] = None,
+        unit: str = "records",
+    ) -> Optional[Any]:
+        """Create a tqdm progress bar that the caller will update manually.
+        
+        Args:
+            total: Total number of items to process
+            desc: Description text for progress bar
+            unit: Unit label (e.g., "records", "files")
+            
+        Returns:
+            tqdm progress bar instance, or None if progress is disabled
+        """
         if not self.progress_enabled or tqdm is None:
             return None
         return tqdm(
@@ -229,8 +280,12 @@ class CrafterCmd(object):
             leave=False,
         )
 
-    def rules_list(self):
-        """Rules list"""
+    def rules_list(self) -> None:
+        """List all loaded classification rules.
+        
+        Displays a table of all field rules, data rules, and date/time patterns
+        with their metadata (ID, name, type, match method, group, language, context).
+        """
         if not self.processor:
             print("Local rules are unavailable when a remote API endpoint is configured.")
             return
@@ -257,8 +312,12 @@ class CrafterCmd(object):
 #        print(all_rules)
         print(tabulate(all_rules, headers=headers, tablefmt=self.table_format))            
 
-    def rules_dumpstats(self):
-        """Dump rules statistics"""
+    def rules_dumpstats(self) -> None:
+        """Print statistics about loaded rules.
+        
+        Displays counts of field rules, data rules, languages, contexts,
+        country codes, and date/time patterns.
+        """
         if not self.processor:
             print("Local rules are unavailable when a remote API endpoint is configured.")
             return
@@ -521,24 +580,47 @@ class CrafterCmd(object):
 
     def scan_data_client(
         self,
-        api_root,
-        items,
-        limit=1000,
-        contexts=None,
-        langs=None,
-        confidence=None,
-        stop_on_match=None,
-        parse_dates=None,
-        ignore_imprecise=None,
-        except_empty=None,
-        fields=None,
-        stats_only=None,
-        dict_share=None,
-        empty_values=None,
-    ):
+        api_root: str,
+        items: List[Dict[str, Any]],
+        limit: int = 1000,
+        contexts: Optional[List[str]] = None,
+        langs: Optional[List[str]] = None,
+        confidence: Optional[float] = None,
+        stop_on_match: Optional[bool] = None,
+        parse_dates: Optional[bool] = None,
+        ignore_imprecise: Optional[bool] = None,
+        except_empty: Optional[bool] = None,
+        fields: Optional[List[str]] = None,
+        stats_only: Optional[bool] = None,
+        dict_share: Optional[float] = None,
+        empty_values: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """Scan data using remote API client.
         
+        Sends data to a remote Metacrafter API server for classification.
         Note: Not all parameters may be supported by the remote API.
+        
+        Args:
+            api_root: Base URL of the remote API server
+            items: List of dictionaries to classify
+            limit: Maximum records to process per field
+            contexts: Optional list of context filters
+            langs: Optional list of language filters
+            confidence: Optional minimum confidence threshold
+            stop_on_match: Optional flag to stop after first match
+            parse_dates: Optional flag to enable date parsing
+            ignore_imprecise: Optional flag to ignore imprecise rules
+            except_empty: Optional flag to exclude empty values
+            fields: Optional list of specific fields to process
+            stats_only: Optional flag to return only statistics
+            dict_share: Optional dictionary share threshold
+            empty_values: Optional list of values treated as empty
+            
+        Returns:
+            Dictionary with classification results (same format as scan_data)
+            
+        Raises:
+            requests.RequestException: If API request fails after retries
         """
         params = {
             'langs': ','.join(langs) if langs else None, 
@@ -594,20 +676,20 @@ class CrafterCmd(object):
 
     def scan_data(
         self,
-        items,
-        limit=1000,
-        contexts=None,
-        langs=None,
-        confidence=None,
-        stop_on_match=False,
-        parse_dates=True,
-        ignore_imprecise=True,
-        except_empty=True,
-        fields=None,
-        stats_only=False,
-        dict_share=None,
-        empty_values=None,
-    ):
+        items: List[Dict[str, Any]],
+        limit: int = 1000,
+        contexts: Optional[Union[str, List[str]]] = None,
+        langs: Optional[Union[str, List[str]]] = None,
+        confidence: Optional[float] = None,
+        stop_on_match: bool = False,
+        parse_dates: bool = True,
+        ignore_imprecise: bool = True,
+        except_empty: bool = True,
+        fields: Optional[Union[str, List[str]]] = None,
+        stats_only: bool = False,
+        dict_share: Optional[float] = None,
+        empty_values: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """Scan data items and return classification results.
         
         Args:
@@ -624,6 +706,13 @@ class CrafterCmd(object):
             stats_only: Return only statistics without performing classification
             dict_share: Override dictionary share percentage
             empty_values: Override list of values treated as empty
+            
+        Returns:
+            Dictionary with keys:
+                - 'results': List of classification results (summary format)
+                - 'data': List of detailed field information with matches
+                - 'stats': Dictionary of field statistics
+                - 'stats_table': Table format of statistics
         """
         # Parse contexts and langs if they are strings
         if isinstance(contexts, str):
@@ -673,10 +762,11 @@ class CrafterCmd(object):
             "dictvalues",
         ]
         datastats_dict = {}
-        for row in datastats:
-            datastats_dict[row[0]] = {}
-            for n in range(0, len(headers)):
-                datastats_dict[row[0]][headers[n]] = row[n]
+        if datastats is not None:
+            for row in datastats:
+                datastats_dict[row[0]] = {}
+                for n in range(0, len(headers)):
+                    datastats_dict[row[0]][headers[n]] = row[n]
 
         if stats_only:
             return {
@@ -768,6 +858,71 @@ class CrafterCmd(object):
         empty_values=None,
         compression="auto",
     ):
+        """Scan a file and classify its fields.
+        
+        This method processes a data file (CSV, TSV, JSON, JSONL, NDJSON, BSON, 
+        Parquet, Avro, ORC, Excel, XML, Pickle) and applies classification rules 
+        to identify field types and data patterns. Results can be written to a file 
+        or printed to stdout. Format detection is handled automatically by iterabledata.
+        
+        Args:
+            filename: Path to the file to scan. Supports multiple formats including
+                CSV, TSV, JSON, JSONL, BSON, Parquet, Avro, ORC, Excel (.xls, .xlsx),
+                and XML. Compression codecs (gz, bz2, xz, lz4, zst, br, snappy) are
+                automatically detected.
+            delimiter: CSV/TSV delimiter character. If None, auto-detected from file.
+            tagname: XML tag name for data extraction. If None, auto-detected.
+            limit: Maximum number of records to process per field. Defaults to 1000.
+            encoding: Character encoding for text files (e.g., 'utf8', 'cp1251').
+                If None, auto-detected using chardet.
+            contexts: Optional comma-separated string or list of context filters
+                (e.g., 'pii,common'). Only rules matching these contexts will be applied.
+            langs: Optional comma-separated string or list of language filters
+                (e.g., 'en,ru'). Only rules for these languages will be applied.
+            dformat: Output detail format - 'short' (only fields with matches) or
+                'full' (all fields). Defaults to 'short'.
+            output: Optional output file path. If None, results printed to stdout.
+                Use '-' or 'stdout' to explicitly write to stdout.
+            confidence: Minimum confidence threshold (0-100). Rules with lower
+                confidence will be ignored. Defaults to 5.0.
+            stop_on_match: If True, stop after first rule match per field.
+                Defaults to False.
+            parse_dates: Enable automatic date/time pattern detection. Defaults to True.
+            ignore_imprecise: If True, ignore imprecise rules. Defaults to True.
+            except_empty: If True, exclude empty values from confidence calculations.
+                Defaults to True.
+            fields: Optional comma-separated string or list of specific fields to process.
+                If None, all fields are processed.
+            output_format: Output format - 'table', 'json', 'yaml', or 'csv'.
+                Defaults to 'table'.
+            stats_only: If True, return only statistics without classification.
+                Defaults to False.
+            dict_share: Override dictionary share threshold (percentage). Fields with
+                uniqueness below this threshold are treated as dictionaries.
+            empty_values: Optional comma-separated list of values treated as empty.
+                Use '""' for empty string. Defaults to [None, "", "None", "NaN", "-", "N/A"].
+            compression: Compression codec handling - 'auto' (detect), 'none' (disable),
+                or specific codec ('gz', 'bz2', etc.). Defaults to 'auto'.
+        
+        Returns:
+            None if output is written to file/stdout, otherwise returns empty list
+            on error or None on success.
+        
+        Raises:
+            IOError: If file cannot be opened or read.
+            OSError: If file system error occurs.
+            ValueError: If file format is unsupported or invalid.
+        
+        Example:
+            >>> cmd = CrafterCmd()
+            >>> cmd.scan_file(
+            ...     "data.csv",
+            ...     limit=100,
+            ...     contexts="pii",
+            ...     output_format="json",
+            ...     output="results.json"
+            ... )
+        """
         iterableargs = {}
         if tagname is not None:
             iterableargs['tagname'] = tagname
@@ -787,9 +942,14 @@ class CrafterCmd(object):
             return []
         except ValueError as e:
             logging.error(f"Unsupported file type {filename}: {e}")
+            supported_formats = ", ".join(sorted(set(SUPPORTED_FILE_TYPES)))
             print(
-                f"Unsupported file type. Supported file types are CSV, TSV, JSON lines, "
-                f"BSON, Parquet, JSON. Error: {e}"
+                f"Unsupported file type: {filename}\n"
+                f"Error: {e}\n"
+                f"Supported formats: {supported_formats}\n"
+                f"Supported compression codecs: {', '.join(sorted(CODECS))}\n"
+                f"For more information, see the documentation at "
+                f"https://github.com/apicrafter/metacrafter"
             )
             return []
         except Exception as e:
@@ -799,6 +959,8 @@ class CrafterCmd(object):
         # Process file efficiently - collect items from iterator
         # Note: For very large files, consider implementing streaming processing
         # in scan_data() method to avoid loading entire file into memory
+        if data_file is None:
+            return []
         items = []
         try:
             progress_iter, progress_bar = self._iter_with_progress(
@@ -868,33 +1030,34 @@ class CrafterCmd(object):
                 stats_only=stats_only,
             )
         finally:
-            data_file.close()
+            if data_file is not None:
+                data_file.close()
             # Clear items from memory after processing
             del items
 
 
     def scan_bulk(
         self,
-        dirname,
-        delimiter=None,
-        tagname=None,
-        limit=1000,
-        encoding="utf8",
-        contexts=None,
-        langs=None,
-        output=None,
-        confidence=None,
-        stop_on_match=False,
-        parse_dates=True,
-        ignore_imprecise=True,
-        except_empty=True,
-        fields=None,
-        output_format="table",
-        stats_only=False,
-        dict_share=None,
-        empty_values=None,
-        compression="auto",
-    ):
+        dirname: str,
+        delimiter: Optional[str] = None,
+        tagname: Optional[str] = None,
+        limit: int = 1000,
+        encoding: str = "utf8",
+        contexts: Optional[Union[str, List[str]]] = None,
+        langs: Optional[Union[str, List[str]]] = None,
+        output: Optional[Union[str, Any]] = None,
+        confidence: Optional[float] = None,
+        stop_on_match: bool = False,
+        parse_dates: bool = True,
+        ignore_imprecise: bool = True,
+        except_empty: bool = True,
+        fields: Optional[Union[str, List[str]]] = None,
+        output_format: str = "table",
+        stats_only: bool = False,
+        dict_share: Optional[float] = None,
+        empty_values: Optional[List[str]] = None,
+        compression: str = "auto",
+    ) -> None:
         filelist = [
             os.path.join(dp, f) for dp, dn, filenames in os.walk(dirname) for f in filenames
         ]
@@ -950,26 +1113,54 @@ class CrafterCmd(object):
 
     def scan_db(
         self,
-        connectstr="sqlite:///test.db",
-        schema=None,
-        limit=1000,
-        contexts=None,
-        langs=None,
-        dformat="short",
-        output=None,
-        confidence=None,
-        stop_on_match=False,
-        parse_dates=True,
-        ignore_imprecise=True,
-        except_empty=True,
-        fields=None,
-        output_format="table",
-        stats_only=False,
-        dict_share=None,
-        empty_values=None,
-        batch_size=DEFAULT_BATCH_SIZE,
-    ):
-        """SQL alchemy way to scan any database"""
+        connectstr: str = "sqlite:///test.db",
+        schema: Optional[str] = None,
+        limit: int = 1000,
+        contexts: Optional[Union[str, List[str]]] = None,
+        langs: Optional[Union[str, List[str]]] = None,
+        dformat: str = "short",
+        output: Optional[Union[str, Any]] = None,
+        confidence: Optional[float] = None,
+        stop_on_match: bool = False,
+        parse_dates: bool = True,
+        ignore_imprecise: bool = True,
+        except_empty: bool = True,
+        fields: Optional[Union[str, List[str]]] = None,
+        output_format: str = "table",
+        stats_only: bool = False,
+        dict_share: Optional[float] = None,
+        empty_values: Optional[List[str]] = None,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+    ) -> None:
+        """Scan SQL database tables and classify their fields.
+        
+        Connects to a SQL database using SQLAlchemy connection string and
+        scans all tables (optionally filtered by schema) to classify field types.
+        
+        Args:
+            connectstr: SQLAlchemy connection string (e.g., "postgresql://user:pass@host/db")
+            schema: Optional database schema name to filter tables
+            limit: Maximum records to process per field
+            contexts: Optional context filters (comma-separated string or list)
+            langs: Optional language filters (comma-separated string or list)
+            dformat: Output detail format - "short" or "full"
+            output: Optional output file path or file-like object
+            confidence: Optional minimum confidence threshold
+            stop_on_match: If True, stop after first rule match
+            parse_dates: Enable date pattern matching
+            ignore_imprecise: Ignore imprecise rules
+            except_empty: Exclude empty values from calculations
+            fields: Optional list of specific fields to process
+            output_format: Output format - "table", "json", "yaml", or "csv"
+            stats_only: Return only statistics without classification
+            dict_share: Override dictionary share threshold
+            empty_values: Override list of values treated as empty
+            batch_size: Number of rows to fetch per batch
+            
+        Raises:
+            ValueError: If schema name is invalid or not found
+            sqlalchemy.exc.SQLAlchemyError: If database connection or query fails
+        """
         from sqlalchemy import create_engine, inspect, text
         import sqlalchemy.exc
         import re
@@ -1027,7 +1218,25 @@ class CrafterCmd(object):
                 try:
                     row_batch = queryres.fetchmany(effective_batch)
                     while row_batch:
-                        batch_dicts = [dict(u) for u in row_batch]
+                        # Convert SQLAlchemy Row objects to dictionaries
+                        # Handle both SQLAlchemy 1.x and 2.x Row objects
+                        batch_dicts = []
+                        for row in row_batch:
+                            try:
+                                # SQLAlchemy 2.x: use .mapping or ._mapping
+                                if hasattr(row, '_mapping'):
+                                    batch_dicts.append(dict(row._mapping))
+                                elif hasattr(row, 'mapping'):
+                                    batch_dicts.append(dict(row.mapping))
+                                elif hasattr(row, '_asdict'):
+                                    # SQLAlchemy 1.x RowProxy
+                                    batch_dicts.append(row._asdict())
+                                else:
+                                    # Fallback: try direct dict conversion
+                                    batch_dicts.append(dict(row))
+                            except (TypeError, ValueError):
+                                # If dict() fails, try manual conversion
+                                batch_dicts.append({col: getattr(row, col, None) for col in row.keys()})
                         items.extend(batch_dicts)
                         if fetch_progress:
                             fetch_progress.update(len(batch_dicts))
@@ -1091,29 +1300,59 @@ class CrafterCmd(object):
 
     def scan_mongodb(
         self,
-        host="localhost",
-        port=27017,
-        dbname="test",
-        username=None,
-        password=None,
-        limit=1000,
-        contexts=None,
-        langs=None,
-        dformat="short",
-        output=None,
-        confidence=None,
-        stop_on_match=False,
-        parse_dates=True,
-        ignore_imprecise=True,
-        except_empty=True,
-        fields=None,
-        output_format="table",
-        stats_only=False,
-        dict_share=None,
-        empty_values=None,
-        batch_size=DEFAULT_BATCH_SIZE,
-    ):
-        """Scan entire MongoDB database"""
+        host: str = "localhost",
+        port: int = 27017,
+        dbname: str = "test",
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        limit: int = 1000,
+        contexts: Optional[Union[str, List[str]]] = None,
+        langs: Optional[Union[str, List[str]]] = None,
+        dformat: str = "short",
+        output: Optional[Union[str, Any]] = None,
+        confidence: Optional[float] = None,
+        stop_on_match: bool = False,
+        parse_dates: bool = True,
+        ignore_imprecise: bool = True,
+        except_empty: bool = True,
+        fields: Optional[Union[str, List[str]]] = None,
+        output_format: str = "table",
+        stats_only: bool = False,
+        dict_share: Optional[float] = None,
+        empty_values: Optional[List[str]] = None,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+    ) -> None:
+        """Scan entire MongoDB database and classify collection fields.
+        
+        Connects to MongoDB and scans all collections in the specified database
+        to classify field types.
+        
+        Args:
+            host: MongoDB hostname or connection URI
+            port: MongoDB port number
+            dbname: Database name to scan
+            username: Optional MongoDB username
+            password: Optional MongoDB password
+            limit: Maximum documents to process per field
+            contexts: Optional context filters (comma-separated string or list)
+            langs: Optional language filters (comma-separated string or list)
+            dformat: Output detail format - "short" or "full"
+            output: Optional output file path or file-like object
+            confidence: Optional minimum confidence threshold
+            stop_on_match: If True, stop after first rule match
+            parse_dates: Enable date pattern matching
+            ignore_imprecise: Ignore imprecise rules
+            except_empty: Exclude empty values from calculations
+            fields: Optional list of specific fields to process
+            output_format: Output format - "table", "json", "yaml", or "csv"
+            stats_only: Return only statistics without classification
+            dict_share: Override dictionary share threshold
+            empty_values: Override list of values treated as empty
+            batch_size: Number of documents to fetch per batch
+            
+        Raises:
+            pymongo.errors.PyMongoError: If MongoDB connection fails
+        """
         if not self.quiet:
             print("Connecting to %s %d" % (host, port))
         from pymongo import MongoClient

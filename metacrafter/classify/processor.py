@@ -1,20 +1,13 @@
+"""Rules processor module for classifying and matching data types."""
 import glob
-import pickle
 import importlib
 import logging
 import warnings
 from functools import lru_cache
 from pathlib import Path
+from typing import List, Dict, Any, Optional, Union, Set, Callable
 
 import yaml
-from pyparsing import (
-    ParseException,
-    lineEnd,
-    lineStart,
-    oneOf,
-)
-
-from .utils import headers, dict_to_columns
 from pyparsing import (
     LineEnd,
     LineStart,
@@ -25,16 +18,29 @@ from pyparsing import (
     alphas,
     alphanums,
     hexnums,
-    Optional,
+    Optional as PyParsingOptional,
     printables,
     nums,
+    ParseException,
+    lineEnd,
+    lineStart,
+    ParserElement,
 )
 
+from .utils import headers, dict_to_columns
 
-def _normalize_country_codes(country_value):
+
+def _normalize_country_codes(
+    country_value: Optional[Union[str, List[str], tuple, set]]
+) -> Optional[List[str]]:
     """Return normalized list of lower-cased country codes.
 
-    Accepts comma-separated string, single string, or list/tuple.
+    Args:
+        country_value: Comma-separated string, single string, list, tuple, or set
+            of country codes. Can be None.
+
+    Returns:
+        List of normalized (lowercase) country codes, or None if input is empty/None.
     """
     if not country_value:
         return None
@@ -55,11 +61,15 @@ def _normalize_country_codes(country_value):
     return normalized or None
 
 
-def _create_safe_namespace():
+def _create_safe_namespace() -> Dict[str, Any]:
     """Create a safe namespace for evaluating PyParsing rules.
     
     This restricts eval() to only allow PyParsing objects and basic operations,
     preventing arbitrary code execution.
+    
+    Returns:
+        Dictionary containing safe namespace with PyParsing classes and
+        restricted built-in functions.
     """
     # Create a restricted namespace with only allowed PyParsing objects
     safe_dict = {
@@ -67,7 +77,7 @@ def _create_safe_namespace():
         'Word': Word,
         'Literal': Literal,
         'CaselessLiteral': CaselessLiteral,
-        'Optional': Optional,
+        'Optional': PyParsingOptional,
         'oneOf': oneOf,
         'LineStart': LineStart,
         'LineEnd': LineEnd,
@@ -93,8 +103,24 @@ def _create_safe_namespace():
     return safe_dict
 
 
-def _compile_rule_with_warning_capture(rule_string, rule_id, filename, rule_label):
-    """Compile rule while capturing SyntaxWarnings for debugging."""
+def _compile_rule_with_warning_capture(
+    rule_string: str, rule_id: str, filename: str, rule_label: str
+) -> ParserElement:
+    """Compile rule while capturing SyntaxWarnings for debugging.
+    
+    Args:
+        rule_string: PyParsing rule expression as string
+        rule_id: Unique identifier for the rule
+        filename: Source filename where rule is defined
+        rule_label: Label for the rule type (e.g., "data", "field")
+    
+    Returns:
+        Compiled PyParsing parser element
+        
+    Raises:
+        ValueError: If rule compilation fails
+        SyntaxError: If rule syntax is invalid
+    """
     with warnings.catch_warnings(record=True) as caught_warnings:
         warnings.simplefilter("always", SyntaxWarning)
         compiled_rule = _safe_eval_pyparsing_rule(
@@ -112,19 +138,22 @@ def _compile_rule_with_warning_capture(rule_string, rule_id, filename, rule_labe
     return compiled_rule
 
 @lru_cache(maxsize=256)
-def _safe_eval_pyparsing_rule(rule_string, rule_source="<string>"):
+def _safe_eval_pyparsing_rule(
+    rule_string: str, rule_source: str = "<string>"
+) -> ParserElement:
     """Safely evaluate a PyParsing rule string.
     
     Cached to avoid recompiling the same rules multiple times.
     
     Args:
         rule_string: String containing PyParsing expression
+        rule_source: Source identifier for error messages (filename or description)
         
     Returns:
-        Compiled PyParsing expression
+        Compiled PyParsing parser element
         
     Raises:
-        ValueError: If rule contains unsafe code
+        ValueError: If rule contains unsafe code or compilation fails
         SyntaxError: If rule syntax is invalid
     """
     # Validate that the rule doesn't contain dangerous patterns
@@ -149,7 +178,7 @@ def _safe_eval_pyparsing_rule(rule_string, rule_source="<string>"):
         'vars',
         'dir',
     ]
-    
+
     rule_lower = rule_string.lower()
     for pattern in dangerous_patterns:
         if pattern in rule_lower:
@@ -157,11 +186,11 @@ def _safe_eval_pyparsing_rule(rule_string, rule_source="<string>"):
                 f"Rule contains potentially dangerous pattern: {pattern}. "
                 "Only PyParsing expressions are allowed."
             )
-    
+
     # Use restricted namespace for eval
     safe_dict = _create_safe_namespace()
     rule_filename = rule_source or "<string>"
-    
+
     try:
         # Compile the rule in restricted namespace
         code_obj = compile(rule_string, rule_filename, "eval")
@@ -191,21 +220,37 @@ BASE_URL = "https://registry.apicrafter.io/datatype/{dataclass}"
 
 
 class TableScanResult:
-    """Results of table scan classification"""
+    """Results of table scan classification.
+    
+    Aggregates classification results for all columns in a table.
+    """
 
-    def __init__(self):
-        self.results = []
-        pass
+    def __init__(self) -> None:
+        """Initialize empty table scan result."""
+        self.results: List['ColumnMatchResult'] = []
 
-    def add(self, result):
-        """Add one more Columnt scan result"""
+    def add(self, result: 'ColumnMatchResult') -> None:
+        """Add a column match result to the table scan.
+        
+        Args:
+            result: ColumnMatchResult instance to add
+        """
         self.results.append(result)
 
-    def is_empty(self):
-        """True if empty"""
+    def is_empty(self) -> bool:
+        """Check if scan result is empty.
+        
+        Returns:
+            True if no column results have been added, False otherwise
+        """
         return len(self.results) == 0
 
-    def asdict(self):
+    def asdict(self) -> List[Dict[str, Any]]:
+        """Convert scan results to dictionary format.
+        
+        Returns:
+            List of dictionaries, each representing a column match result
+        """
         res = []
         for m in self.results:
             res.append(m.asdict())
@@ -213,22 +258,43 @@ class TableScanResult:
 
 
 class ColumnMatchResult:
-    """Results of the column classficiations"""
+    """Results of column classification.
+    
+    Contains all rule matches for a single column/field.
+    """
 
-    def __init__(self, field, matches=[]):
-        self.field = field
-        self.matches = matches
-        pass
+    def __init__(self, field: str, matches: Optional[List['RuleResult']] = None) -> None:
+        """Initialize column match result.
+        
+        Args:
+            field: Field/column name
+            matches: Optional list of rule matches (defaults to empty list)
+        """
+        self.field: str = field
+        self.matches: List['RuleResult'] = matches if matches is not None else []
 
-    def add(self, match):
-        """Add one more rule result"""
+    def add(self, match: 'RuleResult') -> None:
+        """Add a rule match result.
+        
+        Args:
+            match: RuleResult instance to add
+        """
         self.matches.append(match)
 
-    def is_empty(self):
-        """True if empty"""
+    def is_empty(self) -> bool:
+        """Check if no matches found.
+        
+        Returns:
+            True if no rule matches, False otherwise
+        """
         return len(self.matches) == 0
 
-    def asdict(self):
+    def asdict(self) -> Dict[str, Any]:
+        """Convert column match result to dictionary format.
+        
+        Returns:
+            Dictionary with 'field' and 'matches' keys
+        """
         matches = []
         for m in self.matches:
             matches.append(m.asdict())
@@ -236,22 +302,51 @@ class ColumnMatchResult:
 
 
 class RuleResult:
-    """Result match error"""
+    """Result of a single rule match.
+    
+    Represents one classification rule that matched a field or data value.
+    """
 
     def __init__(
-        self, ruleid, dataclass, confidence, ruletype, is_pii=False, format=None
-    ):
-        self.ruleid = ruleid
-        self.dataclass = dataclass
-        self.confidence = confidence
-        self.ruletype = ruletype
-        self.is_pii = is_pii
-        self.format = format
+        self,
+        ruleid: str,
+        dataclass: str,
+        confidence: float,
+        ruletype: str,
+        is_pii: bool = False,
+        format: Optional[str] = None,
+    ) -> None:
+        """Initialize rule match result.
+        
+        Args:
+            ruleid: Unique identifier of the matching rule
+            dataclass: Data class/type that was matched
+            confidence: Confidence score (0-100)
+            ruletype: Type of rule that matched ("field", "data", "fieldtype")
+            is_pii: Whether this match represents PII data
+            format: Optional format string (e.g., date format pattern)
+        """
+        self.ruleid: str = ruleid
+        self.dataclass: str = dataclass
+        self.confidence: float = confidence
+        self.ruletype: str = ruletype
+        self.is_pii: bool = is_pii
+        self.format: Optional[str] = format
 
-    def class_url(self):
+    def class_url(self) -> str:
+        """Get URL to data class registry entry.
+        
+        Returns:
+            URL string pointing to the data class definition
+        """
         return BASE_URL.format(dataclass=self.dataclass)
 
-    def asdict(self):
+    def asdict(self) -> Dict[str, Any]:
+        """Convert rule result to dictionary format.
+        
+        Returns:
+            Dictionary containing all rule result fields
+        """
         return {
             "ruleid": self.ruleid,
             "dataclass": self.dataclass,
@@ -263,29 +358,60 @@ class RuleResult:
 
 
 class RulesProcessor:
-    """Classification rules processor class"""
+    """Classification rules processor class.
+    
+    Loads, compiles, and applies classification rules to identify data types
+    in structured data (CSV, JSON, databases, etc.).
+    """
 
-    def __init__(self, langs=None, contexts=None, countries=None):
-        self.preset_langs = langs
-        self.preset_contexts = contexts
-        self.preset_countries = (
+    def __init__(
+        self,
+        langs: Optional[List[str]] = None,
+        contexts: Optional[List[str]] = None,
+        countries: Optional[List[str]] = None,
+    ) -> None:
+        """Initialize rules processor.
+        
+        Args:
+            langs: Optional list of language codes to filter rules (e.g., ['en', 'ru'])
+            contexts: Optional list of context filters (e.g., ['pii', 'common'])
+            countries: Optional list of ISO country codes to filter rules
+        """
+        self.preset_langs: Optional[List[str]] = langs
+        self.preset_contexts: Optional[List[str]] = contexts
+        self.preset_countries: Optional[List[str]] = (
             [c.lower() for c in countries] if countries else None
         )
         self.reset_rules()
-        pass
 
-    def reset_rules(self):
-        """Cleans up imported rules."""
-        self.data_rules = []
-        self.field_rules = []
-        self.__rule_keys = []
-        self.langs = {}
-        self.contexts = {}
-        self.countries = {}
+    def reset_rules(self) -> None:
+        """Clear all imported rules and reset statistics.
+        
+        Removes all field rules, data rules, and resets language/context/country
+        statistics. Useful for reinitializing the processor.
+        """
+        self.data_rules: List[Dict[str, Any]] = []
+        self.field_rules: List[Dict[str, Any]] = []
+        self.__rule_keys: List[str] = []
+        self.langs: Dict[str, int] = {}
+        self.contexts: Dict[str, int] = {}
+        self.countries: Dict[Optional[str], int] = {}
 
-    def import_rules(self, filename):
-        """Import rules from file"""
-        logging.debug("Loading rules file %s" % (filename))
+    def import_rules(self, filename: str) -> None:
+        """Import classification rules from a YAML file.
+        
+        Loads rules from a YAML file, compiles PyParsing expressions, and
+        filters rules based on preset language, context, and country filters.
+        
+        Args:
+            filename: Path to YAML file containing rule definitions
+            
+        Raises:
+            IOError: If file cannot be read
+            yaml.YAMLError: If YAML file is malformed
+            ValueError: If rule compilation fails
+        """
+        logging.debug("Loading rules file %s", filename)
         with open(filename, "r", encoding="utf8") as f:
             ruledata = yaml.safe_load(f)
 
@@ -328,9 +454,16 @@ class RulesProcessor:
                     )
                     continue
             elif rule["match"] == "func":
-                module, funcname = rule["rule"].rsplit(".", 1)
-                match_func = getattr(importlib.import_module(module), funcname)
-                rule["compiled"] = match_func
+                try:
+                    module, funcname = rule["rule"].rsplit(".", 1)
+                    match_func = getattr(importlib.import_module(module), funcname)
+                    rule["compiled"] = match_func
+                except (ImportError, AttributeError, ValueError) as e:
+                    logging.warning(
+                        f"Failed to import function '{rule['rule']}' for rule '{rulekey}': {e}. "
+                        "Skipping this rule."
+                    )
+                    continue
             elif rule["match"] == "text":
                 keywords = rule["rule"].split(",")
                 ruledata["rules"][rulekey]["compiled"] = (
@@ -349,9 +482,16 @@ class RulesProcessor:
                     int(rule["minlen"]) if "minlen" in rule.keys() else DEFAULT_MIN_LEN
                 )
             if "validator" in rule.keys():
-                module, funcname = rule["validator"].rsplit(".", 1)
-                match_func = getattr(importlib.import_module(module), funcname)
-                rule["vfunc"] = match_func
+                try:
+                    module, funcname = rule["validator"].rsplit(".", 1)
+                    match_func = getattr(importlib.import_module(module), funcname)
+                    rule["vfunc"] = match_func
+                except (ImportError, AttributeError, ValueError) as e:
+                    logging.warning(
+                        f"Failed to import validator '{rule['validator']}' for rule '{rulekey}': {e}. "
+                        "Skipping validator."
+                    )
+                    # Continue without validator - rule can still work
             if "fieldrule" in rule.keys() and "fieldrulematch" in rule.keys():
                 if rule["fieldrulematch"] == "ppr":
                     try:
@@ -413,10 +553,22 @@ class RulesProcessor:
                 v = self.countries.get(None, 0)
                 self.countries[None] = v + 1
 
-        logging.debug("Loaded rules from %s" % filename)
+        logging.debug("Loaded rules from %s", filename)
 
-    def import_rules_path(self, pathname, recursive=True):
-        """Import rules from path"""
+    def import_rules_path(self, pathname: str, recursive: bool = True) -> None:
+        """Import rules from a directory path.
+        
+        Scans a directory (optionally recursively) for YAML rule files
+        and imports all found rules.
+        
+        Args:
+            pathname: Directory path containing rule files
+            recursive: If True, search subdirectories recursively
+            
+        Raises:
+            IOError: If path cannot be accessed
+            yaml.YAMLError: If any YAML file is malformed
+        """
         if not recursive:
             filenames = glob.glob(pathname + "/*.yaml")
             for filename in filenames:
@@ -425,32 +577,53 @@ class RulesProcessor:
             for path in Path(pathname).rglob("*.yaml"):
                 self.import_rules(str(path))
 
-    def dumpStats(self):
-        """Dump statistics"""
+    def dumpStats(self) -> None:
+        """Print statistics about loaded rules.
+        
+        Displays counts of field rules, data rules, languages, contexts,
+        and country codes. Also shows count of date/time patterns from qddate.
+        """
         import qddate
 
         print("Rule types:")
-        print("- field based rules %d" % (len(self.field_rules)))
-        print("- data based rules %d" % (len(self.data_rules)))
+        print(f"- field based rules {len(self.field_rules)}")
+        print(f"- data based rules {len(self.data_rules)}")
         print("Context:")
         for key in sorted(self.contexts.keys()):
-            print("- %s %d" % (key, self.contexts[key]))
+            print(f"- {key} {self.contexts[key]}")
         print("Language:")
         for key in sorted(self.langs.keys()):
-            print("- %s %d" % (key, self.langs[key]))
+            print(f"- {key} {self.langs[key]}")
         if self.countries:
             print("Country codes:")
             for key in sorted(self.countries.keys()):
-                print("- %s %d" % (key or "unknown", self.countries[key]))
+                print(f"- {key or 'unknown'} {self.countries[key]}")
         dparser = qddate.DateParser(
             patterns=qddate.patterns.PATTERNS_EN + qddate.patterns.PATTERNS_RU
         )
-        print("Data/time patterns (qddate): %d" % (len(dparser.patterns)))
+        print(f"Data/time patterns (qddate): {len(dparser.patterns)}")
 
     def get_filtered_rules(
-        self, ruletype, contexts=None, langs=None, ignore_imprecise=False
-    ):
-        """Filters rules by ruletype, context and languages. Helps to filter rules before data matching"""
+        self,
+        ruletype: int,
+        contexts: Optional[List[str]] = None,
+        langs: Optional[List[str]] = None,
+        ignore_imprecise: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Filter rules by type, context, language, and precision.
+        
+        Filters the loaded rules based on the specified criteria. This helps
+        reduce the number of rules to evaluate during data matching.
+        
+        Args:
+            ruletype: Rule type constant (RULE_TYPE_FIELD or RULE_TYPE_DATA)
+            contexts: Optional list of context filters (e.g., ['pii', 'common'])
+            langs: Optional list of language codes to filter (e.g., ['en', 'ru'])
+            ignore_imprecise: If True, exclude rules marked as imprecise
+            
+        Returns:
+            List of filtered rule dictionaries matching the criteria
+        """
         rules = self.field_rules if ruletype == RULE_TYPE_FIELD else self.data_rules
         filtered = []
         if not contexts and not langs and not ignore_imprecise:
@@ -481,20 +654,52 @@ class RulesProcessor:
 
     def match_dict(
         self,
-        data,
-        fields=None,
-        datastats=None,
-        confidence=95,
-        stop_on_match=False,
-        parse_dates=True,
-        dateparser=None,
-        limit=1000,
-        filter_contexts=None,
-        filter_langs=None,
-        except_empty=True,
-        ignore_imprecise=True,
-    ):
-        """Matches python array of dicts (from JSON lines or BSON)"""
+        data: List[Dict[str, Any]],
+        fields: Optional[List[str]] = None,
+        datastats: Optional[Dict[str, Dict[str, Any]]] = None,
+        confidence: float = 95.0,
+        stop_on_match: bool = False,
+        parse_dates: bool = True,
+        dateparser: Optional[Any] = None,
+        limit: int = 1000,
+        filter_contexts: Optional[List[str]] = None,
+        filter_langs: Optional[List[str]] = None,
+        except_empty: bool = True,
+        ignore_imprecise: bool = True,
+    ) -> TableScanResult:
+        """Match classification rules against a list of dictionaries.
+        
+        Processes an array of dictionaries (e.g., from JSON lines or BSON)
+        and applies classification rules to identify data types for each field.
+        
+        Args:
+            data: List of dictionaries to classify
+            fields: Optional list of specific field names to process.
+                If None, processes all fields found in data
+            datastats: Optional dictionary of field statistics from Analyzer.
+                Keys are field names, values are statistics dictionaries
+            confidence: Minimum confidence threshold (0-100) for rule matches.
+                Defaults to 95.0
+            stop_on_match: If True, stop after first rule match per field.
+                Defaults to False
+            parse_dates: If True, attempt date/time pattern matching using
+                dateparser. Defaults to True
+            dateparser: Optional qddate.DateParser instance for date matching.
+                Required if parse_dates is True
+            limit: Maximum number of records to process per field. Defaults to 1000
+            filter_contexts: Optional list of context filters (e.g., ['pii'])
+            filter_langs: Optional list of language codes to filter (e.g., ['en'])
+            except_empty: If True, exclude empty values from confidence calculations.
+                Defaults to True
+            ignore_imprecise: If True, ignore rules marked as imprecise.
+                Defaults to True
+                
+        Returns:
+            TableScanResult containing classification results for all fields
+            
+        Raises:
+            ValueError: If dateparser is required but not provided
+        """
         results = TableScanResult()
         if not fields:
             fields = headers(data)
@@ -555,7 +760,7 @@ class RulesProcessor:
                     # Cache lowercase conversions to avoid repeated calls
                     shortfield_lower = shortfield.lower()
                     field_lower = field.lower()
-                    res = (shortfield_lower in rule["keywords"] or 
+                    res = (shortfield_lower in rule["keywords"] or
                            field_lower in rule["keywords"])
                     if res:
                         m_result.add(
@@ -573,7 +778,8 @@ class RulesProcessor:
             min_len = 0
             max_len = 0
             if datastats:
-                # Match boolean as bool type and ignore float fields right now #FIXME
+                # Handle special field types: boolean fields are matched directly,
+                # float fields are skipped from further rule matching
                 if field in datastats.keys():
                     if datastats[field]["ftype"] == "bool":
                         m_result.add(
@@ -587,6 +793,8 @@ class RulesProcessor:
                         results.add(m_result)
                         continue
                     elif datastats[field]["ftype"] == "float":
+                        # Float fields are skipped from pattern matching
+                        # as they don't benefit from rule-based classification
                         results.add(m_result)
                         continue
                     elif datastats[field]["ftype"] == "datetime":
@@ -707,7 +915,7 @@ class RulesProcessor:
                         if stop_on_match:
                             break
 
-            if m_result.is_empty() and parse_dates and field not in nonstr:
+            if m_result.is_empty() and parse_dates and field not in nonstr and dateparser is not None:
                 total = len(slice)
                 success = 0
                 empty = 0
@@ -723,6 +931,8 @@ class RulesProcessor:
                         continue
                     if not isinstance(value, str):
                         continue
+                    if not hasattr(dateparser, 'match'):
+                        break
                     res = dateparser.match(value, noyear=False)
                     if res:
                         success += 1
