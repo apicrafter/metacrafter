@@ -1,6 +1,7 @@
 name: us-industry
 description: US industry classifiers and identifiers
 context: industry
+country_code: us
 lang: en
 rules:
   naicscodeknown:

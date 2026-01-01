@@ -18,6 +18,16 @@ class MetacrafterConfig(BaseModel):
     
     rulepath: List[str] = Field(default_factory=lambda: DEFAULT_RULEPATH.copy())
     
+    # LLM configuration fields
+    classification_mode: Optional[str] = Field(default="rules", description="Classification mode: rules, llm, or hybrid")
+    llm_provider: Optional[str] = Field(default="openai", description="LLM provider: openai, openrouter, ollama, lmstudio, perplexity")
+    llm_registry_path: Optional[str] = None
+    llm_index_path: Optional[str] = None
+    llm_model: Optional[str] = None
+    llm_api_key: Optional[str] = None
+    llm_base_url: Optional[str] = None
+    llm_min_confidence: Optional[float] = Field(default=50.0, description="Minimum confidence for LLM results (0-100)")
+    
     @validator('rulepath')
     def validate_rulepath(cls, v):
         """Validate that all rule paths exist.
@@ -41,6 +51,27 @@ class MetacrafterConfig(BaseModel):
                     f"Rule path does not exist: {path}. "
                     "Please check your configuration file."
                 )
+        return v
+    
+    @validator('classification_mode')
+    def validate_classification_mode(cls, v):
+        """Validate classification mode."""
+        if v is not None and v.lower() not in ("rules", "llm", "hybrid"):
+            raise ValueError(f"classification_mode must be one of: rules, llm, hybrid. Got: {v}")
+        return v.lower() if v else "rules"
+    
+    @validator('llm_provider')
+    def validate_llm_provider(cls, v):
+        """Validate LLM provider."""
+        if v is not None and v.lower() not in ("openai", "openrouter", "ollama", "lmstudio", "perplexity"):
+            raise ValueError(f"llm_provider must be one of: openai, openrouter, ollama, lmstudio, perplexity. Got: {v}")
+        return v.lower() if v else "openai"
+    
+    @validator('llm_min_confidence')
+    def validate_llm_min_confidence(cls, v):
+        """Validate LLM minimum confidence."""
+        if v is not None and (v < 0 or v > 100):
+            raise ValueError(f"llm_min_confidence must be between 0 and 100. Got: {v}")
         return v
     
     class Config:
@@ -91,7 +122,21 @@ class ConfigLoader:
                 raise
 
         return None
-
+    
+    @staticmethod
+    def get_config_file_path() -> Optional[str]:
+        """Get the path to the config file being used.
+        
+        Returns:
+            Path to .metacrafter file or None if not found
+        """
+        if os.path.exists(DEFAULT_METACRAFTER_CONFIGFILE):
+            return os.path.abspath(DEFAULT_METACRAFTER_CONFIGFILE)
+        home_config = os.path.join(os.path.expanduser("~"), DEFAULT_METACRAFTER_CONFIGFILE)
+        if os.path.exists(home_config):
+            return home_config
+        return None
+    
     @staticmethod
     def get_rulepath() -> List[str]:
         """Get rule path from configuration with validation.
@@ -115,4 +160,77 @@ class ConfigLoader:
                     "Please check your .metacrafter configuration file."
                 ) from e
         return DEFAULT_RULEPATH
+    
+    @staticmethod
+    def get_llm_config() -> Optional[dict]:
+        """Get LLM configuration from config file.
+        
+        Returns:
+            Dictionary with LLM configuration or None if not configured
+        """
+        config = ConfigLoader.load_config()
+        if config:
+            try:
+                validated_config = MetacrafterConfig(**config)
+                llm_config = {
+                    "classification_mode": validated_config.classification_mode,
+                    "llm_provider": validated_config.llm_provider,
+                    "llm_registry_path": validated_config.llm_registry_path,
+                    "llm_index_path": validated_config.llm_index_path,
+                    "llm_model": validated_config.llm_model,
+                    "llm_api_key": validated_config.llm_api_key,
+                    "llm_base_url": validated_config.llm_base_url,
+                    "llm_min_confidence": validated_config.llm_min_confidence,
+                }
+                # Check if any LLM-specific setting is configured (excluding defaults)
+                # Consider it configured if:
+                # 1. classification_mode is not "rules" (default)
+                # 2. llm_provider is not "openai" (default)
+                # 3. Any other LLM setting is not None
+                has_llm_config = (
+                    llm_config.get("classification_mode") not in (None, "rules") or
+                    llm_config.get("llm_provider") not in (None, "openai") or
+                    llm_config.get("llm_registry_path") is not None or
+                    llm_config.get("llm_index_path") is not None or
+                    llm_config.get("llm_model") is not None or
+                    llm_config.get("llm_api_key") is not None or
+                    llm_config.get("llm_base_url") is not None or
+                    llm_config.get("llm_min_confidence") not in (None, 50.0)
+                )
+                
+                if has_llm_config:
+                    logging.debug(f"Loaded LLM config: {llm_config}")
+                    return llm_config
+                else:
+                    logging.debug("No LLM configuration found in config file")
+            except Exception as e:
+                logging.warning(f"Error loading LLM config: {e}")
+                logging.debug(f"Config content: {config}", exc_info=True)
+        else:
+            logging.debug("No .metacrafter config file found")
+        return None
+    
+    @staticmethod
+    def get_classification_mode() -> str:
+        """Get classification mode from config.
+        
+        Returns:
+            Classification mode: "rules", "llm", or "hybrid" (defaults to "rules")
+        """
+        llm_config = ConfigLoader.get_llm_config()
+        if llm_config and llm_config.get("classification_mode"):
+            return llm_config["classification_mode"]
+        return "rules"
+    
+    @staticmethod
+    def get_llm_provider() -> str:
+        """Get LLM provider from config.
+        
+        Returns:
+            Provider name (defaults to "openai")
+        """
+        llm_config = ConfigLoader.get_llm_config()
+        if llm_config and llm_config.get("llm_provider"):
+            return llm_config["llm_provider"]
+        return "openai"
 

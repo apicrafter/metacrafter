@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 import time
+from pathlib import Path
 from typing import List, Optional, Dict, Any, Union
 
 import csv
@@ -70,6 +71,11 @@ STATS_HEADERS = [
     "has_digit",
     "has_alphas",
     "has_special",
+    "minval",
+    "maxval",
+    "has_any_digit",
+    "has_any_alphas",
+    "has_any_special",
     "dictvalues",
 ]
 
@@ -118,6 +124,9 @@ app.add_typer(scan_app, name="scan", help="Scan files, SQL databases, MongoDB, o
 server_app = typer.Typer(help="Commands for running the Metacrafter API server.")
 app.add_typer(server_app, name="server", help="Run the API server and web interface.")
 
+export_app = typer.Typer(help="Commands that export scan results to external systems.")
+app.add_typer(export_app, name="export", help="Export scan results to external metadata catalogs.")
+
 
 class CrafterCmd(object):
     """Main command class for Metacrafter operations.
@@ -139,6 +148,14 @@ class CrafterCmd(object):
         timeout: Optional[float] = None,
         retries: int = 0,
         retry_delay: float = DEFAULT_RETRY_DELAY,
+        use_llm: bool = False,
+        llm_only: bool = False,
+        llm_provider: str = "openai",
+        llm_registry_path: Optional[str] = None,
+        llm_index_path: Optional[str] = None,
+        llm_model: Optional[str] = None,
+        llm_api_key: Optional[str] = None,
+        llm_base_url: Optional[str] = None,
     ):
         """Initialize CrafterCmd instance.
         
@@ -197,6 +214,125 @@ class CrafterCmd(object):
         if remote is None:
             self.processor = RulesProcessor(countries=self.country_codes)
             self.prepare()
+        
+        # Load LLM config from file if not provided
+        llm_config = ConfigLoader.get_llm_config()
+        if llm_config:
+            logging.debug(f"LLM config loaded from file: classification_mode={llm_config.get('classification_mode')}, "
+                        f"llm_provider={llm_config.get('llm_provider')}, "
+                        f"llm_registry_path={llm_config.get('llm_registry_path')}")
+            
+            # Use config values if not explicitly provided
+            if llm_registry_path is None:
+                llm_registry_path = llm_config.get("llm_registry_path")
+                if llm_registry_path:
+                    logging.debug(f"Using llm_registry_path from config: {llm_registry_path}")
+            if llm_index_path is None:
+                llm_index_path = llm_config.get("llm_index_path")
+                if llm_index_path:
+                    logging.debug(f"Using llm_index_path from config: {llm_index_path}")
+            if llm_provider == "openai" and llm_config.get("llm_provider"):
+                llm_provider = llm_config.get("llm_provider")
+                logging.debug(f"Using llm_provider from config: {llm_provider}")
+            if llm_model is None:
+                llm_model = llm_config.get("llm_model")
+                if llm_model:
+                    logging.debug(f"Using llm_model from config: {llm_model}")
+            if llm_api_key is None:
+                llm_api_key = llm_config.get("llm_api_key")
+                if llm_api_key:
+                    logging.debug("Using llm_api_key from config (key present)")
+            if llm_base_url is None:
+                llm_base_url = llm_config.get("llm_base_url")
+                if llm_base_url:
+                    logging.debug(f"Using llm_base_url from config: {llm_base_url}")
+            
+            # Check if config enables LLM (if not explicitly set via parameters)
+            if not use_llm and not llm_only:
+                config_mode = llm_config.get("classification_mode", "rules")
+                logging.debug(f"Config classification_mode: {config_mode}")
+                if config_mode in ("llm", "hybrid"):
+                    use_llm = True
+                    if config_mode == "llm":
+                        llm_only = True
+                    logging.debug(f"LLM enabled from config: mode={config_mode}, use_llm={use_llm}, llm_only={llm_only}")
+        else:
+            logging.debug("No LLM config found in .metacrafter file")
+        
+        # Initialize LLM classifier if requested
+        self.llm_classifier = None
+        self.classification_mode = "rules"  # Default: rules-only
+        
+        if use_llm or llm_only:
+            if llm_only:
+                self.classification_mode = "llm"
+            else:
+                self.classification_mode = "hybrid"
+            
+            logging.debug(f"Initializing LLM classifier: mode={self.classification_mode}, "
+                        f"provider={llm_provider}, registry_path={llm_registry_path}, "
+                        f"index_path={llm_index_path}")
+            
+            try:
+                from metacrafter.classify.llm import LLMClassifier
+                
+                # Determine embedding API key (always uses OpenAI for embeddings)
+                embedding_api_key = llm_api_key if llm_provider == "openai" else os.getenv("OPENAI_API_KEY")
+                if not embedding_api_key:
+                    logging.debug("No embedding API key found, checking OPENAI_API_KEY env var")
+                    embedding_api_key = os.getenv("OPENAI_API_KEY")
+                
+                # Resolve registry path if it's a relative path
+                resolved_registry_path = None
+                if llm_registry_path:
+                    registry_path_obj = Path(llm_registry_path)
+                    if not registry_path_obj.is_absolute():
+                        # Determine config file location to resolve relative paths correctly
+                        config_file_path_str = ConfigLoader.get_config_file_path()
+                        if config_file_path_str:
+                            config_file_path = Path(config_file_path_str).parent
+                            logging.debug(f"Found config file at: {config_file_path_str}, using parent dir: {config_file_path}")
+                            
+                            # Try resolving relative to config file location first
+                            resolved_registry_path = config_file_path / registry_path_obj
+                            logging.debug(f"Trying registry_path relative to config dir: {resolved_registry_path} (exists: {resolved_registry_path.exists()})")
+                            
+                            if not resolved_registry_path.exists():
+                                # Fall back to current directory
+                                resolved_registry_path = Path.cwd() / registry_path_obj
+                                logging.debug(f"Trying registry_path relative to CWD: {resolved_registry_path} (exists: {resolved_registry_path.exists()})")
+                        else:
+                            # No config file found, try current directory
+                            resolved_registry_path = Path.cwd() / registry_path_obj
+                            logging.debug(f"No config file found, trying registry_path relative to CWD: {resolved_registry_path} (exists: {resolved_registry_path.exists()})")
+                    else:
+                        resolved_registry_path = registry_path_obj
+                        logging.debug(f"Using absolute registry_path: {resolved_registry_path} (exists: {resolved_registry_path.exists()})")
+                else:
+                    logging.debug("No registry_path provided, LLMClassifier will try to find default")
+                
+                self.llm_classifier = LLMClassifier(
+                    registry_path=str(resolved_registry_path) if resolved_registry_path else None,
+                    index_path=llm_index_path,
+                    embedding_api_key=embedding_api_key,
+                    llm_provider=llm_provider,
+                    llm_model=llm_model,
+                    llm_api_key=llm_api_key,
+                    llm_base_url=llm_base_url,
+                )
+                if self.verbose:
+                    logging.info(f"LLM classifier initialized with provider: {llm_provider}")
+                logging.debug("LLM classifier initialized successfully")
+            except ImportError as e:
+                logging.warning(f"Failed to import LLM classifier: {e}. LLM functionality disabled.")
+                logging.debug("Import error details:", exc_info=True)
+                self.llm_classifier = None
+                self.classification_mode = "rules"
+            except Exception as e:
+                logging.warning(f"Failed to initialize LLM classifier: {e}. LLM functionality disabled.")
+                logging.debug("Initialization error details:", exc_info=True)
+                self.llm_classifier = None
+                self.classification_mode = "rules"
 
     def prepare(self) -> None:
         """Prepare the processor by loading rules and initializing date parser.
@@ -280,37 +416,201 @@ class CrafterCmd(object):
             leave=False,
         )
 
-    def rules_list(self) -> None:
+    def _format_country_codes(self, country_codes: Optional[List[str]]) -> str:
+        """Format country codes for display.
+        
+        Args:
+            country_codes: List of country codes or None
+            
+        Returns:
+            Formatted string of country codes, or 'any' if None/empty
+        """
+        if country_codes and isinstance(country_codes, list) and len(country_codes) > 0:
+            return ','.join(sorted(country_codes)).upper()
+        return 'any'
+    
+    def _format_contexts(self, contexts: List[str]) -> str:
+        """Format contexts for display with better visual separation.
+        
+        Args:
+            contexts: List of context strings
+            
+        Returns:
+            Formatted string with pipe separators
+        """
+        if not contexts:
+            return ''
+        # Sort for consistency
+        sorted_contexts = sorted(contexts)
+        return ' | '.join(sorted_contexts)
+    
+    def _format_lang(self, lang: str) -> str:
+        """Format language code for display.
+        
+        Args:
+            lang: Language code string
+            
+        Returns:
+            Formatted language string (currently just returns as-is, can be enhanced with flags)
+        """
+        return lang
+    
+    def rules_list(
+        self, 
+        output_format: str = "table", 
+        output: Optional[str] = None
+    ) -> None:
         """List all loaded classification rules.
         
         Displays a table of all field rules, data rules, and date/time patterns
-        with their metadata (ID, name, type, match method, group, language, context).
+        with their metadata (ID, name, type, match method, group, language, country, context).
+        
+        Args:
+            output_format: Output format - 'table', 'json', 'yaml', or 'csv'
+            output: Optional output file path
         """
         if not self.processor:
             print("Local rules are unavailable when a remote API endpoint is configured.")
             return
-        headers = ['id', 'name', 'type', 'match', 'group', 'group_desc', 'lang']
-        all_rules = []
+        
+        # Collect all rules data
+        all_rules_data = []
+        
+        # Process field rules
         for item in self.processor.field_rules:
-            rule = []
-            for h in headers:
-                rule.append(item[h])
-            rule.append(','.join(item['context']))                             
-            all_rules.append(rule)
-
+            rule_dict = {
+                'id': item.get('id', ''),
+                'name': item.get('name', ''),
+                'type': item.get('type', ''),
+                'match': item.get('match', ''),
+                'group': item.get('group', ''),
+                'group_desc': item.get('group_desc', ''),
+                'lang': item.get('lang', ''),
+                'country': item.get('country_code', None),
+                'contexts': item.get('context', []),
+                'is_pii': item.get('is_pii', False),
+                'priority': item.get('priority', 0),
+                'minlen': item.get('minlen', None),
+                'maxlen': item.get('maxlen', None),
+            }
+            all_rules_data.append(rule_dict)
+        
+        # Process data rules
         for item in self.processor.data_rules:
-            rule = []
-            for h in headers:
-                rule.append(item[h])
-            rule.append(','.join(item['context']))        
-            all_rules.append(rule)
-
+            rule_dict = {
+                'id': item.get('id', ''),
+                'name': item.get('name', ''),
+                'type': item.get('type', ''),
+                'match': item.get('match', ''),
+                'group': item.get('group', ''),
+                'group_desc': item.get('group_desc', ''),
+                'lang': item.get('lang', ''),
+                'country': item.get('country_code', None),
+                'contexts': item.get('context', []),
+                'is_pii': item.get('is_pii', False),
+                'priority': item.get('priority', 0),
+                'minlen': item.get('minlen', None),
+                'maxlen': item.get('maxlen', None),
+            }
+            all_rules_data.append(rule_dict)
+        
+        # Process date/time patterns
         for pat in self.dparser.patterns:
-            rule = [pat['key'], pat['name'], 'data', 'ppr', 'datetime', "qddate datetime patterns", 'common', 'datetime']    
-            all_rules.append(rule) 
-        headers.append('context')            
-#        print(all_rules)
-        print(tabulate(all_rules, headers=headers, tablefmt=self.table_format))            
+            rule_dict = {
+                'id': pat.get('key', ''),
+                'name': pat.get('name', ''),
+                'type': 'data',
+                'match': 'ppr',
+                'group': 'datetime',
+                'group_desc': 'qddate datetime patterns',
+                'lang': 'common',
+                'country': None,
+                'contexts': ['datetime'],
+                'is_pii': False,
+                'priority': 0,
+                'minlen': None,
+                'maxlen': None,
+            }
+            all_rules_data.append(rule_dict)
+        
+        # Output based on format
+        output_format_lower = (output_format or "table").lower()
+        
+        if output_format_lower == "table":
+            # Format for table display
+            headers = ['id', 'name', 'type', 'match', 'lang', 'country', 'contexts']
+            table_data = []
+            for rule in all_rules_data:
+                table_data.append([
+                    rule['id'],
+                    rule['name'],
+                    rule['type'],
+                    rule['match'],
+                    self._format_lang(rule['lang']),
+                    self._format_country_codes(rule['country']),
+                    self._format_contexts(rule['contexts']),
+                ])
+            output_text = tabulate(table_data, headers=headers, tablefmt=self.table_format)
+            
+        elif output_format_lower in ("json", "yaml"):
+            # Prepare structured data
+            output_dict = {
+                'total_rules': len(all_rules_data),
+                'rules': all_rules_data
+            }
+            
+            if output_format_lower == "json":
+                output_text = json.dumps(
+                    output_dict, 
+                    indent=self.json_indent or 2, 
+                    ensure_ascii=False,
+                    sort_keys=True
+                )
+            else:  # yaml
+                output_text = yaml.safe_dump(
+                    output_dict, 
+                    default_flow_style=False, 
+                    allow_unicode=True,
+                    sort_keys=False
+                )
+                
+        elif output_format_lower == "csv":
+            # Write CSV format
+            from io import StringIO
+            output_buffer = StringIO()
+            writer = csv.DictWriter(
+                output_buffer, 
+                fieldnames=[
+                    'id', 'name', 'type', 'match', 'group', 'lang', 
+                    'country', 'contexts', 'is_pii', 'priority', 'minlen', 'maxlen'
+                ]
+            )
+            writer.writeheader()
+            for rule in all_rules_data:
+                writer.writerow({
+                    'id': rule['id'],
+                    'name': rule['name'],
+                    'type': rule['type'],
+                    'match': rule['match'],
+                    'group': rule['group'],
+                    'lang': rule['lang'],
+                    'country': self._format_country_codes(rule['country']),
+                    'contexts': '|'.join(rule['contexts']),
+                    'is_pii': str(rule['is_pii']).lower(),
+                    'priority': rule['priority'],
+                    'minlen': rule['minlen'] if rule['minlen'] is not None else '',
+                    'maxlen': rule['maxlen'] if rule['maxlen'] is not None else '',
+                })
+            output_text = output_buffer.getvalue()
+        else:
+            raise ValueError(f"Unsupported output format: {output_format}. Choose from: table, json, yaml, csv")
+        
+        # Write output
+        if output:
+            with open(output, 'w', encoding='utf-8') as f:
+                f.write(output_text)
+        else:
+            print(output_text)            
 
     def rules_dumpstats(self) -> None:
         """Print statistics about loaded rules.
@@ -674,6 +974,186 @@ class CrafterCmd(object):
                     time.sleep(self.retry_delay)
         raise last_exc
 
+    def _classify_with_llm_only(
+        self,
+        items: List[Dict[str, Any]],
+        datastats: Dict[str, Dict[str, Any]],
+        langs: Optional[List[str]] = None,
+        contexts: Optional[List[str]] = None,
+    ):
+        """Classify all fields using LLM only.
+        
+        Args:
+            items: List of data items
+            datastats: Field statistics dictionary
+            langs: Optional language filters
+            contexts: Optional context filters (categories)
+            
+        Returns:
+            TableScanResult compatible with rule-based results
+        """
+        from metacrafter.classify.processor import TableScanResult, ColumnMatchResult, RuleResult
+        
+        if not self.llm_classifier:
+            return TableScanResult()
+        
+        # Collect sample values for each field
+        field_samples = {}
+        for item in items[:100]:  # Limit to first 100 items for efficiency
+            for field_name, value in item.items():
+                if field_name not in field_samples:
+                    field_samples[field_name] = []
+                if value and len(field_samples[field_name]) < 10:
+                    field_samples[field_name].append(str(value))
+        
+        # Prepare fields for batch classification
+        fields_to_classify = []
+        for field_name in datastats.keys():
+            sample_values = field_samples.get(field_name, [])[:5]  # Limit to 5 samples
+            fields_to_classify.append({
+                "field_name": field_name,
+                "sample_values": sample_values
+            })
+        
+        # Convert contexts to categories for LLM
+        categories = contexts if contexts else None
+        
+        # Classify with LLM
+        try:
+            llm_results = self.llm_classifier.classify_batch(
+                fields=fields_to_classify,
+                langs=langs,
+                categories=categories
+            )
+        except Exception as e:
+            logging.warning(f"LLM classification failed: {e}")
+            return TableScanResult()
+        
+        # Convert LLM results to TableScanResult format
+        results = TableScanResult()
+        for llm_result in llm_results:
+            field_name = llm_result.get("field")
+            if not field_name:
+                continue
+            
+            datatype_id = llm_result.get("datatype_id")
+            confidence = llm_result.get("confidence", 0.0)
+            
+            # Create column result
+            column_result = ColumnMatchResult(field=field_name)
+            
+            # Add LLM match if found
+            if datatype_id and confidence > 0:
+                llm_match = RuleResult(
+                    ruleid="llm_classifier",
+                    dataclass=datatype_id,
+                    confidence=confidence * 100.0,  # Convert to 0-100 scale
+                    ruletype="llm",
+                )
+                column_result.add(llm_match)
+            
+            results.results.append(column_result)
+        
+        return results
+    
+    def _merge_llm_results(
+        self,
+        rule_results,
+        items: List[Dict[str, Any]],
+        datastats: Dict[str, Dict[str, Any]],
+        langs: Optional[List[str]] = None,
+        contexts: Optional[List[str]] = None,
+        min_confidence: float = 50.0,
+    ):
+        """Merge LLM classification results with rule-based results.
+        
+        Args:
+            rule_results: Results from rule-based classification
+            items: Original data items
+            datastats: Field statistics
+            langs: Language filters
+            contexts: Context filters (categories)
+            min_confidence: Minimum confidence for LLM results (0-100)
+            
+        Returns:
+            Merged TableScanResult
+        """
+        from metacrafter.classify.processor import ColumnMatchResult, RuleResult
+        
+        if not self.llm_classifier:
+            return rule_results
+        
+        # Get fields that matched with high confidence
+        matched_fields = {}
+        for res in rule_results.results:
+            if res.matches:
+                # Get highest confidence match
+                max_conf = max(m.confidence for m in res.matches) if res.matches else 0
+                matched_fields[res.field] = max_conf
+        
+        # Collect sample values for each field
+        field_samples = {}
+        for item in items[:100]:  # Limit to first 100 items
+            for field_name, value in item.items():
+                if field_name not in field_samples:
+                    field_samples[field_name] = []
+                if value and len(field_samples[field_name]) < 10:
+                    field_samples[field_name].append(str(value))
+        
+        # Convert contexts to categories for LLM
+        categories = contexts if contexts else None
+        
+        # Try LLM classification for unmatched or low-confidence fields
+        for field_name, stats in datastats.items():
+            # Skip if already matched with high confidence
+            if field_name in matched_fields and matched_fields[field_name] >= min_confidence:
+                continue
+            
+            # Get sample values
+            sample_values = field_samples.get(field_name, [])[:5]  # Limit to 5 samples
+            
+            try:
+                # Classify with LLM
+                llm_result = self.llm_classifier.classify_field(
+                    field_name=field_name,
+                    sample_values=sample_values,
+                    langs=langs,
+                    categories=categories,
+                )
+                
+                # Check if LLM found a match with sufficient confidence
+                llm_confidence = llm_result.get("confidence", 0) * 100  # Convert to 0-100
+                if llm_result.get("datatype_id") and llm_confidence >= min_confidence:
+                    # Find or create column result
+                    column_result = None
+                    for res in rule_results.results:
+                        if res.field == field_name:
+                            column_result = res
+                            break
+                    
+                    if not column_result:
+                        column_result = ColumnMatchResult(field=field_name)
+                        rule_results.results.append(column_result)
+                    
+                    # Add LLM match as a rule result
+                    llm_match = RuleResult(
+                        ruleid="llm_classifier",
+                        dataclass=llm_result["datatype_id"],
+                        confidence=llm_confidence,
+                        ruletype="llm",
+                    )
+                    column_result.add(llm_match)
+                    
+                    if self.verbose:
+                        logging.debug(f"LLM classified {field_name} as {llm_result['datatype_id']} "
+                                    f"(confidence: {llm_confidence:.1f}%)")
+            
+            except Exception as e:
+                logging.warning(f"LLM classification failed for field {field_name}: {e}")
+                continue
+        
+        return rule_results
+
     def scan_data(
         self,
         items: List[Dict[str, Any]],
@@ -689,6 +1169,8 @@ class CrafterCmd(object):
         stats_only: bool = False,
         dict_share: Optional[float] = None,
         empty_values: Optional[List[str]] = None,
+        classification_mode: Optional[str] = None,
+        llm_min_confidence: float = 50.0,
     ) -> Dict[str, Any]:
         """Scan data items and return classification results.
         
@@ -776,23 +1258,66 @@ class CrafterCmd(object):
                 "stats_table": datastats,
             }
 
+        # Determine classification mode
+        mode = classification_mode if classification_mode is not None else self.classification_mode
+        
         # Use provided confidence or default
         confidence_threshold = confidence if confidence is not None else MIN_CONFIDENCE_FOR_MATCH
 
-        results = self.processor.match_dict(
-            items,
-            fields=fields,
-            datastats=datastats_dict,
-            confidence=confidence_threshold,
-            stop_on_match=stop_on_match,
-            dateparser=self.dparser,
-            parse_dates=parse_dates,
-            limit=limit,
-            filter_contexts=contexts,
-            filter_langs=langs,
-            except_empty=except_empty,
-            ignore_imprecise=ignore_imprecise,
-        )
+        # Run classification based on mode
+        if mode == "llm":
+            # LLM-only mode
+            if not self.llm_classifier:
+                logging.warning("LLM classifier not available, falling back to rule-based classification")
+                # Fall through to rule-based classification
+                results = self.processor.match_dict(
+                    items,
+                    fields=fields,
+                    datastats=datastats_dict,
+                    confidence=confidence_threshold,
+                    stop_on_match=stop_on_match,
+                    dateparser=self.dparser,
+                    parse_dates=parse_dates,
+                    limit=limit,
+                    filter_contexts=contexts,
+                    filter_langs=langs,
+                    except_empty=except_empty,
+                    ignore_imprecise=ignore_imprecise,
+                )
+            else:
+                results = self._classify_with_llm_only(
+                    items=items,
+                    datastats=datastats_dict,
+                    langs=langs,
+                    contexts=contexts,
+                )
+        else:
+            # Rule-based mode (default)
+            results = self.processor.match_dict(
+                items,
+                fields=fields,
+                datastats=datastats_dict,
+                confidence=confidence_threshold,
+                stop_on_match=stop_on_match,
+                dateparser=self.dparser,
+                parse_dates=parse_dates,
+                limit=limit,
+                filter_contexts=contexts,
+                filter_langs=langs,
+                except_empty=except_empty,
+                ignore_imprecise=ignore_imprecise,
+            )
+            
+            # Merge LLM results if in hybrid mode
+            if mode == "hybrid" and self.llm_classifier:
+                results = self._merge_llm_results(
+                    rule_results=results,
+                    items=items,
+                    datastats=datastats_dict,
+                    langs=langs,
+                    contexts=contexts,
+                    min_confidence=llm_min_confidence,
+                )
         output = []
         outdata = []
         for res in results.results:
@@ -857,6 +1382,8 @@ class CrafterCmd(object):
         dict_share=None,
         empty_values=None,
         compression="auto",
+        classification_mode=None,
+        llm_min_confidence=50.0,
     ):
         """Scan a file and classify its fields.
         
@@ -1000,6 +1527,8 @@ class CrafterCmd(object):
                     stats_only=stats_only,
                     dict_share=dict_share,
                     empty_values=empty_values,
+                    classification_mode=classification_mode,
+                    llm_min_confidence=llm_min_confidence,
                 )
             else:
                 report = self.scan_data_client(
@@ -1111,6 +1640,187 @@ class CrafterCmd(object):
             if output_handle and should_close:
                 output_handle.close()
 
+    def _scan_duckdb_native(
+        self,
+        connectstr: str,
+        schema: Optional[str] = None,
+        limit: int = 1000,
+        contexts: Optional[Union[str, List[str]]] = None,
+        langs: Optional[Union[str, List[str]]] = None,
+        dformat: str = "short",
+        output: Optional[Union[str, Any]] = None,
+        confidence: Optional[float] = None,
+        stop_on_match: bool = False,
+        parse_dates: bool = True,
+        ignore_imprecise: bool = True,
+        except_empty: bool = True,
+        fields: Optional[Union[str, List[str]]] = None,
+        output_format: str = "table",
+        stats_only: bool = False,
+        dict_share: Optional[float] = None,
+        empty_values: Optional[List[str]] = None,
+        batch_size: int = DEFAULT_BATCH_SIZE,
+    ) -> None:
+        """Scan DuckDB database using native Python API to avoid SQLAlchemy type issues.
+        
+        This method bypasses SQLAlchemy's type system which has issues with DuckDB's
+        unhashable type objects.
+        """
+        try:
+            import duckdb
+        except ImportError:
+            raise ImportError(
+                "DuckDB Python package is required. Install it with: pip install duckdb"
+            )
+        
+        import os
+        
+        # Parse DuckDB connection string: duckdb:///path/to/file.duckdb
+        # or duckdb://:memory: for in-memory database
+        db_path = connectstr.replace("duckdb:///", "").replace("duckdb://", "")
+        if db_path == ":memory:":
+            db_path = ":memory:"
+        elif not os.path.isabs(db_path):
+            # Relative path - make it absolute
+            db_path = os.path.abspath(db_path)
+        
+        if not self.quiet:
+            print(f"Connecting to DuckDB: {db_path}")
+        
+        # Connect using DuckDB native API
+        conn = duckdb.connect(db_path)
+        db_results = {}
+        
+        effective_batch = batch_size if batch_size and batch_size > 0 else DEFAULT_BATCH_SIZE
+        
+        try:
+            # Get list of tables
+            # Escape schema name to prevent SQL injection
+            if schema:
+                safe_schema = schema.replace("'", "''")  # Escape single quotes
+                tables_query = f"SELECT table_name FROM information_schema.tables WHERE table_schema = '{safe_schema}'"
+            else:
+                tables_query = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
+            
+            tables_result = conn.execute(tables_query).fetchall()
+            tables = [row[0] for row in tables_result]
+            
+            if not tables:
+                if not self.quiet:
+                    print("No tables found in database")
+                return
+            
+            for table in tables:
+                if not self.quiet:
+                    print(f"- table {table}")
+                
+                try:
+                    # Query table data using DuckDB native API
+                    # Use parameterized query to avoid SQL injection
+                    # DuckDB uses ? for parameters, but LIMIT doesn't support parameters well
+                    # So we validate limit is an integer and quote the table name
+                    safe_limit = int(limit)
+                    safe_table = table.replace('"', '""')  # Escape double quotes
+                    query = f'SELECT * FROM "{safe_table}" LIMIT {safe_limit}'
+                    result = conn.execute(query)
+                    
+                    # Get column names from description
+                    column_names = [desc[0] for desc in result.description]
+                    
+                    items = []
+                    fetch_progress = self._create_progress_bar(
+                        total=limit if limit else None,
+                        desc=f"Fetching rows for {table}",
+                        unit="records",
+                    )
+                    
+                    try:
+                        # Fetch rows in batches
+                        while True:
+                            row_batch = result.fetchmany(effective_batch)
+                            if not row_batch:
+                                break
+                            
+                            # Convert rows to dictionaries
+                            for row in row_batch:
+                                row_dict = {}
+                                for i, col_name in enumerate(column_names):
+                                    val = row[i]
+                                    # Convert any problematic types
+                                    if val is not None:
+                                        type_name = type(val).__name__
+                                        if 'DuckDBPyType' in type_name:
+                                            val = None
+                                    row_dict[col_name] = val
+                                items.append(row_dict)
+                            
+                            if fetch_progress:
+                                fetch_progress.update(len(row_batch))
+                            
+                            if len(items) >= limit:
+                                items = items[:limit]
+                                break
+                    finally:
+                        if fetch_progress:
+                            fetch_progress.close()
+                    
+                    # Process the data
+                    if self.remote is None:
+                        report = self.scan_data(
+                            items,
+                            limit,
+                            contexts,
+                            langs,
+                            confidence=confidence,
+                            stop_on_match=stop_on_match,
+                            parse_dates=parse_dates,
+                            ignore_imprecise=ignore_imprecise,
+                            except_empty=except_empty,
+                            fields=fields,
+                            stats_only=stats_only,
+                            dict_share=dict_share,
+                            empty_values=empty_values,
+                        )
+                    else:
+                        report = self.scan_data_client(
+                            self.remote,
+                            items,
+                            limit,
+                            contexts,
+                            langs,
+                            confidence=confidence,
+                            stop_on_match=stop_on_match,
+                            parse_dates=parse_dates,
+                            ignore_imprecise=ignore_imprecise,
+                            except_empty=except_empty,
+                            fields=fields,
+                            stats_only=stats_only,
+                            dict_share=dict_share,
+                            empty_values=empty_values,
+                        )
+                        if stats_only and not report.get("stats_table"):
+                            print("Stats-only mode is not available for remote database scans.")
+                            return
+                    
+                    db_results[table] = report
+                    
+                except Exception as e:
+                    logging.error(f"Error processing table {table}: {e}")
+                    if not self.quiet:
+                        print(f"Error processing table {table}: {e}")
+                    continue
+            
+            self._write_db_results(
+                db_results,
+                dformat,
+                output,
+                output_format=output_format,
+                stats_only=stats_only,
+            )
+            
+        finally:
+            conn.close()
+
     def scan_db(
         self,
         connectstr: str = "sqlite:///test.db",
@@ -1161,14 +1871,42 @@ class CrafterCmd(object):
             ValueError: If schema name is invalid or not found
             sqlalchemy.exc.SQLAlchemyError: If database connection or query fails
         """
-        from sqlalchemy import create_engine, inspect, text
+        from sqlalchemy import create_engine, inspect, text, event
         import sqlalchemy.exc
         import re
 
         dbtype = connectstr.split(":", 1)[0].lower()
+        
+        # Special handling for DuckDB to avoid SQLAlchemy type caching issues
+        if dbtype == "duckdb":
+            return self._scan_duckdb_native(connectstr, schema, limit, contexts, langs, 
+                                            dformat, output, confidence, stop_on_match,
+                                            parse_dates, ignore_imprecise, except_empty,
+                                            fields, output_format, stats_only, dict_share,
+                                            empty_values, batch_size)
+        
         if not self.quiet:
             print("Connecting to %s" % (connectstr))
-        dbe = create_engine(connectstr)
+        
+        # Configure SQLite to handle encoding errors gracefully
+        if dbtype == "sqlite":
+            import sqlite3
+            
+            def set_sqlite_text_factory(dbapi_conn, connection_record):
+                """Set text factory to handle UTF-8 decoding errors gracefully"""
+                def text_factory(data):
+                    """Custom text factory that handles encoding errors"""
+                    try:
+                        return data.decode('utf-8')
+                    except UnicodeDecodeError:
+                        # Replace invalid bytes with replacement character
+                        return data.decode('utf-8', errors='replace')
+                dbapi_conn.text_factory = text_factory
+            
+            dbe = create_engine(connectstr)
+            event.listen(dbe, "connect", set_sqlite_text_factory)
+        else:
+            dbe = create_engine(connectstr)
         inspector = inspect(dbe)
         db_schemas = inspector.get_schema_names()
         con = dbe.connect()
@@ -1216,34 +1954,174 @@ class CrafterCmd(object):
                     unit="records",
                 )
                 try:
-                    row_batch = queryres.fetchmany(effective_batch)
+                    # Get column names from result set metadata (safer for DuckDB)
+                    # This avoids issues with DuckDB type objects in keys()
+                    column_names = None
+                    
+                    # First, try to get column names from inspector (most reliable)
+                    try:
+                        columns = inspector.get_columns(table, schema=db_schema)
+                        column_names = [col['name'] for col in columns]
+                    except Exception:
+                        pass
+                    
+                    # If that didn't work, try getting from the result set
+                    if column_names is None:
+                        try:
+                            # Try to get column names from the result set's column metadata
+                            if hasattr(queryres, 'keys'):
+                                raw_keys = queryres.keys()
+                                # Convert all keys to strings to avoid unhashable type issues
+                                column_names = [str(k) if k is not None else f"col_{i}" 
+                                              for i, k in enumerate(raw_keys)]
+                        except Exception:
+                            pass
+                    
+                    # Fetch first batch
+                    try:
+                        row_batch = queryres.fetchmany(effective_batch)
+                    except sqlalchemy.exc.OperationalError as e:
+                        error_msg = str(e)
+                        if "Could not decode to UTF-8" in error_msg or "decode" in error_msg.lower():
+                            if not self.quiet:
+                                print(f"Warning: Encoding error in table {table}: {error_msg}")
+                                print("Skipping table due to encoding issues. Consider re-encoding the database.")
+                            continue
+                        else:
+                            # Re-raise if it's a different OperationalError
+                            raise
+                    
+                    # If still no column names, try getting from the first row
+                    if column_names is None and row_batch:
+                        first_row = row_batch[0]
+                        try:
+                            if hasattr(first_row, '_fields'):
+                                # SQLAlchemy 2.x Row has _fields attribute
+                                column_names = list(first_row._fields)
+                            elif hasattr(first_row, 'keys'):
+                                raw_keys = first_row.keys()
+                                # Convert all keys to strings to avoid unhashable type issues
+                                column_names = [str(k) if k is not None else f"col_{i}" 
+                                              for i, k in enumerate(raw_keys)]
+                        except Exception:
+                            pass
+                    
+                    # If we still don't have column names, we'll use fallback methods
+                    
                     while row_batch:
                         # Convert SQLAlchemy Row objects to dictionaries
                         # Handle both SQLAlchemy 1.x and 2.x Row objects
+                        # Special handling for DuckDB which may return unhashable type objects
                         batch_dicts = []
                         for row in row_batch:
+                            row_dict = {}
                             try:
-                                # SQLAlchemy 2.x: use .mapping or ._mapping
-                                if hasattr(row, '_mapping'):
-                                    batch_dicts.append(dict(row._mapping))
-                                elif hasattr(row, 'mapping'):
-                                    batch_dicts.append(dict(row.mapping))
-                                elif hasattr(row, '_asdict'):
-                                    # SQLAlchemy 1.x RowProxy
-                                    batch_dicts.append(row._asdict())
+                                # Use column names if available, otherwise try row methods
+                                if column_names:
+                                    # Access by index to avoid type object issues with DuckDB
+                                    for i, col_name in enumerate(column_names):
+                                        try:
+                                            # Ensure col_name is a string (not a DuckDB type object)
+                                            col_name_str = str(col_name) if col_name is not None else f"col_{i}"
+                                            
+                                            # Access value by index to avoid DuckDB type object issues
+                                            if hasattr(row, '__getitem__'):
+                                                val = row[i]
+                                            elif hasattr(row, '_mapping'):
+                                                val = row._mapping.get(col_name_str)
+                                            elif hasattr(row, 'mapping'):
+                                                val = row.mapping.get(col_name_str)
+                                            else:
+                                                val = getattr(row, col_name_str, None)
+                                            
+                                            # Convert DuckDB type objects to None
+                                            if val is not None:
+                                                type_name = type(val).__name__
+                                                if 'DuckDBPyType' in type_name:
+                                                    val = None
+                                            
+                                            row_dict[col_name_str] = val
+                                        except (TypeError, ValueError, IndexError, AttributeError) as e:
+                                            # If there's an error accessing the value, set to None
+                                            col_name_str = str(col_name) if col_name is not None else f"col_{i}"
+                                            row_dict[col_name_str] = None
                                 else:
-                                    # Fallback: try direct dict conversion
-                                    batch_dicts.append(dict(row))
-                            except (TypeError, ValueError):
-                                # If dict() fails, try manual conversion
-                                batch_dicts.append({col: getattr(row, col, None) for col in row.keys()})
+                                    # Fallback: try standard SQLAlchemy row conversion methods
+                                    try:
+                                        if hasattr(row, '_mapping'):
+                                            row_dict = dict(row._mapping)
+                                        elif hasattr(row, 'mapping'):
+                                            row_dict = dict(row.mapping)
+                                        elif hasattr(row, '_asdict'):
+                                            row_dict = row._asdict()
+                                        else:
+                                            # Last resort: try direct dict conversion
+                                            row_dict = dict(row)
+                                    except (TypeError, ValueError) as e:
+                                        # If dict conversion fails, try manual conversion
+                                        # This handles cases where keys() returns unhashable types
+                                        row_dict = {}
+                                        try:
+                                            # Try to get column count and access by index
+                                            if hasattr(row, '__len__'):
+                                                num_cols = len(row)
+                                                for i in range(num_cols):
+                                                    try:
+                                                        val = row[i]
+                                                        # Check for DuckDB type objects
+                                                        if val is not None:
+                                                            type_name = type(val).__name__
+                                                            if 'DuckDBPyType' in type_name:
+                                                                val = None
+                                                        row_dict[f"col_{i}"] = val
+                                                    except (TypeError, ValueError, IndexError):
+                                                        row_dict[f"col_{i}"] = None
+                                        except Exception:
+                                            # If all else fails, create empty dict
+                                            pass
+                                
+                                # Clean up any unhashable types in the final dict
+                                # Also ensure all keys are strings
+                                cleaned_dict = {}
+                                for key, value in row_dict.items():
+                                    # Ensure key is a string
+                                    key_str = str(key) if key is not None else "unknown"
+                                    
+                                    if value is not None:
+                                        type_name = type(value).__name__
+                                        if 'DuckDBPyType' in type_name:
+                                            cleaned_dict[key_str] = None
+                                        else:
+                                            cleaned_dict[key_str] = value
+                                    else:
+                                        cleaned_dict[key_str] = None
+                                
+                                batch_dicts.append(cleaned_dict)
+                            except (TypeError, ValueError) as e:
+                                # If all else fails, log and skip this row
+                                logging.warning(f"Failed to convert row to dictionary: {e}")
+                                continue
+                        
                         items.extend(batch_dicts)
                         if fetch_progress:
                             fetch_progress.update(len(batch_dicts))
                         if len(items) >= limit:
                             items = items[:limit]
                             break
-                        row_batch = queryres.fetchmany(effective_batch)
+                        try:
+                            row_batch = queryres.fetchmany(effective_batch)
+                        except sqlalchemy.exc.OperationalError as e:
+                            error_msg = str(e)
+                            if "Could not decode to UTF-8" in error_msg or "decode" in error_msg.lower():
+                                if not self.quiet:
+                                    print(f"Warning: Encoding error while fetching from table {table}: {error_msg}")
+                                    print("Stopping fetch for this table due to encoding issues.")
+                                # Break out of while loop
+                                row_batch = []
+                                break
+                            else:
+                                # Re-raise if it's a different OperationalError
+                                raise
                 finally:
                     if fetch_progress:
                         fetch_progress.close()
@@ -1413,527 +2291,4 @@ class CrafterCmd(object):
             output_format=output_format,
             stats_only=stats_only,
         )
-
-
-@server_app.command('run')
-def server_run(
-    host: str = typer.Option("127.0.0.1", "--host", help="IP or hostname to bind the API server to"),
-    port: int = typer.Option(10399, "--port", help="Port where the API server listens"),
-    debug: bool = typer.Option(False, "--debug", help="Enable verbose server debug logging"),
-):
-    """Start the API server that exposes the classifier via HTTP."""
-    logging.info("Run server with classifier API")
-    from metacrafter.server.manager import run_server
-
-    run_server(host, port, debug)
-
-
-@rules_app.command('stats')
-def rules_stats(
-    debug: bool = typer.Option(False, help="Enable debug logging"),
-    rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
-    country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
-):
-    """Display aggregate statistics about loaded rules."""
-    # Parse rulepath if provided (comma-separated)
-    rulepath_list = None
-    if rulepath:
-        rulepath_list = [rp.strip() for rp in rulepath.split(',') if rp.strip()]
-    country_code_list = None
-    if country_codes:
-        country_code_list = [
-            cc.strip().lower() for cc in country_codes.split(",") if cc.strip()
-        ]
-    acmd = CrafterCmd(debug=debug, rulepath=rulepath_list, country_codes=country_code_list)
-    acmd.rules_dumpstats()
-
-@rules_app.command('list')
-def rules_list(
-    debug: bool = typer.Option(False, help="Enable debug logging"),
-    rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
-    country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
-):
-    """List every rule along with key metadata."""
-    # Parse rulepath if provided (comma-separated)
-    rulepath_list = None
-    if rulepath:
-        rulepath_list = [rp.strip() for rp in rulepath.split(',') if rp.strip()]
-    country_code_list = None
-    if country_codes:
-        country_code_list = [
-            cc.strip().lower() for cc in country_codes.split(",") if cc.strip()
-        ]
-    acmd = CrafterCmd(debug=debug, rulepath=rulepath_list, country_codes=country_code_list)
-    acmd.rules_list()
-
-@scan_app.command('file')
-def scan_file(
-    filename: str = typer.Argument(..., help="Path to the data file to scan (CSV, JSON, NDJSON, etc.)"),
-    delimiter: str = typer.Option(None, help="CSV/TSV delimiter character"),
-    tagname: str = typer.Option(None, help="XML tag name for data extraction"),
-    encoding: str = typer.Option(None, help="Character encoding for text files (e.g. utf8)"),
-    limit: int = typer.Option(100, help="Maximum records to process per field"),
-    contexts: str = typer.Option(None, help="Comma-separated list of context filters"),
-    langs: str = typer.Option(None, help="Comma-separated list of language filters"),
-    format: str = typer.Option("short", help="Output format: short or full"),
-    output: str = typer.Option(None, "--output", "-o", help="Output file path"),
-    remote: str = typer.Option(None, help="Remote server URL for API calls"),
-    debug: bool = typer.Option(False, help="Enable debug logging"),
-    confidence: float = typer.Option(None, "--confidence", "-c", help="Minimum confidence threshold (0-100, default: 5.0)"),
-    stop_on_match: bool = typer.Option(False, "--stop-on-match", help="Stop processing after first rule match"),
-    no_dates: bool = typer.Option(False, "--no-dates", help="Disable date pattern matching"),
-    include_imprecise: bool = typer.Option(False, "--include-imprecise", help="Include imprecise rules in matching"),
-    include_empty: bool = typer.Option(False, "--include-empty", help="Include empty values in confidence calculations"),
-    fields: str = typer.Option(None, "--fields", help="Comma-separated list of specific fields to process"),
-    rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
-    country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
-    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
-    stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
-    verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
-    quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
-    progress: bool = typer.Option(False, "--progress", help="Show progress while processing"),
-    compression: str = typer.Option("auto", "--compression", help="Force compression handling: auto, none, gz, bz2, ..."),
-    dict_share: float = typer.Option(None, "--dict-share", help="Dictionary share threshold (percentage)"),
-    empty_values: str = typer.Option(None, "--empty-values", help="Comma-separated values treated as empty (use \"\" for empty string)"),
-    timeout: float = typer.Option(None, "--timeout", help="Remote request timeout in seconds (<=0 disables)"),
-    retries: int = typer.Option(0, "--retries", help="Retry attempts for remote requests"),
-    retry_delay: float = typer.Option(DEFAULT_RETRY_DELAY, "--retry-delay", help="Delay between remote retries in seconds"),
-    stdout: bool = typer.Option(False, "--stdout", help="Write output to stdout"),
-    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON output"),
-    indent: Optional[int] = typer.Option(None, "--indent", help="Custom JSON indent (0 for compact)"),
-    table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Tabulate format for table outputs"),
-):
-    """Scan a single file and classify its fields."""
-    # Parse rulepath if provided (comma-separated)
-    rulepath_list = None
-    if rulepath:
-        rulepath_list = [rp.strip() for rp in rulepath.split(',') if rp.strip()]
-    country_code_list = None
-    if country_codes:
-        country_code_list = [
-            cc.strip().lower() for cc in country_codes.split(",") if cc.strip()
-        ]
-    
-    if verbose and quiet:
-        raise typer.BadParameter("Cannot use --verbose and --quiet together")
-    if dict_share is not None and dict_share <= 0:
-        raise typer.BadParameter("--dict-share must be greater than 0")
-    if retries < 0:
-        raise typer.BadParameter("--retries must be >= 0")
-    if retry_delay < 0:
-        raise typer.BadParameter("--retry-delay must be >= 0")
-    if timeout is not None and timeout < 0:
-        raise typer.BadParameter("--timeout must be >= 0")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
-    output_format_value = output_format.lower()
-    if output_format_value not in allowed_output_formats:
-        raise typer.BadParameter(
-            f"Invalid output format '{output_format}'. Choose from {', '.join(sorted(allowed_output_formats))}"
-        )
-
-    empty_values_list = _split_option_list(empty_values)
-    json_indent_value = indent if indent is not None else DEFAULT_JSON_INDENT
-    if indent is not None and indent <= 0:
-        json_indent_value = None
-    elif indent is None and pretty:
-        json_indent_value = DEFAULT_JSON_INDENT
-    output_target = _resolve_output_target(output, stdout)
-    table_format_value = table_format or DEFAULT_TABLE_FORMAT
-
-    acmd = CrafterCmd(
-        remote,
-        debug,
-        rulepath=rulepath_list,
-        country_codes=country_code_list,
-        verbose=verbose,
-        quiet=quiet,
-        progress=progress,
-        table_format=table_format_value,
-        json_indent=json_indent_value,
-        timeout=timeout,
-        retries=retries,
-        retry_delay=retry_delay,
-    )
-    acmd.scan_file(
-        filename=filename,
-        delimiter=delimiter,
-        tagname=tagname,
-        limit=int(limit),
-        encoding=encoding,
-        contexts=contexts,
-        langs=langs,
-        dformat=format,
-        output=output_target,
-        confidence=confidence,
-        stop_on_match=stop_on_match,
-        parse_dates=not no_dates,
-        ignore_imprecise=not include_imprecise,
-        except_empty=not include_empty,
-        fields=fields,
-        output_format=output_format_value,
-        stats_only=stats_only,
-        dict_share=dict_share,
-        empty_values=empty_values_list,
-        compression=compression,
-    )
-
-@scan_app.command('sql')
-def scan_db(
-    connstr: str = typer.Argument(..., help="SQLAlchemy connection string for the target database"),
-    schema: str = typer.Option(None, help="Database schema name"),
-    limit: int = typer.Option(1000, help="Maximum records to process per field"),
-    contexts: str = typer.Option(None, help="Comma-separated list of context filters"),
-    langs: str = typer.Option(None, help="Comma-separated list of language filters"),
-    format: str = typer.Option("short", help="Output format: short or full"),
-    output: str = typer.Option(None, "--output", "-o", help="Output file path"),
-    remote: str = typer.Option(None, help="Remote server URL for API calls"),
-    debug: bool = typer.Option(False, help="Enable debug logging"),
-    confidence: float = typer.Option(None, "--confidence", "-c", help="Minimum confidence threshold (0-100, default: 5.0)"),
-    stop_on_match: bool = typer.Option(False, "--stop-on-match", help="Stop processing after first rule match"),
-    no_dates: bool = typer.Option(False, "--no-dates", help="Disable date pattern matching"),
-    include_imprecise: bool = typer.Option(False, "--include-imprecise", help="Include imprecise rules in matching"),
-    include_empty: bool = typer.Option(False, "--include-empty", help="Include empty values in confidence calculations"),
-    fields: str = typer.Option(None, "--fields", help="Comma-separated list of specific fields to process"),
-    rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
-    country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
-    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
-    stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
-    verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
-    quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
-    progress: bool = typer.Option(False, "--progress", help="Show progress while processing"),
-    batch_size: int = typer.Option(DEFAULT_BATCH_SIZE, "--batch-size", help="Number of rows fetched per batch"),
-    dict_share: float = typer.Option(None, "--dict-share", help="Dictionary share threshold (percentage)"),
-    empty_values: str = typer.Option(None, "--empty-values", help="Comma-separated values treated as empty"),
-    timeout: float = typer.Option(None, "--timeout", help="Remote request timeout in seconds (<=0 disables)"),
-    retries: int = typer.Option(0, "--retries", help="Retry attempts for remote requests"),
-    retry_delay: float = typer.Option(DEFAULT_RETRY_DELAY, "--retry-delay", help="Delay between remote retries in seconds"),
-    stdout: bool = typer.Option(False, "--stdout", help="Write output to stdout"),
-    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON output"),
-    indent: Optional[int] = typer.Option(None, "--indent", help="Custom JSON indent (0 for compact)"),
-    table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Tabulate format for table outputs"),
-):
-    """Scan a SQL database using a SQLAlchemy connection string."""
-    # Parse rulepath if provided (comma-separated)
-    rulepath_list = None
-    if rulepath:
-        rulepath_list = [rp.strip() for rp in rulepath.split(',') if rp.strip()]
-    country_code_list = None
-    if country_codes:
-        country_code_list = [
-            cc.strip().lower() for cc in country_codes.split(",") if cc.strip()
-        ]
-    
-    if verbose and quiet:
-        raise typer.BadParameter("Cannot use --verbose and --quiet together")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
-    output_format_value = output_format.lower()
-    if output_format_value not in allowed_output_formats:
-        raise typer.BadParameter(
-            f"Invalid output format '{output_format}'. Choose from {', '.join(sorted(allowed_output_formats))}"
-        )
-
-    if verbose and quiet:
-        raise typer.BadParameter("Cannot use --verbose and --quiet together")
-    if dict_share is not None and dict_share <= 0:
-        raise typer.BadParameter("--dict-share must be greater than 0")
-    if batch_size <= 0:
-        raise typer.BadParameter("--batch-size must be greater than 0")
-    if retries < 0:
-        raise typer.BadParameter("--retries must be >= 0")
-    if retry_delay < 0:
-        raise typer.BadParameter("--retry-delay must be >= 0")
-    if timeout is not None and timeout < 0:
-        raise typer.BadParameter("--timeout must be >= 0")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
-    output_format_value = output_format.lower()
-    if output_format_value not in allowed_output_formats:
-        raise typer.BadParameter(
-            f"Invalid output format '{output_format}'. Choose from {', '.join(sorted(allowed_output_formats))}"
-        )
-    empty_values_list = _split_option_list(empty_values)
-    json_indent_value = indent if indent is not None else DEFAULT_JSON_INDENT
-    if indent is not None and indent <= 0:
-        json_indent_value = None
-    elif indent is None and pretty:
-        json_indent_value = DEFAULT_JSON_INDENT
-    output_target = _resolve_output_target(output, stdout)
-    table_format_value = table_format or DEFAULT_TABLE_FORMAT
-
-    acmd = CrafterCmd(
-        remote,
-        debug,
-        rulepath=rulepath_list,
-        country_codes=country_code_list,
-        verbose=verbose,
-        quiet=quiet,
-        progress=progress,
-        table_format=table_format_value,
-        json_indent=json_indent_value,
-        timeout=timeout,
-        retries=retries,
-        retry_delay=retry_delay,
-    )
-    acmd.scan_db(
-        connectstr=connstr,
-        schema=schema,
-        limit=int(limit),
-        contexts=contexts,
-        langs=langs,
-        dformat=format,
-        output=output_target,
-        confidence=confidence,
-        stop_on_match=stop_on_match,
-        parse_dates=not no_dates,
-        ignore_imprecise=not include_imprecise,
-        except_empty=not include_empty,
-        fields=fields,
-        output_format=output_format_value,
-        stats_only=stats_only,
-        dict_share=dict_share,
-        empty_values=empty_values_list,
-        batch_size=batch_size,
-    )
-
-
-@scan_app.command('mongodb')
-def scan_mongodb(
-    host: str = typer.Argument(..., help="MongoDB host or connection URI to scan"),
-    port: int = typer.Option(27017, help="MongoDB port number"),
-    dbname: str = typer.Option(None, help="MongoDB database name"),
-    username: str = typer.Option(None, help="MongoDB username"),
-    password: str = typer.Option(None, help="MongoDB password"),
-    limit: int = typer.Option(1000, help="Maximum records to process per field"),
-    contexts: str = typer.Option(None, help="Comma-separated list of context filters"),
-    langs: str = typer.Option(None, help="Comma-separated list of language filters"),
-    format: str = typer.Option("short", help="Output format: short or full"),
-    output: str = typer.Option(None, "--output", "-o", help="Output file path"),
-    remote: str = typer.Option(None, help="Remote server URL for API calls"),
-    debug: bool = typer.Option(False, help="Enable debug logging"),
-    confidence: float = typer.Option(None, "--confidence", "-c", help="Minimum confidence threshold (0-100, default: 5.0)"),
-    stop_on_match: bool = typer.Option(False, "--stop-on-match", help="Stop processing after first rule match"),
-    no_dates: bool = typer.Option(False, "--no-dates", help="Disable date pattern matching"),
-    include_imprecise: bool = typer.Option(False, "--include-imprecise", help="Include imprecise rules in matching"),
-    include_empty: bool = typer.Option(False, "--include-empty", help="Include empty values in confidence calculations"),
-    fields: str = typer.Option(None, "--fields", help="Comma-separated list of specific fields to process"),
-    rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
-    country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
-    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
-    stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
-    verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
-    quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
-    progress: bool = typer.Option(False, "--progress", help="Show progress while processing"),
-    batch_size: int = typer.Option(DEFAULT_BATCH_SIZE, "--batch-size", help="Number of documents fetched per batch"),
-    dict_share: float = typer.Option(None, "--dict-share", help="Dictionary share threshold (percentage)"),
-    empty_values: str = typer.Option(None, "--empty-values", help="Comma-separated values treated as empty"),
-    timeout: float = typer.Option(None, "--timeout", help="Remote request timeout in seconds (<=0 disables)"),
-    retries: int = typer.Option(0, "--retries", help="Retry attempts for remote requests"),
-    retry_delay: float = typer.Option(DEFAULT_RETRY_DELAY, "--retry-delay", help="Delay between remote retries in seconds"),
-    stdout: bool = typer.Option(False, "--stdout", help="Write output to stdout"),
-    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON output"),
-    indent: Optional[int] = typer.Option(None, "--indent", help="Custom JSON indent (0 for compact)"),
-    table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Tabulate format for table outputs"),
-):
-    """Scan a MongoDB deployment and classify fields within its collections."""
-    # Parse rulepath if provided (comma-separated)
-    rulepath_list = None
-    if rulepath:
-        rulepath_list = [rp.strip() for rp in rulepath.split(',') if rp.strip()]
-    country_code_list = None
-    if country_codes:
-        country_code_list = [
-            cc.strip().lower() for cc in country_codes.split(",") if cc.strip()
-        ]
-    
-    if verbose and quiet:
-        raise typer.BadParameter("Cannot use --verbose and --quiet together")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
-    output_format_value = output_format.lower()
-    if output_format_value not in allowed_output_formats:
-        raise typer.BadParameter(
-            f"Invalid output format '{output_format}'. Choose from {', '.join(sorted(allowed_output_formats))}"
-        )
-
-    if verbose and quiet:
-        raise typer.BadParameter("Cannot use --verbose and --quiet together")
-    if dict_share is not None and dict_share <= 0:
-        raise typer.BadParameter("--dict-share must be greater than 0")
-    if batch_size <= 0:
-        raise typer.BadParameter("--batch-size must be greater than 0")
-    if retries < 0:
-        raise typer.BadParameter("--retries must be >= 0")
-    if retry_delay < 0:
-        raise typer.BadParameter("--retry-delay must be >= 0")
-    if timeout is not None and timeout < 0:
-        raise typer.BadParameter("--timeout must be >= 0")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
-    output_format_value = output_format.lower()
-    if output_format_value not in allowed_output_formats:
-        raise typer.BadParameter(
-            f"Invalid output format '{output_format}'. Choose from {', '.join(sorted(allowed_output_formats))}"
-        )
-    empty_values_list = _split_option_list(empty_values)
-    json_indent_value = indent if indent is not None else DEFAULT_JSON_INDENT
-    if indent is not None and indent <= 0:
-        json_indent_value = None
-    elif indent is None and pretty:
-        json_indent_value = DEFAULT_JSON_INDENT
-    output_target = _resolve_output_target(output, stdout)
-    table_format_value = table_format or DEFAULT_TABLE_FORMAT
-
-    acmd = CrafterCmd(
-        remote,
-        debug,
-        rulepath=rulepath_list,
-        country_codes=country_code_list,
-        verbose=verbose,
-        quiet=quiet,
-        progress=progress,
-        table_format=table_format_value,
-        json_indent=json_indent_value,
-        timeout=timeout,
-        retries=retries,
-        retry_delay=retry_delay,
-    )
-    acmd.scan_mongodb(
-        host=host,
-        port=int(port),
-        dbname=dbname,
-        username=username,
-        password=password,
-        limit=int(limit),
-        contexts=contexts,
-        langs=langs,
-        dformat=format,
-        output=output_target,
-        confidence=confidence,
-        stop_on_match=stop_on_match,
-        parse_dates=not no_dates,
-        ignore_imprecise=not include_imprecise,
-        except_empty=not include_empty,
-        fields=fields,
-        output_format=output_format_value,
-        stats_only=stats_only,
-        dict_share=dict_share,
-        empty_values=empty_values_list,
-        batch_size=batch_size,
-    )
-
-
-@scan_app.command('bulk')
-def scan_bulk(
-    dirname: str = typer.Argument(..., help="Directory containing files to scan recursively"),
-    delimiter: str = typer.Option(None, help="CSV/TSV delimiter character"),
-    tagname: str = typer.Option(None, help="XML tag name for data extraction"),
-    encoding: str = typer.Option("utf8", help="Default encoding for files in the directory"),
-    limit: int = typer.Option(100, help="Maximum records to process per field"),
-    contexts: str = typer.Option(None, help="Comma-separated list of context filters"),
-    langs: str = typer.Option(None, help="Comma-separated list of language filters"),
-    format: str = typer.Option(None, help="Output format (not used in bulk mode)"),
-    output: str = typer.Option(None, "--output", "-o", help="Output file path"),
-    remote: str = typer.Option(None, help="Remote server URL for API calls"),
-    debug: bool = typer.Option(False, help="Enable debug logging"),
-    confidence: float = typer.Option(None, "--confidence", "-c", help="Minimum confidence threshold (0-100, default: 5.0)"),
-    stop_on_match: bool = typer.Option(False, "--stop-on-match", help="Stop processing after first rule match"),
-    no_dates: bool = typer.Option(False, "--no-dates", help="Disable date pattern matching"),
-    include_imprecise: bool = typer.Option(False, "--include-imprecise", help="Include imprecise rules in matching"),
-    include_empty: bool = typer.Option(False, "--include-empty", help="Include empty values in confidence calculations"),
-    fields: str = typer.Option(None, "--fields", help="Comma-separated list of specific fields to process"),
-    rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
-    country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
-    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
-    stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
-    verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
-    quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
-    progress: bool = typer.Option(False, "--progress", help="Show progress while processing"),
-    compression: str = typer.Option("auto", "--compression", help="Force compression handling: auto, none, gz, bz2, ..."),
-    dict_share: float = typer.Option(None, "--dict-share", help="Dictionary share threshold (percentage)"),
-    empty_values: str = typer.Option(None, "--empty-values", help="Comma-separated values treated as empty"),
-    timeout: float = typer.Option(None, "--timeout", help="Remote request timeout in seconds (<=0 disables)"),
-    retries: int = typer.Option(0, "--retries", help="Retry attempts for remote requests"),
-    retry_delay: float = typer.Option(DEFAULT_RETRY_DELAY, "--retry-delay", help="Delay between remote retries in seconds"),
-    stdout: bool = typer.Option(False, "--stdout", help="Write output to stdout"),
-    pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON output"),
-    indent: Optional[int] = typer.Option(None, "--indent", help="Custom JSON indent (0 for compact)"),
-    table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Tabulate format for table outputs"),
-):
-    """Scan every supported file inside a directory tree."""
-    # Parse rulepath if provided (comma-separated)
-    rulepath_list = None
-    if rulepath:
-        rulepath_list = [rp.strip() for rp in rulepath.split(',') if rp.strip()]
-    country_code_list = None
-    if country_codes:
-        country_code_list = [
-            cc.strip().lower() for cc in country_codes.split(",") if cc.strip()
-        ]
-    
-    if verbose and quiet:
-        raise typer.BadParameter("Cannot use --verbose and --quiet together")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
-    output_format_value = output_format.lower()
-    if output_format_value not in allowed_output_formats:
-        raise typer.BadParameter(
-            f"Invalid output format '{output_format}'. Choose from {', '.join(sorted(allowed_output_formats))}"
-        )
-
-    if verbose and quiet:
-        raise typer.BadParameter("Cannot use --verbose and --quiet together")
-    if dict_share is not None and dict_share <= 0:
-        raise typer.BadParameter("--dict-share must be greater than 0")
-    if retries < 0:
-        raise typer.BadParameter("--retries must be >= 0")
-    if retry_delay < 0:
-        raise typer.BadParameter("--retry-delay must be >= 0")
-    if timeout is not None and timeout < 0:
-        raise typer.BadParameter("--timeout must be >= 0")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
-    output_format_value = output_format.lower()
-    if output_format_value not in allowed_output_formats:
-        raise typer.BadParameter(
-            f"Invalid output format '{output_format}'. Choose from {', '.join(sorted(allowed_output_formats))}"
-        )
-    empty_values_list = _split_option_list(empty_values)
-    json_indent_value = indent if indent is not None else DEFAULT_JSON_INDENT
-    if indent is not None and indent <= 0:
-        json_indent_value = None
-    elif indent is None and pretty:
-        json_indent_value = DEFAULT_JSON_INDENT
-    output_target = _resolve_output_target(output, stdout)
-    table_format_value = table_format or DEFAULT_TABLE_FORMAT
-
-    acmd = CrafterCmd(
-        remote,
-        debug,
-        rulepath=rulepath_list,
-        country_codes=country_code_list,
-        verbose=verbose,
-        quiet=quiet,
-        progress=progress,
-        table_format=table_format_value,
-        json_indent=json_indent_value,
-        timeout=timeout,
-        retries=retries,
-        retry_delay=retry_delay,
-    )
-    acmd.scan_bulk(
-        dirname=dirname,
-        delimiter=delimiter,
-        tagname=tagname,
-        limit=int(limit),
-        encoding=encoding,
-        contexts=contexts,
-        langs=langs,
-        output=output_target,
-        confidence=confidence,
-        stop_on_match=stop_on_match,
-        parse_dates=not no_dates,
-        ignore_imprecise=not include_imprecise,
-        except_empty=not include_empty,
-        fields=fields,
-        output_format=output_format_value,
-        stats_only=stats_only,
-        dict_share=dict_share,
-        empty_values=empty_values_list,
-        compression=compression,
-    )
 

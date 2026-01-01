@@ -55,3 +55,4 @@ rules:
     minlen: 2
     type: data
     match: text
+    validator: metacrafterext.rules.common.identifiers.validate_language_tag

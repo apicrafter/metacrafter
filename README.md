@@ -68,6 +68,9 @@ Metacrafter key features:
 * support any database supported by SQLAlchemy
 * advanced context and language management. You could apply only rules relevant to certain data of choosen language
 * built-in API server
+* **LLM-based classification** using Retrieval-Augmented Generation (RAG) with support for multiple providers (OpenAI, OpenRouter, Ollama, LM Studio, Perplexity)
+* **Hybrid classification** combining rule-based and LLM-based approaches
+* DataHub integration for exporting scan results to metadata catalogs
 * commercial support and additional rules available
 
 
@@ -509,6 +512,76 @@ metacrafter scan bulk /path/to/data \
   -o bulk_results.json
 ```
 
+### Rules Inspection
+
+Inspect and manage classification rules:
+
+**List all rules:**
+```bash
+# List all rules in table format
+metacrafter rules list
+
+# List rules in JSON format
+metacrafter rules list --output-format json -o rules.json
+
+# List rules filtered by country codes
+metacrafter rules list --country-codes us,ca --output-format csv -o us_ca_rules.csv
+
+# List rules from custom rule path
+metacrafter rules list --rulepath ./custom_rules --output-format yaml
+```
+
+**Show rule statistics:**
+```bash
+# Display aggregate statistics about loaded rules
+metacrafter rules stats
+
+# Statistics with custom rule path
+metacrafter rules stats --rulepath ./custom_rules
+
+# Statistics filtered by country codes
+metacrafter rules stats --country-codes ru,de
+```
+
+The `rules list` command displays all field rules, data rules, and date/time patterns with their metadata including:
+- Rule ID and name
+- Type (field or data)
+- Match method (text, ppr, func)
+- Language and country codes
+- Contexts (e.g., pii, finance)
+- PII flag, priority, and length constraints
+
+The `rules stats` command shows aggregate counts of:
+- Field-based rules
+- Data-based rules
+- Rules by context
+- Rules by language
+- Rules by country code
+- Date/time patterns
+
+### Exporting to DataHub
+
+Export scan results to DataHub metadata catalog:
+
+```bash
+# First, scan a file and save results
+metacrafter scan file users.csv --format json -o results.json
+
+# Then export to DataHub
+metacrafter export datahub results.json \
+  --dataset-urn "urn:li:dataset:(urn:li:dataPlatform:postgres,users,PROD)" \
+  --datahub-url "http://localhost:8080" \
+  --token "your-token" \
+  --min-confidence 50.0
+```
+
+With configuration file (`.metacrafter`):
+
+```bash
+metacrafter export datahub results.json \
+  --dataset-urn "urn:li:dataset:(urn:li:dataPlatform:postgres,users,PROD)"
+```
+
 ### Server mode and remote scanning
 
 Launch the local API server:
@@ -527,6 +600,58 @@ metacrafter scan file somefile.csv \
   --stdout
 ```
 
+### LLM-based classification examples
+
+**LLM-only classification with OpenAI:**
+```bash
+metacrafter scan file data.csv \
+  --classification-mode llm \
+  --llm-provider openai \
+  --llm-model gpt-4o-mini \
+  --llm-api-key "sk-..." \
+  --format full
+```
+
+**Hybrid classification (rules + LLM fallback):**
+```bash
+metacrafter scan file data.csv \
+  --classification-mode hybrid \
+  --llm-provider openai \
+  --llm-api-key "sk-..." \
+  --llm-min-confidence 60.0 \
+  --format full
+```
+
+**Using Ollama (local LLM):**
+```bash
+metacrafter scan file data.csv \
+  --llm-only \
+  --llm-provider ollama \
+  --llm-base-url "http://localhost:11434" \
+  --llm-model "llama3" \
+  --format full
+```
+
+**Using OpenRouter:**
+```bash
+metacrafter scan file data.csv \
+  --classification-mode llm \
+  --llm-provider openrouter \
+  --llm-model "openai/gpt-4o-mini" \
+  --llm-api-key "sk-or-..." \
+  --format full
+```
+
+**Using LM Studio (local):**
+```bash
+metacrafter scan file data.csv \
+  --llm-only \
+  --llm-provider lmstudio \
+  --llm-base-url "http://localhost:1234/v1" \
+  --llm-model "local-model" \
+  --format full
+```
+
 ### Advanced CLI options (selection)
 
 All `scan` commands share a rich set of options. Some commonly used ones:
@@ -542,8 +667,193 @@ All `scan` commands share a rich set of options. Some commonly used ones:
 - `--stdout`, `--pretty`, `--indent`: control where and how JSON/YAML is written.
 - `--rulepath`: override default rule paths with your own YAML rule directories.
 - `--country-codes`: restrict rules to specific ISO country codes.
+- `--classification-mode`: set classification mode (`rules`, `llm`, or `hybrid`).
+- `--llm-provider`: LLM provider (`openai`, `openrouter`, `ollama`, `lmstudio`, `perplexity`).
+- `--llm-model`: model name for the selected provider.
+- `--llm-api-key`: API key for cloud providers.
+- `--llm-base-url`: base URL for local providers (Ollama, LM Studio).
 
-Run `metacrafter --help`, `metacrafter scan file --help`, etc. for the full list.
+**Rules commands:**
+- `metacrafter rules list`: List all loaded rules with metadata
+- `metacrafter rules stats`: Display aggregate statistics about loaded rules
+
+Run `metacrafter --help`, `metacrafter scan file --help`, `metacrafter rules list --help`, etc. for the full list.
+
+## LLM-Based Classification
+
+Metacrafter now supports LLM-based classification using Retrieval-Augmented Generation (RAG) to identify semantic data types. This feature uses vector embeddings and similarity search to provide context-aware classification.
+
+### Features
+
+- **Multiple LLM Providers**: Support for OpenAI, OpenRouter, Ollama, LM Studio, and Perplexity
+- **RAG Architecture**: Uses vector embeddings (ChromaDB) and similarity search to retrieve relevant registry entries
+- **Three Classification Modes**:
+  - **Rules-only** (default): Traditional rule-based classification
+  - **LLM-only**: Use only LLM classification, skipping rule-based matching
+  - **Hybrid**: Rule-based first, with LLM as fallback for unmatched or low-confidence fields
+- **Automatic Index Building**: Vector index is automatically built from registry on first use
+- **Configurable Confidence Thresholds**: Set minimum confidence for LLM results
+
+### Installation
+
+LLM features require additional dependencies:
+
+```bash
+pip install openai chromadb requests
+```
+
+### Quick Start
+
+**LLM-only classification:**
+```bash
+metacrafter scan file data.csv \
+  --classification-mode llm \
+  --llm-provider openai \
+  --llm-api-key "sk-..." \
+  --format full
+```
+
+**Hybrid classification (rules + LLM fallback):**
+```bash
+metacrafter scan file data.csv \
+  --classification-mode hybrid \
+  --llm-provider openai \
+  --llm-api-key "sk-..." \
+  --llm-min-confidence 50.0 \
+  --format full
+```
+
+**Using Ollama (local LLM):**
+```bash
+metacrafter scan file data.csv \
+  --classification-mode llm \
+  --llm-provider ollama \
+  --llm-base-url "http://localhost:11434" \
+  --llm-model "llama3" \
+  --format full
+```
+
+### Supported LLM Providers
+
+| Provider | Model Examples | API Key Required | Base URL |
+|----------|---------------|------------------|----------|
+| **OpenAI** | gpt-4o-mini, gpt-4, gpt-3.5-turbo | Yes (OPENAI_API_KEY) | https://api.openai.com/v1 |
+| **OpenRouter** | openai/gpt-4o-mini, anthropic/claude-3-haiku | Yes (OPENROUTER_API_KEY) | https://openrouter.ai/api/v1 |
+| **Ollama** | llama3, mistral, codellama | No | http://localhost:11434 |
+| **LM Studio** | Any local model | No | http://localhost:1234/v1 |
+| **Perplexity** | llama-3.1-sonar-small-128k-online | Yes (PERPLEXITY_API_KEY) | https://api.perplexity.ai |
+
+### Configuration
+
+Add LLM settings to your `.metacrafter` config file:
+
+```yaml
+rulepath:
+  - ./rules
+
+# LLM Configuration
+classification_mode: hybrid  # rules, llm, or hybrid
+llm_provider: openai
+llm_model: gpt-4o-mini
+llm_registry_path: ../metacrafter-registry/data/datatypes_latest.jsonl
+llm_index_path: ./llm_index
+llm_api_key: sk-...  # Or use OPENAI_API_KEY env var
+llm_min_confidence: 50.0
+```
+
+**Environment Variables:**
+- `OPENAI_API_KEY`: OpenAI API key (for OpenAI provider and embeddings)
+- `OPENROUTER_API_KEY`: OpenRouter API key
+- `PERPLEXITY_API_KEY`: Perplexity API key
+
+### CLI Options
+
+**LLM-related options:**
+- `--classification-mode`: Set classification mode (`rules`, `llm`, or `hybrid`)
+- `--llm-only`: Use LLM-only mode (shorthand for `--classification-mode llm`)
+- `--use-llm`: Enable LLM in hybrid mode (shorthand for `--classification-mode hybrid`)
+- `--llm-provider`: LLM provider (`openai`, `openrouter`, `ollama`, `lmstudio`, `perplexity`)
+- `--llm-model`: Model name (provider-specific)
+- `--llm-api-key`: API key for the provider
+- `--llm-base-url`: Base URL (for Ollama, LM Studio, or custom endpoints)
+- `--llm-registry-path`: Path to registry JSONL file
+- `--llm-index-path`: Path to vector index directory
+- `--llm-min-confidence`: Minimum confidence threshold (0-100, default: 50.0)
+
+### Python API
+
+**LLM-only classification:**
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd(
+    llm_only=True,
+    llm_provider="openai",
+    llm_api_key="sk-...",
+    llm_registry_path="../registry/data/datatypes_latest.jsonl"
+)
+
+report = cmd.scan_data(
+    items=[{"email": "test@example.com", "unknown_field": "xyz123"}],
+    classification_mode="llm"
+)
+```
+
+**Hybrid classification:**
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd(
+    use_llm=True,
+    llm_provider="openai",
+    llm_api_key="sk-...",
+    llm_min_confidence=60.0
+)
+
+report = cmd.scan_data(
+    items=[{"email": "test@example.com", "unknown_field": "xyz123"}],
+    classification_mode="hybrid"
+)
+```
+
+**Using Ollama:**
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd(
+    llm_only=True,
+    llm_provider="ollama",
+    llm_base_url="http://localhost:11434",
+    llm_model="llama3"
+)
+
+report = cmd.scan_data(
+    items=[{"email": "test@example.com"}],
+    classification_mode="llm"
+)
+```
+
+### How It Works
+
+1. **Index Building**: On first use, Metacrafter loads the registry and creates vector embeddings for all datatypes using OpenAI's embedding API
+2. **Query Embedding**: For each field, the field name and sample values are embedded
+3. **Vector Search**: Similar registry entries are retrieved using ChromaDB
+4. **LLM Classification**: The LLM receives a prompt with the field context and retrieved registry entries
+5. **Result Formatting**: LLM results are converted to Metacrafter-compatible format
+
+### Performance Considerations
+
+- **Index Building**: One-time cost (several minutes for large registries)
+- **Classification**: Each field requires one LLM API call (~1-3 seconds depending on provider)
+- **Cost**: Depends on LLM provider and model (OpenAI charges per token)
+- **Caching**: Vector index is persisted to disk and reused across sessions
+
+### Limitations
+
+- Requires internet connection for cloud providers (OpenAI, OpenRouter, Perplexity)
+- Local providers (Ollama, LM Studio) require the service to be running
+- API costs apply for cloud providers
+- Index must be rebuilt when registry updates
 
 ## Configuration
 
@@ -558,11 +868,151 @@ rulepath:
   - ./rules
   - ./custom_rules
   - /path/to/additional/rules
+
+# LLM Configuration (optional)
+classification_mode: hybrid  # rules, llm, or hybrid
+llm_provider: openai
+llm_model: gpt-4o-mini
+llm_registry_path: ../metacrafter-registry/data/datatypes_latest.jsonl
+llm_index_path: ./llm_index
+llm_api_key: sk-...  # Or use environment variable
+llm_min_confidence: 50.0
 ```
 
 The `rulepath` option specifies a list of directories where Metacrafter should look for rule YAML files. If not specified, it defaults to `["rules"]`.
 
 You can also override the rule path using the `--rulepath` command-line option.
+
+### DataHub Integration Configuration
+
+Metacrafter can be configured to export scan results to DataHub. Add the following to your `.metacrafter` config file:
+
+```yaml
+rulepath:
+  - ./rules
+
+datahub:
+  url: "http://localhost:8080"
+  token: "your-authentication-token"
+```
+
+Alternatively, you can use environment variables:
+- `DATAHUB_URL`: DataHub GMS server URL
+- `DATAHUB_TOKEN`: DataHub authentication token
+
+## DataHub Integration
+
+Metacrafter can export scan results to [DataHub](https://datahubproject.io), a popular metadata catalog. This allows you to automatically tag dataset columns with PII labels, datatypes, and other classification metadata.
+
+### Installation
+
+To use the DataHub integration, install the DataHub Python SDK:
+
+```bash
+pip install 'acryl-datahub[datahub-rest]'
+```
+
+### Exporting Scan Results to DataHub
+
+1. **Scan a file and save results:**
+   ```bash
+   metacrafter scan file users.csv --format json -o results.json
+   ```
+
+2. **Export to DataHub:**
+   ```bash
+   metacrafter export datahub results.json \
+     --dataset-urn "urn:li:dataset:(urn:li:dataPlatform:postgres,users,PROD)" \
+     --datahub-url "http://localhost:8080" \
+     --token "your-token"
+   ```
+
+### Export Options
+
+- `--dataset-urn`: DataHub dataset URN (required)
+- `--datahub-url`: DataHub GMS server URL (or use `DATAHUB_URL` env var)
+- `--token`: Authentication token (or use `DATAHUB_TOKEN` env var)
+- `--add-pii-tags`: Add PII tags to fields (default: true)
+- `--add-datatype-tags`: Add datatype tags (default: true)
+- `--link-glossary-terms`: Link glossary terms (default: true)
+- `--add-properties`: Add custom properties (default: true)
+- `--min-confidence`: Minimum confidence threshold 0-100 (default: 0.0)
+- `--replace`: Replace existing metadata instead of merging (default: false)
+
+### What Gets Exported
+
+Metacrafter exports the following metadata to DataHub:
+
+- **Tags**: PII tags and datatype tags (e.g., "PII", "Email", "Phone")
+- **Glossary Terms**: Links to glossary terms for detected datatypes
+- **Custom Properties**:
+  - `metacrafter_confidence`: Confidence score (0-100)
+  - `metacrafter_datatype`: Detected datatype name
+  - `metacrafter_datatype_url`: Link to registry entry
+  - `metacrafter_rule_id`: Rule that matched
+  - `metacrafter_field_type`: Field data type (str, int, etc.)
+
+### Example Workflow
+
+```bash
+# 1. Scan your data
+metacrafter scan file users.csv \
+  --contexts pii \
+  --format json \
+  -o scan_results.json
+
+# 2. Export to DataHub
+metacrafter export datahub scan_results.json \
+  --dataset-urn "urn:li:dataset:(urn:li:dataPlatform:postgres,users,PROD)" \
+  --datahub-url "http://datahub.example.com:8080" \
+  --min-confidence 50.0
+```
+
+For more details, see the [DataHub Integration Documentation](devdocs/ISSUE_24_IMPLEMENTATION.md).
+
+### OpenMetadata Integration
+
+Metacrafter can export scan results to OpenMetadata metadata catalog, adding tags, glossary terms, and custom properties to table columns.
+
+**Installation:**
+```bash
+pip install openmetadata-ingestion
+```
+
+**Usage:**
+```bash
+# 1. Scan your data
+metacrafter scan file users.csv \
+  --contexts pii \
+  --format json \
+  -o scan_results.json
+
+# 2. Export to OpenMetadata
+metacrafter export openmetadata scan_results.json \
+  --table-fqn "postgres.default.public.users" \
+  --openmetadata-url "http://localhost:8585/api" \
+  --min-confidence 50.0
+```
+
+**Configuration:**
+Create `.metacrafter` file:
+```yaml
+openmetadata:
+  url: "http://localhost:8585/api"
+  token: "your-jwt-token"
+```
+
+**What Gets Exported:**
+- **Tags**: PII tags and datatype tags (e.g., "PII", "Email", "Phone")
+- **Glossary Terms**: Links to glossary terms for detected datatypes
+- **Custom Properties**:
+  - `metacrafter_confidence`: Confidence score (0-100)
+  - `metacrafter_datatype`: Detected datatype name
+  - `metacrafter_datatype_url`: Link to registry entry
+  - `metacrafter_rule_id`: Rule that matched
+  - `metacrafter_field_type`: Field data type (str, int, etc.)
+
+For more details, see the [OpenMetadata Integration Documentation](devdocs/ISSUE_OPENMETADATA_IMPLEMENTATION.md).
 
 ## Python API examples
 
@@ -826,6 +1276,119 @@ report = cmd.scan_data(
 )
 ```
 
+### Using LLM-based classification
+
+**LLM-only classification:**
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd(
+    llm_only=True,
+    llm_provider="openai",
+    llm_api_key="sk-...",
+    llm_registry_path="../metacrafter-registry/data/datatypes_latest.jsonl"
+)
+
+report = cmd.scan_data(
+    items=[
+        {"email": "test@example.com", "unknown_field": "xyz123"},
+        {"phone": "555-1234", "mystery_field": "abc456"}
+    ],
+    classification_mode="llm"
+)
+
+# Access LLM classification results
+for field_info in report["data"]:
+    print(f"{field_info['field']}: {field_info['matches']}")
+```
+
+**Hybrid classification (rules + LLM fallback):**
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd(
+    use_llm=True,
+    llm_provider="openai",
+    llm_api_key="sk-...",
+    llm_min_confidence=60.0
+)
+
+report = cmd.scan_data(
+    items=[
+        {"email": "test@example.com", "unknown_field": "xyz123"}
+    ],
+    classification_mode="hybrid"
+)
+```
+
+**Using Ollama (local LLM):**
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd(
+    llm_only=True,
+    llm_provider="ollama",
+    llm_base_url="http://localhost:11434",
+    llm_model="llama3"
+)
+
+report = cmd.scan_data(
+    items=[{"email": "test@example.com"}],
+    classification_mode="llm"
+)
+```
+
+**Using OpenRouter:**
+```python
+from metacrafter.core import CrafterCmd
+
+cmd = CrafterCmd(
+    llm_only=True,
+    llm_provider="openrouter",
+    llm_model="openai/gpt-4o-mini",
+    llm_api_key="sk-or-..."
+)
+
+report = cmd.scan_data(
+    items=[{"email": "test@example.com"}],
+    classification_mode="llm"
+)
+```
+
+### Exporting to DataHub programmatically
+
+```python
+from metacrafter.core import CrafterCmd
+from metacrafter.integrations.datahub import DataHubExporter
+
+# Scan a file
+cmd = CrafterCmd()
+report = cmd.scan_file(
+    filename="users.csv",
+    contexts="pii",
+    output_format="json"
+)
+
+# Export to DataHub
+exporter = DataHubExporter(
+    datahub_url="http://localhost:8080",
+    token="your-token"
+)
+
+stats = exporter.export_scan_results(
+    dataset_urn="urn:li:dataset:(urn:li:dataPlatform:postgres,users,PROD)",
+    scan_report=report,
+    min_confidence=50.0,
+    add_pii_tags=True,
+    add_datatype_tags=True,
+    link_glossary_terms=True,
+    add_properties=True,
+)
+
+print(f"Exported {stats['fields_processed']} fields")
+print(f"Added {stats['tags_added']} tags")
+print(f"Linked {stats['glossary_terms_linked']} glossary terms")
+```
 
 # Rules
 

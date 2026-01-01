@@ -8,6 +8,9 @@ import sys
 def main():
     """Main entry point for metacrafter CLI."""
     try:
+        # Import commands to register them with Typer app instances
+        from .cli import commands  # noqa: F401
+        
         from .core import app
 
         app()

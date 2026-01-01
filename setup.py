@@ -42,6 +42,8 @@ install_requires = [
     'PyYAML',
     'pandas',
     'sqlalchemy',
+    'duckdb-engine',
+    'duckdb',
     'validators',
     'typer',
     'tabulate',

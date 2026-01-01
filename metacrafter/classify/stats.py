@@ -240,7 +240,8 @@ class Analyzer:
         Returns:
             List of lists, where each inner list represents statistics for one field.
             Each row contains: [key, ftype, is_dictkey, is_uniq, n_uniq, share_uniq,
-            minlen, maxlen, avglen, tags, has_digit, has_alphas, has_special, dictvalues]
+            minlen, maxlen, avglen, tags, has_digit, has_alphas, has_special,
+            minval, maxval, has_any_digit, has_any_alphas, has_any_special, dictvalues]
             Returns None if both fromfile and itemlist are None
 
         Raises:
@@ -356,6 +357,8 @@ class Analyzer:
                         "has_digit": 0,
                         "has_alphas": 0,
                         "has_special": 0,
+                        "minval": None,
+                        "maxval": None,
                     }
                 fd = fielddata[k]
                 val_s = str(v)
@@ -377,16 +380,31 @@ class Analyzer:
                     fieldtypes[k] = {"key": k, "types": {}}
                 fd = fieldtypes[k]
                 thetype = guess_datatype(v, self.qd)["base"]
-                if thetype == "str" and isinstance(v, str) and len(v) > 0:
+                # Check character composition for string values (including numeric strings)
+                val_str = str(v)
+                if isinstance(v, str) and len(val_str) > 0:
                     fielddata[k]["has_digit"] += (
-                        1 if any(char.isdigit() for char in v) else 0
+                        1 if any(char.isdigit() for char in val_str) else 0
                     )
                     fielddata[k]["has_alphas"] += (
-                        1 if any(char.isalpha() for char in v) else 0
+                        1 if any(char.isalpha() for char in val_str) else 0
                     )
                     fielddata[k]["has_special"] += (
-                        1 if any(not char.isalnum() for char in v) else 0
+                        1 if any(not char.isalnum() and not char.isspace() for char in val_str) else 0
                     )
+                # Track min/max values for numeric fields
+                if thetype in ["int", "float"]:
+                    try:
+                        num_val = float(v) if isinstance(v, str) else v
+                        if isinstance(num_val, (int, float)):
+                            if fielddata[k]["minval"] is None:
+                                fielddata[k]["minval"] = num_val
+                                fielddata[k]["maxval"] = num_val
+                            else:
+                                fielddata[k]["minval"] = min(fielddata[k]["minval"], num_val)
+                                fielddata[k]["maxval"] = max(fielddata[k]["maxval"], num_val)
+                    except (ValueError, TypeError):
+                        pass
                 uniqval = fd["types"].get(thetype, 0)
                 fd["types"][thetype] = uniqval + 1
                 fieldtypes[k] = fd
@@ -394,6 +412,10 @@ class Analyzer:
         for k, v in list(fielddata.items()):
             fielddata[k]["share_uniq"] = (v["n_uniq"] * 100.0) / v["total"]
             fielddata[k]["avglen"] = v["totallen"] / v["total"]
+            # Convert counts to booleans for character composition
+            fielddata[k]["has_any_digit"] = v["has_digit"] > 0
+            fielddata[k]["has_any_alphas"] = v["has_alphas"] > 0
+            fielddata[k]["has_any_special"] = v["has_special"] > 0
         profile["count"] = count
         profile["num_fields"] = nfields
         finfields = {}
@@ -465,6 +487,11 @@ class Analyzer:
             field.append(fd["has_digit"])
             field.append(fd["has_alphas"])
             field.append(fd["has_special"])
+            field.append(fd["minval"])
+            field.append(fd["maxval"])
+            field.append(fd["has_any_digit"])
+            field.append(fd["has_any_alphas"])
+            field.append(fd["has_any_special"])
             field.append(list(fd["uniq"].keys()) if fd["key"] in dictkeys else None)
             table.append(field)
         return table

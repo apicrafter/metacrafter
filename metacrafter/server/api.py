@@ -142,6 +142,11 @@ def scan_data(rules_processor: RulesProcessor, date_parser: qddate.DateParser):
             "has_digit",
             "has_alphas",
             "has_special",
+            "minval",
+            "maxval",
+            "has_any_digit",
+            "has_any_alphas",
+            "has_any_special",
             "dictvalues",
         ]
         datastats_dict = {}

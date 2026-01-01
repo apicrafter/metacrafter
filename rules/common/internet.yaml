@@ -27,6 +27,7 @@ rules:
     match: ppr
     fieldrule: asn
     fieldrulematch: text
+    validator: metacrafterext.rules.common.identifiers.validate_asn
   asnbyvalueandpostfix:
     key: asn
     name: Autonomous system network (ASN) by value and postfix

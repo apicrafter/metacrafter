@@ -83,4 +83,6 @@ rules:
     rule: (Literal('1') + Word(nums, exact=3)) ^ (Literal('2') + Word('01', exact=1) + Word(nums, exact=2))
     match: ppr
     type: data
+    fieldrule: Optional(Word(printables)) + (CaselessLiteral('year') | CaselessLiteral('date') | CaselessLiteral('time')) + Optional(Word(printables))
+    fieldrulematch: ppr
     imprecise: 1

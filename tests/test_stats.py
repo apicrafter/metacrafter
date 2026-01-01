@@ -286,3 +286,84 @@ class TestAnalyzer:
             if row[0] == "status":
                 assert row[2] is True  # is_dictkey should be True
 
+    def test_analyze_numeric_min_max_values(self):
+        """Test that minval and maxval are tracked for numeric fields."""
+        analyzer = Analyzer(nodates=True)
+        items = [
+            {"id": 1, "score": 10.5, "age": 25},
+            {"id": 5, "score": 20.3, "age": 30},
+            {"id": 3, "score": 15.7, "age": 20},
+        ]
+        result = analyzer.analyze(itemlist=items)
+        assert result is not None
+        for row in result:
+            key = row[0]
+            if key == "id":
+                # minval is at index 13, maxval at index 14
+                assert row[13] == 1  # minval
+                assert row[14] == 5  # maxval
+            elif key == "score":
+                assert row[13] == 10.5  # minval
+                assert row[14] == 20.3  # maxval
+            elif key == "age":
+                assert row[13] == 20  # minval
+                assert row[14] == 30  # maxval
+
+    def test_analyze_numeric_min_max_with_strings(self):
+        """Test that minval/maxval are None for non-numeric fields."""
+        analyzer = Analyzer(nodates=True)
+        items = [
+            {"name": "Alice", "email": "alice@example.com"},
+            {"name": "Bob", "email": "bob@example.com"},
+        ]
+        result = analyzer.analyze(itemlist=items)
+        assert result is not None
+        for row in result:
+            key = row[0]
+            if key in ["name", "email"]:
+                # minval and maxval should be None for string fields
+                assert row[13] is None  # minval
+                assert row[14] is None  # maxval
+
+    def test_analyze_boolean_character_flags(self):
+        """Test that boolean character flags are correctly set."""
+        analyzer = Analyzer(nodates=True)
+        items = [
+            {"digits_only": "123", "letters_only": "abc", "mixed": "abc123", "special": "a@b#c"},
+            {"digits_only": "456", "letters_only": "def", "mixed": "def456", "special": "x!y$z"},
+        ]
+        result = analyzer.analyze(itemlist=items)
+        assert result is not None
+        for row in result:
+            key = row[0]
+            # has_any_digit at index 15, has_any_alphas at index 16, has_any_special at index 17
+            if key == "digits_only":
+                assert row[15] is True  # has_any_digit
+                assert row[16] is False  # has_any_alphas
+                assert row[17] is False  # has_any_special
+            elif key == "letters_only":
+                assert row[15] is False  # has_any_digit
+                assert row[16] is True  # has_any_alphas
+                assert row[17] is False  # has_any_special
+            elif key == "mixed":
+                assert row[15] is True  # has_any_digit
+                assert row[16] is True  # has_any_alphas
+                assert row[17] is False  # has_any_special
+            elif key == "special":
+                assert row[15] is False  # has_any_digit (for this example)
+                assert row[16] is True  # has_any_alphas (contains letters)
+                assert row[17] is True  # has_any_special (contains @, #, !, $)
+
+    def test_analyze_extended_stats_fields_count(self):
+        """Test that all expected fields are present in the result."""
+        analyzer = Analyzer(nodates=True)
+        items = [{"id": 1, "name": "John"}]
+        result = analyzer.analyze(itemlist=items)
+        assert result is not None
+        for row in result:
+            # Should have at least 19 fields now:
+            # key, ftype, is_dictkey, is_uniq, n_uniq, share_uniq,
+            # minlen, maxlen, avglen, tags, has_digit, has_alphas, has_special,
+            # minval, maxval, has_any_digit, has_any_alphas, has_any_special, dictvalues
+            assert len(row) >= 19
+

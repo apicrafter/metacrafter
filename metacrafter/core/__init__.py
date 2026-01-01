@@ -20,11 +20,32 @@ if os.path.exists(_core_py_path):
         CrafterCmd = getattr(_core_module, 'CrafterCmd', None)
         if CrafterCmd is None:
             raise ImportError("CrafterCmd not found in core.py")
+        # Export app (typer.Typer instance)
+        app = getattr(_core_module, 'app', None)
+        if app is None:
+            raise ImportError("app not found in core.py")
         # Export constants that may be imported by other modules
         SUPPORTED_FILE_TYPES = getattr(_core_module, 'SUPPORTED_FILE_TYPES', None)
         CODECS = getattr(_core_module, 'CODECS', None)
         BINARY_DATA_FORMATS = getattr(_core_module, 'BINARY_DATA_FORMATS', None)
-        __all__ = ['CrafterCmd', 'SUPPORTED_FILE_TYPES', 'CODECS', 'BINARY_DATA_FORMATS']
+        DEFAULT_BATCH_SIZE = getattr(_core_module, 'DEFAULT_BATCH_SIZE', None)
+        DEFAULT_JSON_INDENT = getattr(_core_module, 'DEFAULT_JSON_INDENT', None)
+        DEFAULT_RETRY_DELAY = getattr(_core_module, 'DEFAULT_RETRY_DELAY', None)
+        DEFAULT_TABLE_FORMAT = getattr(_core_module, 'DEFAULT_TABLE_FORMAT', None)
+        # Export helper functions
+        _split_option_list = getattr(_core_module, '_split_option_list', None)
+        _resolve_output_target = getattr(_core_module, '_resolve_output_target', None)
+        # Export Typer app instances
+        rules_app = getattr(_core_module, 'rules_app', None)
+        scan_app = getattr(_core_module, 'scan_app', None)
+        server_app = getattr(_core_module, 'server_app', None)
+        export_app = getattr(_core_module, 'export_app', None)
+        __all__ = [
+            'CrafterCmd', 'app', 'SUPPORTED_FILE_TYPES', 'CODECS', 'BINARY_DATA_FORMATS',
+            'DEFAULT_BATCH_SIZE', 'DEFAULT_JSON_INDENT', 'DEFAULT_RETRY_DELAY', 'DEFAULT_TABLE_FORMAT',
+            '_split_option_list', '_resolve_output_target',
+            'rules_app', 'scan_app', 'server_app', 'export_app'
+        ]
     else:
         raise ImportError("Could not load core.py module")
 else:
