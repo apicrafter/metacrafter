@@ -11,13 +11,18 @@ To install the Python library use `pip install metacrafter`.
 Optional features are available as install extras:
 
 ```bash
-pip install metacrafter               # core (rules-based classification, CLI, server)
+pip install metacrafter               # core (built-in rules, CLI, server)
+pip install 'metacrafter[rules]'      # + extended rules pack (metacrafter-rules)
 pip install 'metacrafter[llm]'        # + LLM/RAG hybrid classification (OpenAI, ChromaDB)
 pip install 'metacrafter[datahub]'    # + DataHub export integration
 pip install 'metacrafter[openmetadata]'  # + OpenMetadata integration
-pip install 'metacrafter[all]'        # all optional integrations
+pip install 'metacrafter[all]'        # extended rules + all optional integrations
 pip install 'metacrafter[dev]'        # development + test tooling
 ```
+
+When `metacrafter[rules]` is installed, Metacrafter automatically loads the extended
+`metacrafter-rules` YAML pack (no manual `rulepath` editing required). Set
+`auto_rules: false` in `.metacrafter` to use only paths you list explicitly.
 
 The stable public Python API is importable directly from the package:
 
@@ -716,13 +721,20 @@ Run `metacrafter --help`, `metacrafter scan file --help`, `metacrafter rules lis
 
 ## Custom rules and validator plugins
 
-Metacrafter loads rules from every directory in your `rulepath` (`.metacrafter`
-config or `--rulepath`). This is the extension mechanism for user-defined rules
+Metacrafter loads rules from every directory in your effective `rulepath` (`.metacrafter`
+config and/or `--rulepath`). This is the extension mechanism for user-defined rules
 and validator "plugins":
 
-- **Custom rule directories**: point `rulepath` at your own directory of YAML
-  rule files. They are merged with the built-in rules; duplicate rule `key`s are
-  skipped with a warning.
+- **Built-in rules**: the `rules/` directory shipped with `metacrafter` is always loaded
+  first when `auto_rules` is enabled (default).
+- **Extended rules (`metacrafter[rules]`)**: when the `metacrafter-rules` package is
+  installed, its bundled `rules/` tree is auto-appended. Install with
+  `pip install 'metacrafter[rules]'` or add `metacrafter-rules` to your environment.
+- **Custom rule directories**: additional `rulepath` entries and `--rulepath` flags are
+  appended after built-in and extended paths. Duplicate rule `key`s are skipped with a
+  warning.
+- **Disable auto-discovery**: set `auto_rules: false` in `.metacrafter` to load only the
+  `rulepath` entries you list (useful for custom-only rule sets).
 - **Validator plugins**: `func`-type rules reference any importable Python path,
   e.g. `rule: mypackage.validators.is_widget_id`. As long as the module is on
   `PYTHONPATH`, the function (which takes a value and returns `bool`) is loaded
@@ -930,10 +942,11 @@ Metacrafter can be configured using a `.metacrafter` configuration file. The con
 ### Configuration file format
 
 ```yaml
+# Optional: disable auto-loading of metacrafter-rules when installed
+# auto_rules: false
+
 rulepath:
-  - ./rules
   - ./custom_rules
-  - /path/to/additional/rules
 
 # LLM Configuration (optional)
 classification_mode: hybrid  # rules, llm, or hybrid
@@ -945,9 +958,13 @@ llm_api_key: sk-...  # Or use environment variable
 llm_min_confidence: 50.0
 ```
 
-The `rulepath` option specifies a list of directories where Metacrafter should look for rule YAML files. If not specified, it defaults to `["rules"]`.
+The `rulepath` option lists **additional** rule directories beyond the built-in `rules/`
+pack and any auto-discovered `metacrafter-rules` content. When `auto_rules` is true
+(default), you do not need to list the extended rules path manually. Use
+`auto_rules: false` for custom-only setups.
 
-You can also override the rule path using the `--rulepath` command-line option.
+You can also pass extra directories with the `--rulepath` command-line option; they are
+appended after built-in and extended paths.
 
 ### DataHub Integration Configuration
 

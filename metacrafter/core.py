@@ -22,7 +22,7 @@ from iterable.helpers.detect import open_iterable
 from metacrafter.classify.processor import RulesProcessor, BASE_URL
 from metacrafter.classify.stats import Analyzer, DEFAULT_DICT_SHARE, DEFAULT_EMPTY_VALUES
 
-from metacrafter.config import ConfigLoader
+from metacrafter.config import ConfigLoader, DEFAULT_RULEPATH
 from metacrafter import output as cli_output
 
 try:  # pragma: no cover - tqdm is optional at import time
@@ -327,7 +327,7 @@ class CrafterCmd(object):
             IOError: If rule files cannot be read
         """
         try:
-            rulepath = self.custom_rulepath if self.custom_rulepath else ConfigLoader.get_rulepath()
+            rulepath = ConfigLoader.get_rulepath(extra_paths=self.custom_rulepath)
             for rp in rulepath:
                 self.processor.import_rules_path(rp, recursive=True)
             self.dparser = qddate.DateParser(
@@ -336,7 +336,7 @@ class CrafterCmd(object):
         except (yaml.YAMLError, IOError) as e:
             logging.error(f"Error loading configuration: {e}")
             # Fall back to default rulepath
-            rulepath = ConfigLoader.DEFAULT_RULEPATH
+            rulepath = DEFAULT_RULEPATH
             for rp in rulepath:
                 self.processor.import_rules_path(rp, recursive=True)
             self.dparser = qddate.DateParser(

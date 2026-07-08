@@ -13,10 +13,69 @@ DEFAULT_METACRAFTER_CONFIGFILE = ".metacrafter"
 DEFAULT_RULEPATH = ["rules"]
 
 
+def discover_extended_rules_path() -> Optional[str]:
+    """Return the metacrafter-rules rules directory when that package is installed."""
+    try:
+        from metacrafterext.rules import rules_dir
+    except ImportError:
+        return None
+
+    path = rules_dir()
+    if path.is_dir() and any(path.rglob("*.yaml")):
+        return str(path)
+    return None
+
+
+def _normalize_rulepath_key(path: str) -> str:
+    if os.path.exists(path):
+        return os.path.normpath(os.path.abspath(path))
+    return os.path.normpath(path)
+
+
+def build_rulepath(
+    user_paths: Optional[List[str]] = None,
+    auto_rules: bool = True,
+) -> List[str]:
+    """Compose the effective rulepath from defaults, extended rules, and user paths."""
+    ordered: List[str] = []
+    seen = set()
+
+    def add(path: str) -> None:
+        key = _normalize_rulepath_key(path)
+        if key in seen:
+            return
+        seen.add(key)
+        ordered.append(path)
+
+    if auto_rules:
+        for path in DEFAULT_RULEPATH:
+            add(path)
+        extended = discover_extended_rules_path()
+        if extended:
+            logging.info(
+                "Auto-appending extended rules from metacrafter-rules: %s",
+                extended,
+            )
+            add(extended)
+        if user_paths:
+            for path in user_paths:
+                add(path)
+    else:
+        paths = user_paths if user_paths is not None else list(DEFAULT_RULEPATH)
+        for path in paths:
+            add(path)
+
+    return ordered
+
+
 class MetacrafterConfig(BaseModel):
     """Pydantic model for Metacrafter configuration validation."""
-    
+
     rulepath: List[str] = Field(default_factory=lambda: DEFAULT_RULEPATH.copy())
+    auto_rules: bool = Field(
+        default=True,
+        description="When true, auto-append metacrafter-rules if installed",
+    )
 
     # Registry configuration
     registry_url: Optional[str] = Field(default=None, description="Base URL of the metacrafter-registry service")
@@ -141,20 +200,46 @@ class ConfigLoader:
         return None
     
     @staticmethod
-    def get_rulepath() -> List[str]:
-        """Get rule path from configuration with validation.
-        
+    def get_auto_rules() -> bool:
+        """Return whether auto-discovery of metacrafter-rules is enabled."""
+        config = ConfigLoader.load_config()
+        if not config:
+            return True
+        try:
+            validated_config = MetacrafterConfig(**config)
+            return validated_config.auto_rules
+        except Exception as e:
+            if isinstance(e, ConfigurationError):
+                raise
+            raise ConfigurationError(
+                f"Invalid configuration: {e}. "
+                "Please check your .metacrafter configuration file."
+            ) from e
+
+    @staticmethod
+    def get_rulepath(extra_paths: Optional[List[str]] = None) -> List[str]:
+        """Get composed rule paths from configuration, auto-discovery, and CLI overrides.
+
+        Args:
+            extra_paths: Optional CLI ``--rulepath`` entries appended after built-in
+                and auto-discovered paths.
+
         Returns:
-            List of rule paths, defaults to ["rules"] if no config found
-            
+            Ordered list of rule directories to load.
+
         Raises:
             ConfigurationError: If configuration is invalid
         """
         config = ConfigLoader.load_config()
+        auto_rules = True
+        user_paths: Optional[List[str]] = None
+
         if config:
             try:
                 validated_config = MetacrafterConfig(**config)
-                return validated_config.rulepath
+                auto_rules = validated_config.auto_rules
+                if "rulepath" in config:
+                    user_paths = validated_config.rulepath
             except Exception as e:
                 if isinstance(e, ConfigurationError):
                     raise
@@ -162,7 +247,11 @@ class ConfigLoader:
                     f"Invalid configuration: {e}. "
                     "Please check your .metacrafter configuration file."
                 ) from e
-        return DEFAULT_RULEPATH
+
+        if extra_paths:
+            user_paths = (user_paths or []) + list(extra_paths)
+
+        return build_rulepath(user_paths=user_paths, auto_rules=auto_rules)
     
     @staticmethod
     def get_registry_url() -> str:

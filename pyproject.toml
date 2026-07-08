@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "metacrafter"
-version = "0.0.5"
+version = "0.0.6"
 description = "Metacrafter metadata classification tool"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -56,6 +56,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Extended YAML rules and validators from the metacrafter-rules package.
+rules = [
+    "metacrafter-rules>=0.0.2",
+]
 # LLM / RAG hybrid classification (OpenAI, local providers, vector store).
 llm = [
     "openai>=1.0.0",
@@ -77,6 +81,7 @@ dev = [
 ]
 # Everything except dev tooling.
 all = [
+    "metacrafter-rules>=0.0.2",
     "openai>=1.0.0",
     "chromadb>=0.4.0",
     "requests>=2.28.0",
