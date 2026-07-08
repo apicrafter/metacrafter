@@ -19,6 +19,7 @@ from pyparsing import (
     alphanums,
     hexnums,
     Optional as PyParsingOptional,
+    ZeroOrMore,
     printables,
     nums,
     ParseException,
@@ -78,6 +79,7 @@ def _create_safe_namespace() -> Dict[str, Any]:
         'Literal': Literal,
         'CaselessLiteral': CaselessLiteral,
         'Optional': PyParsingOptional,
+        'ZeroOrMore': ZeroOrMore,
         'oneOf': oneOf,
         'LineStart': LineStart,
         'LineEnd': LineEnd,
@@ -354,6 +356,7 @@ class RuleResult:
             "ruletype": self.ruletype,
             "format": self.format,
             "classurl": self.class_url(),
+            "is_pii": self.is_pii,
         }
 
 
@@ -429,6 +432,15 @@ class RulesProcessor:
 
         for rulekey in ruledata["rules"].keys():
             if rulekey in self.__rule_keys:
+                # Rulekeys must be globally unique; a collision means a later
+                # rule is silently skipped. Warn so the duplicate can be fixed
+                # (see metacrafter-rules scripts/check_rules.py).
+                logging.warning(
+                    "Duplicate rulekey '%s' encountered while loading %s; "
+                    "skipping the duplicate definition.",
+                    rulekey,
+                    filename,
+                )
                 continue
             else:
                 self.__rule_keys.append(rulekey)
@@ -732,6 +744,7 @@ class RulesProcessor:
                                 confidence=100,
                                 dataclass=rule["key"],
                                 ruletype="field",
+                                is_pii="pii" in rule.get("context", []),
                             )
                         )
                         if stop_on_match:
@@ -752,6 +765,7 @@ class RulesProcessor:
                                 confidence=100,
                                 dataclass=rule["key"],
                                 ruletype="field",
+                                is_pii="pii" in rule.get("context", []),
                             )
                         )
                         if stop_on_match:
@@ -769,6 +783,7 @@ class RulesProcessor:
                                 confidence=100,
                                 dataclass=rule["key"],
                                 ruletype="field",
+                                is_pii="pii" in rule.get("context", []),
                             )
                         )
                         if stop_on_match:
@@ -910,6 +925,7 @@ class RulesProcessor:
                                 confidence=result,
                                 dataclass=rule["key"],
                                 ruletype="data",
+                                is_pii="pii" in rule.get("context", []),
                             )
                         )
                         if stop_on_match:

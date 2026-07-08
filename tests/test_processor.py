@@ -184,6 +184,36 @@ rules:
         processor_ca.import_rules(str(sample_rule))
         assert len(processor_ca.field_rules) == 0
 
+    def test_rulekey_collision_warns_and_skips(self, tmp_path, caplog):
+        """A duplicate rulekey across files must warn and skip the duplicate."""
+        rule_body = """
+name: sample
+description: Sample ruleset
+context: sample
+lang: en
+country_code: us
+rules:
+  dup_field:
+    key: dup_field
+    name: Dup Field
+    rule: sample
+    type: field
+    match: text
+"""
+        first = tmp_path / "first.yaml"
+        second = tmp_path / "second.yaml"
+        first.write_text(rule_body, encoding="utf8")
+        second.write_text(rule_body, encoding="utf8")
+
+        processor = RulesProcessor()
+        processor.import_rules(str(first))
+        with caplog.at_level("WARNING"):
+            processor.import_rules(str(second))
+
+        assert any("Duplicate rulekey 'dup_field'" in rec.message for rec in caplog.records)
+        # Only one field rule should be registered for the duplicated key.
+        assert sum(1 for r in processor.field_rules if r.get("id") == "dup_field") == 1
+
     def test_get_filtered_rules_no_filters(self):
         processor = RulesProcessor()
         rule_path = os.path.join(

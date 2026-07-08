@@ -15,7 +15,13 @@ from .providers import get_provider
 
 logger = logging.getLogger(__name__)
 
-BASE_REGISTRY_URL = "https://registry.apicrafter.io/datatype"
+def _base_registry_url():
+    """Registry datatype URL base, configurable via ``METACRAFTER_REGISTRY_URL``."""
+    base = os.environ.get("METACRAFTER_REGISTRY_URL", "https://registry.apicrafter.io")
+    return base.rstrip("/") + "/datatype"
+
+
+BASE_REGISTRY_URL = _base_registry_url()
 
 
 class LLMClassifier:
@@ -203,7 +209,7 @@ class LLMClassifier:
         result = {
             "field": field_name,
             "datatype_id": datatype_id,
-            "datatype_url": f"{BASE_REGISTRY_URL}/{datatype_id}" if datatype_id else None,
+            "datatype_url": f"{_base_registry_url()}/{datatype_id}" if datatype_id else None,
             "confidence": confidence,
             "reason": reason,
             "matches": [

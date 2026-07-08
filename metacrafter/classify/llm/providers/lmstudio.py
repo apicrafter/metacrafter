@@ -51,6 +51,27 @@ class LMStudioProvider(BaseLLMProvider):
         """LM Studio supports JSON mode (OpenAI-compatible)."""
         return True
     
+    # JSON schema describing the expected classification response. LM Studio's
+    # OpenAI-compatible server only accepts response_format types "json_schema"
+    # or "text" (not "json_object"), so we use a structured schema here.
+    _RESPONSE_SCHEMA = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "datatype_classification",
+            "strict": True,
+            "schema": {
+                "type": "object",
+                "properties": {
+                    "datatype_id": {"type": ["string", "null"]},
+                    "confidence": {"type": "number"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["datatype_id", "confidence", "reason"],
+                "additionalProperties": False,
+            },
+        },
+    }
+
     def _call_api(
         self,
         prompt: str,
@@ -58,24 +79,40 @@ class LMStudioProvider(BaseLLMProvider):
         max_tokens: int = 500
     ) -> str:
         """Make API call to LM Studio."""
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a semantic data type classifier. Always respond with valid JSON only."
+            },
+            {
+                "role": "user",
+                "content": prompt
+            }
+        ]
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": "You are a semantic data type classifier. Always respond with valid JSON only."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
-                ],
-                temperature=temperature,
-                max_tokens=max_tokens,
-                response_format={"type": "json_object"}
-            )
-            
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    response_format=self._RESPONSE_SCHEMA
+                )
+            except APIError as e:
+                # Some LM Studio versions / models do not support structured
+                # outputs. Fall back to plain text and rely on JSON extraction.
+                logger.warning(
+                    f"LM Studio structured output not supported ({e}); "
+                    "falling back to text response_format."
+                )
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    response_format={"type": "text"}
+                )
+
             return response.choices[0].message.content
         except APIConnectionError as e:
             logger.error(f"LM Studio connection error: {e}. Is LM Studio server running at {self.base_url}?")

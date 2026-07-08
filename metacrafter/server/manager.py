@@ -11,7 +11,8 @@ from .api import MetacrafterApp
 MANAGE_PREFIX = ""
 CLASSIFY_HOST = "127.0.0.1"
 CLASSIFY_PORT = 10399
-DEBUG = True
+# Default to production-safe mode; enable via METACRAFTER_DEBUG=1 or the CLI flag.
+DEBUG = os.environ.get("METACRAFTER_DEBUG", "").lower() in ("1", "true", "yes")
 
 # Load secret key from environment variable, generate random one if not set
 # Never commit actual secret keys to version control

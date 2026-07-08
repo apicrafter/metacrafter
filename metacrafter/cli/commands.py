@@ -90,7 +90,7 @@ def rules_list(
     country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
     output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
-    table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Tabulate format for table outputs"),
+    table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Table style: 'auto' (rich on terminals), 'rich', 'plain', or any tabulate format (simple, grid, github, ...)"),
 ):
     """List every rule along with key metadata including contexts, countries, and languages."""
     # Parse rulepath if provided (comma-separated)
@@ -159,7 +159,7 @@ def scan_file(
     stdout: bool = typer.Option(False, "--stdout", help="Write output to stdout"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON output"),
     indent: Optional[int] = typer.Option(None, "--indent", help="Custom JSON indent (0 for compact)"),
-    table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Tabulate format for table outputs"),
+    table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Table style: 'auto' (rich on terminals), 'rich', 'plain', or any tabulate format (simple, grid, github, ...)"),
     classification_mode: str = typer.Option(None, "--classification-mode", help="Classification mode: rules (default), llm, or hybrid"),
     llm_only: bool = typer.Option(False, "--llm-only", help="Use only LLM classification (shortcut for --classification-mode llm)"),
     use_llm: bool = typer.Option(False, "--use-llm", help="Use LLM as fallback (shortcut for --classification-mode hybrid)"),
@@ -172,6 +172,14 @@ def scan_file(
     llm_min_confidence: float = typer.Option(50.0, "--llm-min-confidence", help="Minimum confidence for LLM results (default: 50.0)"),
 ):
     """Scan a single file and classify its fields."""
+    # Fail fast (non-zero exit) when scanning a local file that does not exist.
+    if remote is None and not os.path.exists(filename):
+        typer.echo(
+            f"Error: file not found: {filename}. "
+            f"Please check that the file exists and the path is correct.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
     # Parse rulepath if provided (comma-separated)
     rulepath_list = None
     if rulepath:
@@ -308,7 +316,7 @@ def scan_db(
     stdout: bool = typer.Option(False, "--stdout", help="Write output to stdout"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON output"),
     indent: Optional[int] = typer.Option(None, "--indent", help="Custom JSON indent (0 for compact)"),
-    table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Tabulate format for table outputs"),
+    table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Table style: 'auto' (rich on terminals), 'rich', 'plain', or any tabulate format (simple, grid, github, ...)"),
 ):
     """Scan a SQL database using a SQLAlchemy connection string."""
     # Parse rulepath if provided (comma-separated)
@@ -429,7 +437,7 @@ def scan_mongodb(
     stdout: bool = typer.Option(False, "--stdout", help="Write output to stdout"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON output"),
     indent: Optional[int] = typer.Option(None, "--indent", help="Custom JSON indent (0 for compact)"),
-    table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Tabulate format for table outputs"),
+    table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Table style: 'auto' (rich on terminals), 'rich', 'plain', or any tabulate format (simple, grid, github, ...)"),
 ):
     """Scan a MongoDB deployment and classify fields within its collections."""
     # Parse rulepath if provided (comma-separated)
@@ -552,7 +560,7 @@ def scan_bulk(
     stdout: bool = typer.Option(False, "--stdout", help="Write output to stdout"),
     pretty: bool = typer.Option(False, "--pretty", help="Pretty-print JSON output"),
     indent: Optional[int] = typer.Option(None, "--indent", help="Custom JSON indent (0 for compact)"),
-    table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Tabulate format for table outputs"),
+    table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Table style: 'auto' (rich on terminals), 'rich', 'plain', or any tabulate format (simple, grid, github, ...)"),
 ):
     """Scan every supported file inside a directory tree."""
     # Parse rulepath if provided (comma-separated)

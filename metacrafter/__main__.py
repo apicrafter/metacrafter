@@ -15,8 +15,15 @@ def main():
 
         app()
     except KeyboardInterrupt:
-        print("Ctrl-C pressed. Aborting")
-    sys.exit(0)
+        # 130 is the conventional exit code for termination by Ctrl-C (SIGINT).
+        print("Ctrl-C pressed. Aborting", file=sys.stderr)
+        sys.exit(130)
+    except SystemExit:
+        # Preserve exit codes raised by Typer/argparse (including 0 on success).
+        raise
+    except Exception as exc:  # noqa: BLE001 - top-level guard for non-zero exit
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

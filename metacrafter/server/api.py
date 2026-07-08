@@ -113,8 +113,8 @@ def scan_data(rules_processor: RulesProcessor, date_parser: qddate.DateParser):
     langs = request.args.get("langs", default=None, type=str)
     contexts = request.args.get("contexts", default=None, type=str)
     scan_limit = request.args.get("limit", default=DEFAULT_LIMIT, type=int)
-    langs = langs.split(".") if langs is not None else None
-    contexts = contexts.split(".") if contexts is not None else None
+    langs = langs.split(",") if langs is not None else None
+    contexts = contexts.split(",") if contexts is not None else None
 
     try:
         if not request.data:

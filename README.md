@@ -6,7 +6,24 @@ It could help to find meaningful data in your tables and data files or to find P
 
 ## Installation
 
-To install Python library use `pip install metacrafter` via pip or `python setup.py install` 
+To install the Python library use `pip install metacrafter`.
+
+Optional features are available as install extras:
+
+```bash
+pip install metacrafter               # core (rules-based classification, CLI, server)
+pip install 'metacrafter[llm]'        # + LLM/RAG hybrid classification (OpenAI, ChromaDB)
+pip install 'metacrafter[datahub]'    # + DataHub export integration
+pip install 'metacrafter[openmetadata]'  # + OpenMetadata integration
+pip install 'metacrafter[all]'        # all optional integrations
+pip install 'metacrafter[dev]'        # development + test tooling
+```
+
+The stable public Python API is importable directly from the package:
+
+```python
+from metacrafter import CrafterCmd
+```
 
 ## Features
 
@@ -664,6 +681,12 @@ All `scan` commands share a rich set of options. Some commonly used ones:
 - `--include-empty`: include empty values in statistics and confidence.
 - `--fields`: process only specific fields (comma‑separated).
 - `--output-format`: `table`, `json`, `yaml`, or `csv`.
+- `--table-format`: table renderer. Use `auto` (default) for rich, colorized
+  tables with PII highlighting when writing to a terminal, `rich` to force rich
+  output, or any `tabulate` format (`plain`, `simple`, `github`, ...) for plain
+  output. Set the `METACRAFTER_PLAIN` environment variable to disable rich
+  rendering globally (useful in CI or when piping). Scan headers are written to
+  stderr so `--output-format json` stays pipe-safe.
 - `--stdout`, `--pretty`, `--indent`: control where and how JSON/YAML is written.
 - `--rulepath`: override default rule paths with your own YAML rule directories.
 - `--country-codes`: restrict rules to specific ISO country codes.
@@ -673,11 +696,54 @@ All `scan` commands share a rich set of options. Some commonly used ones:
 - `--llm-api-key`: API key for cloud providers.
 - `--llm-base-url`: base URL for local providers (Ollama, LM Studio).
 
+**Registry configuration:**
+
+Metacrafter links detected datatypes to the metacrafter-registry service. The
+base URL is resolved with the following precedence:
+
+1. `METACRAFTER_REGISTRY_URL` environment variable
+2. `registry_url` in your `.metacrafter` config file
+3. built-in default `https://registry.apicrafter.io`
+
+This lets you point at a self-hosted registry (e.g. `http://localhost:8089`) for
+fully offline or air-gapped setups.
+
 **Rules commands:**
 - `metacrafter rules list`: List all loaded rules with metadata
 - `metacrafter rules stats`: Display aggregate statistics about loaded rules
 
 Run `metacrafter --help`, `metacrafter scan file --help`, `metacrafter rules list --help`, etc. for the full list.
+
+## Custom rules and validator plugins
+
+Metacrafter loads rules from every directory in your `rulepath` (`.metacrafter`
+config or `--rulepath`). This is the extension mechanism for user-defined rules
+and validator "plugins":
+
+- **Custom rule directories**: point `rulepath` at your own directory of YAML
+  rule files. They are merged with the built-in rules; duplicate rule `key`s are
+  skipped with a warning.
+- **Validator plugins**: `func`-type rules reference any importable Python path,
+  e.g. `rule: mypackage.validators.is_widget_id`. As long as the module is on
+  `PYTHONPATH`, the function (which takes a value and returns `bool`) is loaded
+  and used. This is how `metacrafter-rules` (`metacrafterext.*`) plugs in.
+- **PyParsing rules**: `ppr`-type rules are evaluated in a restricted namespace
+  exposing PyParsing primitives (`Word`, `Literal`, `nums`, `alphas`, ...).
+
+### Generating rule skeletons from the registry
+
+`scripts/generate_rule_skeletons.py` emits starter rule YAML for registry
+datatypes that carry a `regexp` but have no rule yet, to help close coverage
+gaps:
+
+```bash
+METACRAFTER_REGISTRY_DIR=../metacrafter-registry \
+METACRAFTER_RULES_DIR=../metacrafter-rules \
+python scripts/generate_rule_skeletons.py --category geo --limit 20 -o skeletons.yaml
+```
+
+Each entry contains a ready-to-use `text` field-name rule and a commented data
+rule stub carrying the registry regexp. Review every skeleton before use.
 
 ## LLM-Based Classification
 

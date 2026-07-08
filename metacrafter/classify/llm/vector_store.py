@@ -4,6 +4,22 @@ import logging
 import os
 from typing import List, Dict, Any, Optional
 from pathlib import Path
+
+# Disable ChromaDB's anonymized telemetry before importing chromadb.
+# ChromaDB reads this env var at import time to build its default Settings,
+# so it must be set *before* the import below. Passing
+# Settings(anonymized_telemetry=False) alone is not always enough: some
+# chromadb/posthog version combinations still construct the Posthog client and
+# emit a ClientStartEvent, which fails with
+# "capture() takes 1 positional argument but 3 were given" (a signature
+# mismatch between chromadb's telemetry wrapper and newer posthog releases).
+os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
+
+# Silence the telemetry logger as a belt-and-suspenders guard: even with
+# telemetry disabled, the buggy capture() call can still be attempted and logged
+# as an ERROR. We never want telemetry, so suppress its output entirely.
+logging.getLogger("chromadb.telemetry").setLevel(logging.CRITICAL)
+
 import chromadb
 from chromadb.config import Settings
 

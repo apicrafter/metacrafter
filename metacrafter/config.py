@@ -17,7 +17,10 @@ class MetacrafterConfig(BaseModel):
     """Pydantic model for Metacrafter configuration validation."""
     
     rulepath: List[str] = Field(default_factory=lambda: DEFAULT_RULEPATH.copy())
-    
+
+    # Registry configuration
+    registry_url: Optional[str] = Field(default=None, description="Base URL of the metacrafter-registry service")
+
     # LLM configuration fields
     classification_mode: Optional[str] = Field(default="rules", description="Classification mode: rules, llm, or hybrid")
     llm_provider: Optional[str] = Field(default="openai", description="LLM provider: openai, openrouter, ollama, lmstudio, perplexity")
@@ -161,6 +164,33 @@ class ConfigLoader:
                 ) from e
         return DEFAULT_RULEPATH
     
+    @staticmethod
+    def get_registry_url() -> str:
+        """Resolve the registry base URL.
+
+        Precedence: ``METACRAFTER_REGISTRY_URL`` environment variable, then the
+        ``registry_url`` value from ``.metacrafter`` config, then the built-in
+        default (``https://registry.apicrafter.io``).
+
+        Returns:
+            The resolved registry base URL (without a trailing slash).
+        """
+        from metacrafter.registry.client import BASE_REGISTRY_URL
+
+        env_url = os.environ.get("METACRAFTER_REGISTRY_URL")
+        if env_url:
+            return env_url.rstrip("/")
+
+        config = ConfigLoader.load_config()
+        if config:
+            try:
+                validated_config = MetacrafterConfig(**config)
+                if validated_config.registry_url:
+                    return validated_config.registry_url.rstrip("/")
+            except Exception as e:  # noqa: BLE001 - fall back to default on any error
+                logging.debug("Could not read registry_url from config: %s", e)
+        return BASE_REGISTRY_URL.rstrip("/")
+
     @staticmethod
     def get_llm_config() -> Optional[dict]:
         """Get LLM configuration from config file.

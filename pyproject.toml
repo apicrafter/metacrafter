@@ -1,0 +1,99 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "metacrafter"
+version = "0.0.5"
+description = "Metacrafter metadata classification tool"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Ivan Begtin", email = "ivan@begtin.tech" },
+]
+keywords = ["json", "jsonl", "csv", "bson", "cli", "dataset", "metadata"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: Apache Software License",
+    "Topic :: Software Development",
+    "Topic :: System :: Networking",
+    "Topic :: Terminals",
+    "Topic :: Text Processing",
+    "Topic :: Utilities",
+]
+
+# Core runtime dependencies. Optional integrations live in [project.optional-dependencies].
+dependencies = [
+    "pyparsing",
+    "phonenumbers",
+    "qddate",
+    "orjson",
+    "pymongo",
+    "PyYAML",
+    "sqlalchemy",
+    "duckdb-engine",
+    "duckdb",
+    "validators",
+    "typer",
+    "tabulate",
+    "rich",
+    "pydantic",
+    "flask",
+    "xmltodict",
+    "iterabledata",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+# LLM / RAG hybrid classification (OpenAI, local providers, vector store).
+llm = [
+    "openai>=1.0.0",
+    "chromadb>=0.4.0",
+    "requests>=2.28.0",
+]
+# Metadata catalog integrations.
+datahub = ["acryl-datahub[datahub-rest]>=0.12.0"]
+openmetadata = ["openmetadata-ingestion>=1.0.0"]
+# Development and testing.
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov",
+    "pytest-mock",
+    "mock",
+    "flake8",
+    "black",
+    "mypy",
+]
+# Everything except dev tooling.
+all = [
+    "openai>=1.0.0",
+    "chromadb>=0.4.0",
+    "requests>=2.28.0",
+    "acryl-datahub[datahub-rest]>=0.12.0",
+    "openmetadata-ingestion>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/apicrafter/metacrafter/"
+Repository = "https://github.com/apicrafter/metacrafter/"
+
+[project.scripts]
+metacrafter = "metacrafter.__main__:main"
+
+[tool.setuptools.packages.find]
+exclude = ["tests", "tests.*"]
+
+[tool.setuptools]
+include-package-data = true
+zip-safe = false

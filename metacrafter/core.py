@@ -23,6 +23,7 @@ from metacrafter.classify.processor import RulesProcessor, BASE_URL
 from metacrafter.classify.stats import Analyzer, DEFAULT_DICT_SHARE, DEFAULT_EMPTY_VALUES
 
 from metacrafter.config import ConfigLoader
+from metacrafter import output as cli_output
 
 try:  # pragma: no cover - tqdm is optional at import time
     from tqdm import tqdm
@@ -80,36 +81,17 @@ STATS_HEADERS = [
 ]
 
 DEFAULT_JSON_INDENT = 4
-DEFAULT_TABLE_FORMAT = "simple"
+DEFAULT_TABLE_FORMAT = cli_output.DEFAULT_TABLE_FORMAT
 DEFAULT_REQUEST_TIMEOUT = 30
 DEFAULT_RETRY_DELAY = 1.0
 
 
-def _split_option_list(value: Optional[str]):
-    """Split comma-separated option values preserving empty-string marker."""
-    if value is None:
-        return None
-    entries = []
-    for token in value.split(","):
-        token = token.strip()
-        if token == "":
-            continue
-        if token in {'""', "''"}:
-            entries.append("")
-        elif token.lower() in ("none", "null"):
-            entries.append(None)
-        else:
-            entries.append(token)
-    return entries or None
-
-
-def _resolve_output_target(output: Optional[str], stdout_flag: bool):
-    """Convert output arguments into file-like objects when needed."""
-    if stdout_flag:
-        return sys.stdout
-    if isinstance(output, str) and output.strip().lower() in ("-", "stdout"):
-        return sys.stdout
-    return output
+# Pure helpers now live in metacrafter/cmd/helpers.py (first slice of the core
+# refactor). Re-exported here under their original names for backward compat.
+from metacrafter.cmd.helpers import (  # noqa: E402
+    split_option_list as _split_option_list,
+    resolve_output_target as _resolve_output_target,
+)
 
 
 app = typer.Typer(
@@ -454,6 +436,39 @@ class CrafterCmd(object):
             Formatted language string (currently just returns as-is, can be enhanced with flags)
         """
         return lang
+
+    def _print_scan_header(self, filename, filetype, record_count, contexts, langs):
+        """Print a concise, readable header before scan results."""
+        if self.quiet:
+            return
+        # Status/diagnostic output goes to stderr so that stdout carries only
+        # the result payload (keeps `... --output-format json | jq` working).
+        if cli_output.should_use_rich(self.table_format, sys.stderr):
+            from rich.text import Text
+
+            console = cli_output.get_console(sys.stderr)
+            body = Text()
+            body.append("File      ", style="cyan")
+            body.append(f"{filename}\n", style="bold")
+            body.append("Format    ", style="cyan")
+            body.append(f"{filetype}\n")
+            body.append("Records   ", style="cyan")
+            body.append(f"{record_count}")
+            if self.verbose:
+                body.append("\nContexts  ", style="cyan")
+                body.append(f"{contexts if contexts else 'all'}")
+                body.append("\nLanguages ", style="cyan")
+                body.append(f"{langs if langs else 'all'}")
+            from rich.panel import Panel
+
+            console.print(Panel(body, title="metacrafter scan", title_align="left",
+                                border_style="cyan", expand=False))
+            return
+        print(f"Processing file {filename}", file=sys.stderr)
+        print(f"Filetype identified as {filetype}", file=sys.stderr)
+        print(f"Processing {record_count} records", file=sys.stderr)
+        if self.verbose:
+            print(f"Contexts filter: {contexts}, Languages filter: {langs}", file=sys.stderr)
     
     def rules_list(
         self, 
@@ -537,7 +552,23 @@ class CrafterCmd(object):
         output_format_lower = (output_format or "table").lower()
         
         if output_format_lower == "table":
-            # Format for table display
+            # Render with rich directly to the console when possible.
+            if not output and cli_output.should_use_rich(self.table_format):
+                console = cli_output.get_console()
+                rich_rules = []
+                for rule in all_rules_data:
+                    rich_rules.append({
+                        'id': rule['id'],
+                        'name': rule['name'],
+                        'type': rule['type'],
+                        'match': rule['match'],
+                        'lang_display': self._format_lang(rule['lang']),
+                        'country_display': self._format_country_codes(rule['country']),
+                        'contexts': rule['contexts'],
+                    })
+                cli_output.render_rules_rich(console, rich_rules, title="Metacrafter rules")
+                return
+            # Format for table display (plain fallback / file output)
             headers = ['id', 'name', 'type', 'match', 'lang', 'country', 'contexts']
             table_data = []
             for rule in all_rules_data:
@@ -550,7 +581,11 @@ class CrafterCmd(object):
                     self._format_country_codes(rule['country']),
                     self._format_contexts(rule['contexts']),
                 ])
-            output_text = tabulate(table_data, headers=headers, tablefmt=self.table_format)
+            output_text = tabulate(
+                table_data,
+                headers=headers,
+                tablefmt=cli_output.tabulate_format(self.table_format),
+            )
             
         elif output_format_lower in ("json", "yaml"):
             # Prepare structured data
@@ -725,8 +760,19 @@ class CrafterCmd(object):
                 if isinstance(output, str) and not self.quiet:
                     print(f"Output written to {output}")
             else:
-                if stats_table:
-                    print(tabulate(stats_table, headers=STATS_HEADERS, tablefmt=self.table_format))
+                if cli_output.should_use_rich(self.table_format) and stats_table:
+                    console = cli_output.get_console()
+                    cli_output.render_stats_rich(
+                        console, stats_table, STATS_HEADERS
+                    )
+                elif stats_table:
+                    print(
+                        tabulate(
+                            stats_table,
+                            headers=STATS_HEADERS,
+                            tablefmt=cli_output.tabulate_format(self.table_format),
+                        )
+                    )
                 else:
                     print("No statistics available")
             return
@@ -790,8 +836,17 @@ class CrafterCmd(object):
                 if isinstance(output, str) and not self.quiet:
                     print(f"Output written to {output}")
             else:
-                if filtered:
-                    print(tabulate(filtered, headers=RESULT_HEADERS, tablefmt=self.table_format))
+                if cli_output.should_use_rich(self.table_format) and detailed:
+                    console = cli_output.get_console()
+                    cli_output.render_scan_results_rich(
+                        console, detailed, dformat
+                    )
+                elif filtered:
+                    print(
+                        cli_output.render_scan_results_plain(
+                            filtered, RESULT_HEADERS, self.table_format
+                        )
+                    )
                 else:
                     print("No results")
             return
@@ -823,8 +878,12 @@ class CrafterCmd(object):
             return
 
         if not output:
+            use_rich_heading = cli_output.should_use_rich(self.table_format)
             for table, report in db_results.items():
-                print(f"Table: {table}")
+                if use_rich_heading:
+                    cli_output.get_console().rule(f"[bold]Table: {table}[/bold]")
+                else:
+                    print(f"Table: {table}")
                 self._write_results(
                     report,
                     table,
@@ -1321,8 +1380,25 @@ class CrafterCmd(object):
         output = []
         outdata = []
         for res in results.results:
-            matches = []
+            # Collapse duplicate dataclasses (multiple rules can match the same
+            # type), keeping the highest-confidence occurrence of each, ordered
+            # by confidence descending for a cleaner summary string.
+            best_by_class = {}
+            order = []
             for match in res.matches:
+                existing = best_by_class.get(match.dataclass)
+                if existing is None:
+                    order.append(match.dataclass)
+                    best_by_class[match.dataclass] = match
+                elif match.confidence > existing.confidence:
+                    best_by_class[match.dataclass] = match
+            deduped = sorted(
+                (best_by_class[name] for name in order),
+                key=lambda m: m.confidence,
+                reverse=True,
+            )
+            matches = []
+            for match in deduped:
                 s = "%s %0.2f" % (match.dataclass, match.confidence)
                 if match.format is not None:
                     s += " (%s)" % (match.format)
@@ -1505,12 +1581,9 @@ class CrafterCmd(object):
                     print("No records found to process")
                 return
 
-            if not self.quiet:
-                print(f"Processing file {filename}")
-                print(f"Filetype identified as {data_file.id()}")
-                print(f"Processing {len(items)} records")
-            if self.verbose and not self.quiet:
-                print(f"Contexts filter: {contexts}, Languages filter: {langs}")
+            self._print_scan_header(
+                filename, data_file.id(), len(items), contexts, langs
+            )
 
             if self.remote is None:
                 report = self.scan_data(
