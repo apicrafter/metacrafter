@@ -1,4 +1,10 @@
+---
+title: "Comparison"
+description: "Metacrafter compared with Presidio, YData Profiling, DataProfiler, and similar tools"
+---
 # Comparison of Metacrafter with Similar Tools
+
+A shorter positioning guide lives in [When to use Metacrafter](/getting-started/when-to-use).
 
 This document provides a comparative analysis of Metacrafter and other popular open-source tools for PII detection, data profiling, and semantic type annotation.
 

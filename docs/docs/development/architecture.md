@@ -1,4 +1,12 @@
+---
+title: "Architecture"
+description: "Metacrafter components, data flow, rule system, and extension points"
+---
 # Metacrafter Architecture Documentation
+
+This page is the internals reference. For day-to-day usage see
+[Getting started](/getting-started/installation), [Custom rules](/integrations/rules),
+and the [CLI reference](/commands/).
 
 ## Table of Contents
 

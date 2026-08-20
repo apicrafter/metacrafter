@@ -1,0 +1,43 @@
+# metacrafter
+
+Python CLI and library for labeling table fields and data files. Detects PII, person names, identifiers, dates, and semantic data types using YAML rules, optional LLM/RAG classification, and registry-linked metadata.
+
+Site: https://apicrafter.github.io/metacrafter/
+CLI help: `metacrafter <command> --help`
+
+## Getting started
+
+- [Installation](https://apicrafter.github.io/metacrafter/getting-started/installation) — extras, pip, Python 3.8–3.12
+- [Quick start](https://apicrafter.github.io/metacrafter/getting-started/quick-start)
+- [Cookbook](https://apicrafter.github.io/metacrafter/getting-started/cookbook)
+- [Basic usage](https://apicrafter.github.io/metacrafter/getting-started/basic-usage)
+- [Shared CLI options](https://apicrafter.github.io/metacrafter/commands/shared-options)
+- [Troubleshooting](https://apicrafter.github.io/metacrafter/getting-started/troubleshooting)
+
+## Commands
+
+- [Command index](https://apicrafter.github.io/metacrafter/commands/)
+- [scan file](https://apicrafter.github.io/metacrafter/commands/scan-file)
+- [scan sql](https://apicrafter.github.io/metacrafter/commands/scan-sql)
+- [scan mongodb](https://apicrafter.github.io/metacrafter/commands/scan-mongodb)
+- [scan bulk](https://apicrafter.github.io/metacrafter/commands/scan-bulk)
+- [rules](https://apicrafter.github.io/metacrafter/commands/rules)
+- [server](https://apicrafter.github.io/metacrafter/commands/server)
+- [export datahub](https://apicrafter.github.io/metacrafter/commands/export-datahub)
+- [export openmetadata](https://apicrafter.github.io/metacrafter/commands/export-openmetadata)
+- [export atlas](https://apicrafter.github.io/metacrafter/commands/export-atlas)
+
+## Integrations
+
+- [Python SDK](https://apicrafter.github.io/metacrafter/integrations/sdk)
+- [API server](https://apicrafter.github.io/metacrafter/integrations/api)
+- [Registry](https://apicrafter.github.io/metacrafter/integrations/registry)
+- [LLM classification](https://apicrafter.github.io/metacrafter/integrations/llm)
+- [Custom rules](https://apicrafter.github.io/metacrafter/integrations/rules)
+- [DataHub](https://apicrafter.github.io/metacrafter/integrations/datahub)
+- [OpenMetadata](https://apicrafter.github.io/metacrafter/integrations/openmetadata)
+- [Apache Atlas](https://apicrafter.github.io/metacrafter/integrations/atlas)
+
+## Formats
+
+- [Format support](https://apicrafter.github.io/metacrafter/formats/)

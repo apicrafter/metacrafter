@@ -61,6 +61,7 @@ metacrafter/
 │   └── fr/              # French-specific rules
 ├── tests/               # Test suite
 ├── scripts/             # Utility scripts
+├── docs/                # Docusaurus site (content in docs/docs/)
 └── setup.py            # Package setup
 ```
 

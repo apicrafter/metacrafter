@@ -91,6 +91,7 @@ all = [
 
 [project.urls]
 Homepage = "https://github.com/apicrafter/metacrafter/"
+Documentation = "https://apicrafter.github.io/metacrafter/"
 Repository = "https://github.com/apicrafter/metacrafter/"
 
 [project.scripts]
