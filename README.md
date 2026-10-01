@@ -18,6 +18,8 @@ The full documentation site (Docusaurus) lives in [`docs/`](docs/) and is publis
 
 Source pages: [`docs/docs/`](docs/docs/). Changelog: [`CHANGELOG.md`](CHANGELOG.md).
 
+Repository assessment and proposed work: [Code quality review and improvement plan](REPOSITORY_REVIEW_AND_IMPROVEMENT_PLAN.md) (2026-10-01).
+
 ## Installation
 
 ```bash
