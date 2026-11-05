@@ -47,6 +47,9 @@ For each field:
 - No match: report the column as unknown. Do not force a datatype.
 
 Use `explain_match(datatype, values)` to see why a datatype was or was not detected.
+For details of a datatype, crosswalks to other vocabularies or value identification without
+rules, use the registry's own `registry-lookup` skill and MCP server
+(https://github.com/apicrafter/metacrafter-registry/tree/main/skills/registry-lookup).
 
 ## Report
 
