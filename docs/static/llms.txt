@@ -12,6 +12,7 @@ and the skills in the repository's skills/ directory. Report schema: https://api
 - [export datahub](https://apicrafter.github.io/metacrafter/commands/export-datahub.md): Export a scan report to DataHub
 - [export openmetadata](https://apicrafter.github.io/metacrafter/commands/export-openmetadata.md): Export a scan report to OpenMetadata
 - [CLI Reference](https://apicrafter.github.io/metacrafter/commands.md): Index of Metacrafter CLI commands
+- [report, check, evaluate](https://apicrafter.github.io/metacrafter/commands/report-tools.md): Compare reports, list PII, enforce policies, explain matches and evaluate detection
 - [rules](https://apicrafter.github.io/metacrafter/commands/rules.md): List loaded rules and show aggregate statistics
 - [scan bulk](https://apicrafter.github.io/metacrafter/commands/scan-bulk.md): Scan every supported file in a directory tree
 - [scan file](https://apicrafter.github.io/metacrafter/commands/scan-file.md): Scan a data file and classify its fields
@@ -23,6 +24,7 @@ and the skills in the repository's skills/ directory. Report schema: https://api
 - [Architecture](https://apicrafter.github.io/metacrafter/development/architecture.md): Metacrafter components, data flow, rule system, and extension points
 - [Community](https://apicrafter.github.io/metacrafter/development/community.md): Support, commercial API, and related projects
 - [Contributing](https://apicrafter.github.io/metacrafter/development/contributing.md): Development setup, tests, and documentation
+- [Ecosystem contract](https://apicrafter.github.io/metacrafter/development/ecosystem.md): How metacrafter, metacrafter-rules and metacrafter-registry are kept compatible
 - [Data File Formats](https://apicrafter.github.io/metacrafter/formats.md): Formats and compression codecs supported via iterabledata
 - [Basic usage](https://apicrafter.github.io/metacrafter/getting-started/basic-usage.md): Configuration, output formats, and everyday scan options
 - [Best practices](https://apicrafter.github.io/metacrafter/getting-started/best-practices.md): Recommended scan settings, rule hygiene, and production use
@@ -32,10 +34,11 @@ and the skills in the repository's skills/ directory. Report schema: https://api
 - [Quick Start](https://apicrafter.github.io/metacrafter/getting-started/quick-start.md): Task-oriented first success paths for Metacrafter
 - [Troubleshooting](https://apicrafter.github.io/metacrafter/getting-started/troubleshooting.md): Common errors, exit codes, and how to debug scans
 - [When to use Metacrafter](https://apicrafter.github.io/metacrafter/getting-started/when-to-use.md): Metacrafter vs Presidio, YData Profiling, DataProfiler, and similar tools
-- [API server](https://apicrafter.github.io/metacrafter/integrations/api.md): HTTP classification API and remote CLI scans
+- [API server](https://apicrafter.github.io/metacrafter/integrations/api.md): HTTP API v2 (FastAPI, OpenAPI) and the pre-1.0 scan_data endpoint
 - [Apache Atlas](https://apicrafter.github.io/metacrafter/integrations/atlas.md): Export scan results as Apache Atlas classifications and attributes
 - [DataHub](https://apicrafter.github.io/metacrafter/integrations/datahub.md): Export scan results to DataHub tags, glossary terms, and properties
-- [LLM classification](https://apicrafter.github.io/metacrafter/integrations/llm.md): RAG-based classification with OpenAI, Ollama, and other providers
+- [LLM classification](https://apicrafter.github.io/metacrafter/integrations/llm.md): Registry-constrained LLM classification with OpenAI-compatible providers and Claude
+- [MCP server and agent skills](https://apicrafter.github.io/metacrafter/integrations/mcp.md): Use Metacrafter from AI agents through MCP and skills
 - [OpenMetadata](https://apicrafter.github.io/metacrafter/integrations/openmetadata.md): Export scan results to OpenMetadata tags and glossary terms
 - [Registry](https://apicrafter.github.io/metacrafter/integrations/registry.md): Resolve scan results against metacrafter-registry datatypes
 - [Report format](https://apicrafter.github.io/metacrafter/integrations/report.md): Scan report version 3, output formats and crosswalk exports

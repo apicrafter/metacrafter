@@ -24,10 +24,10 @@
 
 ## 4. Layout and documentation
 
-- [ ] 4.1 Document the target package layout in `docs/docs/development/architecture.md`
+- [x] 4.1 Document the target package layout in `docs/docs/development/architecture.md`
 - [x] 4.2 Update installation docs and README for extras and Python ≥3.10
-- [ ] 4.3 Add a migration note to `CHANGELOG.md` (extras, removed `rules/`, Python floor)
-- [ ] 4.4 Rewrite `openspec/ROADMAP.md` to list current changes and their status
+- [x] 4.3 Add a migration note to `CHANGELOG.md` (extras, removed `rules/`, Python floor)
+- [x] 4.4 Rewrite `openspec/ROADMAP.md` to list current changes and their status
 
 ## 5. Ecosystem
 

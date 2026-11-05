@@ -35,73 +35,62 @@ Metacrafter is a Python command-line tool and library for labeling table fields 
 
 ```
 metacrafter/
-├── metacrafter/          # Main package
-│   ├── __init__.py       # Package initialization, exports exceptions
-│   ├── __main__.py       # CLI entry point
-│   ├── core.py           # Main CLI command handler (CrafterCmd)
-│   ├── config.py         # Configuration file loader (.metacrafter)
-│   ├── exceptions.py     # Custom exception classes
-│   ├── classify/         # Core classification engine
-│   │   ├── processor.py  # RulesProcessor - loads and applies rules
-│   │   ├── stats.py      # Analyzer - field statistics and analysis
-│   │   └── utils.py      # Utility functions
-│   ├── core/             # Core validation utilities
-│   │   └── validators.py # Validation functions
-│   ├── registry/         # Registry client integration
-│   │   └── client.py     # Client for metacrafter-registry
-│   └── server/           # API server components
-│       ├── api.py        # API endpoints
-│       └── manager.py    # Server management
-├── rules/                # Default rule files (YAML)
-│   ├── basic/           # Basic identifier rules
-│   ├── common/          # Common rules (dates, internet, etc.)
-│   ├── pii/             # PII detection rules
-│   ├── en/              # English-specific rules
-│   ├── ru/              # Russian-specific rules
-│   └── fr/              # French-specific rules
-├── tests/               # Test suite
-├── scripts/             # Utility scripts
-├── docs/                # Docusaurus site (content in docs/docs/)
-└── setup.py            # Package setup
+├── metacrafter/            # Main package
+│   ├── scan_service.py     # CrafterCmd: shared scan service (CLI, SDK, HTTP, MCP)
+│   ├── core/               # Compatibility exports (metacrafter.core.CrafterCmd, Typer apps)
+│   ├── config.py           # .metacrafter loader; rulepath, registry, LLM and MCP settings
+│   ├── registry/           # RegistryAdapter (sources, canonical ids, enrichment), rule key checks
+│   ├── rules/              # Rule format JSON Schema (v2) and validation
+│   ├── classify/           # RulesProcessor, Analyzer (statistics), LLM classifiers and providers
+│   ├── engine/             # Scoring model, checksum validators, registry-derived detectors
+│   ├── report/             # Report version 3 models/schema, legacy and Markdown output
+│   ├── sources.py          # SQL, DuckDB, MongoDB adapters
+│   ├── integrations/       # DataHub, OpenMetadata, Atlas, crosswalk labels, Frictionless
+│   ├── interfaces/         # FastAPI HTTP API, MCP server
+│   ├── product_tools.py    # report diff/pii, check, rules lint/test/draft, evaluate, dbt
+│   ├── ecosystem.py        # Registry-example rule tests, thresholds, benchmark comparison
+│   └── cli/                # Typer commands
+├── skills/                 # Agent skills (metacrafter-scan, metacrafter-rule-author)
+├── tests/                  # pytest; fixtures/registry_snapshot is the offline registry
+│   ├── ecosystem/          # Known unresolved rule keys, rule thresholds
+│   └── benchmark/          # Synthetic labelled data and baseline
+├── openspec/               # Change proposals and ROADMAP.md
+├── devdocs/                # Plans and reviews (MODERNIZATION_PLAN.md)
+├── docs/                   # Docusaurus site (content in docs/docs/)
+├── ecosystem.lock          # Pinned metacrafter-rules and metacrafter-registry commits
+└── pyproject.toml
 ```
+
+Rules are not stored here: the default pack comes from the required `metacrafter-rules`
+package (`metacrafterext.rules.rules_dir()`). Datatypes come from metacrafter-registry through
+`metacrafter.registry.RegistryAdapter`.
 
 ## Key Components
 
-### 1. Core Engine (`metacrafter/core.py`)
+### 1. Scan service (`metacrafter/scan_service.py`)
 
-The `CrafterCmd` class is the main entry point for all operations:
-- `scan_file()` - Scan data files (CSV, JSON, Parquet, etc.)
-- `scan_db()` - Scan SQL databases
-- `scan_mongodb()` - Scan MongoDB databases
-- `scan_data()` - Scan in-memory data (list of dicts)
-- `scan_bulk()` - Scan multiple files in a directory
+`CrafterCmd` is the entry point for every operation: `scan_file()`, `scan_db()`,
+`scan_mongodb()`, `scan_data()`, `scan_bulk()`. It loads rules, binds the registry
+(registry-derived detectors), runs matching, enriches matches from the registry and builds
+report version 3.
 
 ### 2. Rules Processor (`metacrafter/classify/processor.py`)
 
-`RulesProcessor` handles:
-- Loading YAML rule files from configured paths
-- Compiling rules (text, PyParsing, function-based)
-- Applying rules to field names and data values
-- Filtering by context, language, country codes
-- Confidence scoring
+Loads YAML rules (validated against `metacrafter/rules/schema/rule-v2.schema.json`), compiles
+`text`, `ppr`, `func`, `regex` and `registry` rules, and scores matches with evidence
+(`metacrafter/engine/scoring.py`). Later rulepath entries override earlier rule ids.
 
-### 3. Statistics Analyzer (`metacrafter/classify/stats.py`)
+### 3. Registry adapter (`metacrafter/registry/adapter.py`)
 
-`Analyzer` computes field statistics:
-- Data type detection (str, int, float, dict, etc.)
-- Uniqueness metrics
-- Length statistics (min, max, avg)
-- Character analysis (digits, alphas, special chars)
-- Dictionary value detection
+Loads registry data (local path, verified cache, `/api/v1/` download, registry package
+snapshot), resolves aliases to canonical ids, adds registry metadata and PII to matches, and
+builds datatype URLs.
 
 ### 4. Configuration (`metacrafter/config.py`)
 
-`ConfigLoader` reads `.metacrafter` YAML config files from:
-- Current working directory
-- User home directory (`~/.metacrafter`)
-
-Configuration options:
-- `rulepath`: List of directories containing rule YAML files
+`ConfigLoader` reads `.metacrafter` from the current directory or home directory:
+`rulepath`, `auto_rules`, `registry_url`, `registry_path`, `registry_offline`,
+`registry_detectors`, LLM settings and the `mcp` section.
 
 ## Rule System
 
@@ -131,7 +120,7 @@ Rules are YAML files that define how to identify data types. Three match types:
      key: runpa
      match: func
      type: data
-     rule: metacrafter.rules.ru.gov.is_ru_law
+     rule: metacrafterext.rules.ru.gov.is_ru_law
    ```
 
 ## Supported File Formats
@@ -153,7 +142,7 @@ Format detection is automatic based on file extension.
 
 ### Adding a New Rule
 
-1. Create or edit a YAML file in `rules/` directory (or custom rulepath)
+1. Create or edit a YAML file in a directory on your `rulepath` (rules for the default pack go to metacrafter-rules)
 2. Define rule with appropriate match type (text/ppr/func)
 3. Set metadata: key, name, type (field/data), priority, contexts, langs, country
 4. Test with `metacrafter scan file test.csv`
@@ -169,7 +158,7 @@ Format detection is automatic based on file extension.
 
 1. Ensure SQLAlchemy driver is available
 2. Use connection string format: `dialect+driver://user:pass@host:port/db`
-3. For new NoSQL databases, extend `scan_mongodb()` pattern in `core.py`
+3. For new NoSQL databases, add an adapter in `metacrafter/sources.py` and a method on `CrafterCmd`
 
 ### Working with Registry Integration
 
@@ -218,11 +207,12 @@ report = cmd.scan_data(
 
 ## Important Files
 
-- `metacrafter/core.py` - Main CLI handler (2246 lines)
-- `metacrafter/classify/processor.py` - Rule processing engine
-- `metacrafter/classify/stats.py` - Statistics computation
-- `metacrafter/config.py` - Configuration management
-- `metacrafter/server/api.py` - API server endpoints
+- `metacrafter/scan_service.py` - CrafterCmd scan service
+- `metacrafter/classify/processor.py` - Rule loading and matching
+- `metacrafter/registry/adapter.py` - Registry integration
+- `metacrafter/report/models.py` - Report version 3
+- `metacrafter/interfaces/` - HTTP API and MCP server
+- `openspec/ROADMAP.md` - Change status and execution plan
 
 ## Dependencies
 

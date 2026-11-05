@@ -24,4 +24,4 @@
 - [x] 4.1 Add golden SDK/API/serialized statistics parity and scan → serialize → exporter round-trip tests.
 - [x] 4.2 Add threshold, field shape, path, PII and failed-write regression fixtures that fail on the reviewed baseline.
 - [x] 4.3 Run the isolated base/optional test jobs, package checks and applicable quality gates.
-- [ ] 4.4 Update SDK/API/report/export docs and migration examples; verify legacy consumers.
+- [x] 4.4 Update SDK/API/report/export docs and migration examples; verify legacy consumers.

@@ -59,7 +59,7 @@ const sidebars = {
         {
           type: 'category',
           label: 'Rules',
-          items: ['commands/rules'],
+          items: ['commands/rules', 'commands/report-tools'],
         },
         {
           type: 'category',

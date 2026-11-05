@@ -43,6 +43,19 @@ Each step ends with a green test suite and a commit.
 | S9 | Contract tests, `ecosystem.lock`, scheduled check, benchmark | `add-ecosystem-contract-tests`, July `add-ecosystem-alignment-workflow` | `metacrafter-76s.7` |
 | S10 | Docs, CHANGELOG, version, archive delivered changes | all | epic `metacrafter-76s` |
 
+**Status (2026-11-05):** steps S1–S10 are implemented on branch
+`claude/metacrafter-modernization-plan-af6f62` (PR apicrafter/metacrafter#29), version
+`1.0.0.dev0`. Open items:
+
+| Item | Change | Owner |
+|---|---|---|
+| Publish `metacrafter-rules` and `metacrafter-registry` on PyPI (blocks a PyPI release of metacrafter) | `add-registry-integration` 1.1, `add-rules-optional-extra` 1.4 | maintainer |
+| Archive the `metacrafter-llm` repository | `refactor-metacrafter-foundation` 5.1 | maintainer |
+| `--pack` once the registry implements `add-datatype-packs` | `update-detection-engine` 4.3 | metacrafter-registry |
+| Hyphenated ISBN golden test after the ISBN rule fix | `update-detection-engine` 5.2 | metacrafter-rules |
+| Delete the superseded `update-registry-resolution` draft | — | this repo |
+| Archive delivered changes (`openspec archive <id>`) after the release | all | this repo |
+
 Blocked outside this repository:
 - **PyPI publication.** `metacrafter-rules` and `metacrafter-registry` are not on PyPI.
   CI installs them from GitHub at the commits pinned in `ecosystem.lock`. A PyPI release

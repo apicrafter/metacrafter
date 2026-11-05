@@ -5,7 +5,61 @@ All notable changes to Metacrafter will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] - 1.0.0.dev0
+
+Registry-driven modernization (see `devdocs/MODERNIZATION_PLAN.md`, `openspec/ROADMAP.md`)
+together with the fixes from the 2026-10-01 repository review. Migration guide:
+`docs/docs/getting-started/migration.md`.
+
+### Breaking
+
+- Python 3.10 or newer.
+- `metacrafter-rules` is a required dependency and provides the default rule pack. The
+  in-repository `rules/` directory is removed; rules no longer load from `./rules`.
+  `metacrafter-rules` and `metacrafter-registry` are not on PyPI yet: install them from
+  GitHub (`python scripts/ecosystem_ref.py <name>` prints the pinned requirement).
+- Optional dependencies moved to extras: `mongodb`, `duckdb`, `server` (now FastAPI +
+  uvicorn instead of Flask), `formats` (Parquet, ORC, Excel, XML, compression), `mcp`,
+  `llm` (Anthropic SDK), `llm-chroma` (deprecated vector index). Missing extras raise
+  `MissingExtraError` naming the extra.
+- Reports are version 3. Use `--output-format legacy` for the pre-1.0 JSON shape.
+- JSON, YAML and Markdown output omit raw values unless `--include-samples` is set.
+- Field-name-only matches score at most 60 (`--legacy-scoring` restores 100).
+- A later rulepath entry now overrides an earlier rule with the same id.
+- `priority: 1` is the strongest rule priority (rules sort ascending).
+- LLM providers share one OpenAI-compatible HTTP client; the OpenAI SDK is no longer used
+  for chat. `llm_registry_path` is deprecated.
+
+### Added
+
+- Registry adapter: offline-capable loading with SHA-256 verification, canonical ids for
+  alias keys, registry metadata on every match (`registry`, `datatype`, `rule_key`,
+  `pii_source`, `replaced_by`), registry provenance in reports, configurable registry URL,
+  filters `--categories`, `--pii-only`, `--status`.
+- Rule format version 2 with a JSON Schema; `match: regex`, `match: registry`,
+  `validator: checksum:<algorithm>`; `deprecated` rules; `metacrafter rules validate`.
+- Registry-derived detectors for datatypes without rules (`--registry-detectors`).
+- Scoring model v1 with an `evidence` object; qddate formats mapped to registry patterns.
+- `metacrafter rules check --registry`, `rules test --registry-examples`, `evaluate --baseline`.
+- `--output-format md`; `metacrafter export labels --system presidio|google_dlp|dpv|purview|...`;
+  `metacrafter export frictionless`.
+- FastAPI HTTP API: `POST /v2/scan`, `POST /v2/classify`, `/health`, `/ready`, OpenAPI.
+- MCP server (`metacrafter mcp`) with scoped, read-only tools; agent skills in `skills/`;
+  `llms.txt` for the documentation site.
+- Registry-constrained LLM classification with PII-aware disclosure and an Anthropic provider.
+- From the repository review: shared scan service, report interchange and bulk output,
+  bounded head/reservoir sampling, schema-aware SQL quoting, export outcome accounting,
+  report diff, PII inventory, policy checks, rule lint/test/draft, `scan explain`,
+  dbt dry-run export, secret redaction, hermetic tests.
+- Ecosystem contract tests in CI (pinned registry and rules) and a weekly compatibility check.
+
+### Fixed
+
+- Boolean `is_pii` in rules was ignored.
+- Catalog exporters used a hard-coded list of five PII datatypes.
+- `metacrafter scan file` crashed when `--llm-min-confidence` was not given.
+- Valid PyParsing rules with tuple or indexed repetition were rejected.
+- Loading the default rule pack took 4.6 s (now about 0.4 s).
 
 ## [0.0.5] - 2026-07-08
 
