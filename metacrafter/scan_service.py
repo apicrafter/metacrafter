@@ -126,6 +126,11 @@ class CrafterCmd(object):
         embedding_model: Optional[str] = None,
         embedding_base_url: Optional[str] = None,
         llm_max_requests: int = 100,
+        registry_path: Optional[str] = None,
+        registry_offline: Optional[bool] = None,
+        categories: Optional[Union[str, List[str]]] = None,
+        pii_only: bool = False,
+        status: Optional[Union[str, List[str]]] = None,
     ):
         """Initialize CrafterCmd instance.
         
@@ -145,6 +150,17 @@ class CrafterCmd(object):
         if log_level is not None:
             logging.getLogger("metacrafter").setLevel(log_level)
         self.registry_url = ConfigLoader.get_registry_url().rstrip("/")
+        self._registry_settings = ConfigLoader.get_registry_settings()
+        if registry_path:
+            self._registry_settings["registry_path"] = registry_path
+        if registry_offline is not None:
+            self._registry_settings["offline"] = registry_offline
+        self._registry = None
+        self.registry_filters = {
+            "categories": _split_option_list(categories) if isinstance(categories, str) else (list(categories) if categories else None),
+            "pii_only": bool(pii_only),
+            "status": _split_option_list(status) if isinstance(status, str) else (list(status) if status else None),
+        }
         self.remote = remote
         self.custom_rulepath = rulepath
         self.country_codes = (
@@ -1088,6 +1104,43 @@ class CrafterCmd(object):
         return rule_results
 
 
+    @property
+    def registry(self):
+        """Registry adapter, loaded lazily on first use (see metacrafter.registry.adapter)."""
+        if self._registry is None:
+            from metacrafter.registry.adapter import get_adapter
+
+            settings = self._registry_settings
+            self._registry = get_adapter(
+                base_url=settings.get("base_url") or self.registry_url,
+                registry_path=settings.get("registry_path"),
+                offline=bool(settings.get("offline")),
+                cache_ttl=float(settings.get("cache_ttl", 86400)),
+            )
+        return self._registry
+
+    def _registry_filter_allows(self, match: Dict[str, Any]) -> bool:
+        filters = self.registry_filters
+        if filters.get("pii_only") and not match.get("is_pii"):
+            return False
+        reg = match.get("registry") or {}
+        if filters.get("status") and reg.get("status") not in filters["status"]:
+            return False
+        if filters.get("categories") and not set(filters["categories"]) & set(reg.get("categories") or []):
+            return False
+        return True
+
+    def _enrich_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
+        """Resolve and enrich every match of a field record, then apply registry filters."""
+        registry = self.registry
+        matches = [registry.enrich_match(m) for m in record.get("matches", [])]
+        record["matches"] = [m for m in matches if self._registry_filter_allows(m)]
+        if record["matches"]:
+            record["datatype_url"] = record["matches"][0].get("classurl", "")
+        else:
+            record["datatype_url"] = ""
+        return record
+
     def scan_data(
         self,
         items: List[Dict[str, Any]],
@@ -1297,25 +1350,23 @@ class CrafterCmd(object):
                 matches.append(s)
             if res.field not in datastats_dict.keys():
                 continue
+            record = res.asdict()
+            record = self._enrich_record(record)
+            kept = {(m["ruleid"], m["dataclass"]) for m in record["matches"]}
+            matches = [
+                s for s, m in zip(matches, deduped) if (m.ruleid, m.dataclass) in kept
+            ]
             output.append(
                 [
                     res.field,
                     datastats_dict[res.field]["ftype"],
                     ",".join(datastats_dict[res.field]["tags"]),
                     ",".join(matches),
-                    (self.registry_url + "/datatype/{dataclass}").format(dataclass=res.matches[0].dataclass)
-                    if len(res.matches) > 0
-                    else "",
+                    record["datatype_url"],
                 ]
             )
-            record = res.asdict()
             record["tags"] = datastats_dict[res.field]["tags"]
             record["ftype"] = datastats_dict[res.field]["ftype"]
-            record["datatype_url"] = (
-                (self.registry_url + "/datatype/{dataclass}").format(dataclass=res.matches[0].dataclass)
-                if len(res.matches) > 0
-                else ""
-            )
             record["stats"] = datastats_dict[res.field]
 
             outdata.append(record)
@@ -1333,7 +1384,8 @@ class CrafterCmd(object):
             'requested_mode': mode,
             'effective_mode': ('hybrid' if any(m.ruletype == 'llm' for r in results.results for m in r.matches) else 'rules') if mode != 'rules' and (self.llm_classifier is None or self.llm_errors) else mode,
             'sample_policy': self.sample_policy,
-        }            
+            'registry': self.registry.provenance.asdict(),
+        }
         return report
 
 

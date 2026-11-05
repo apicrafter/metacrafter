@@ -19,9 +19,21 @@ def default_registry_url():
 
 
 class RegistryClient:
-    """Client to access semantic data types registry"""
+    """Client to access semantic data types registry.
+
+    .. deprecated:: 0.1.0
+        Use :class:`metacrafter.registry.adapter.RegistryAdapter`, which verifies
+        downloads, works offline and resolves aliases.
+    """
 
     def __init__(self, connstr=None, preload=False):
+        import warnings
+
+        warnings.warn(
+            "RegistryClient is deprecated; use metacrafter.registry.adapter.RegistryAdapter",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.connstr = (connstr or default_registry_url()).rstrip("/")
         self.cached = None
         self._cache = {}

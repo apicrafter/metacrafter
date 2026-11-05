@@ -335,6 +335,19 @@ class ColumnMatchResult:
         return result
 
 
+def rule_pii_source(rule: Dict[str, Any]) -> Optional[str]:
+    """Return why a rule marks PII: its own ``is_pii`` flag or its ``pii`` context."""
+    if rule.get("is_pii") is True:
+        return "rule"
+    if "pii" in rule.get("context", []):
+        return "context"
+    return None
+
+
+def rule_is_pii(rule: Dict[str, Any]) -> bool:
+    return rule_pii_source(rule) is not None
+
+
 class RuleResult:
     """Result of a single rule match.
     
@@ -350,6 +363,7 @@ class RuleResult:
         is_pii: bool = False,
         format: Optional[str] = None,
         evidence=None,
+        pii_source: Optional[str] = None,
     ) -> None:
         """Initialize rule match result.
         
@@ -368,6 +382,7 @@ class RuleResult:
         self.is_pii: bool = is_pii
         self.format: Optional[str] = format
         self.evidence = evidence
+        self.pii_source: Optional[str] = pii_source if is_pii else None
 
     def class_url(self) -> str:
         """Get URL to data class registry entry.
@@ -394,6 +409,7 @@ class RuleResult:
             "format": self.format,
             "classurl": self.class_url(),
             "is_pii": self.is_pii,
+            "pii_source": self.pii_source,
         }
 
 
@@ -847,7 +863,8 @@ class RulesProcessor:
                                 confidence=100,
                                 dataclass=rule["key"],
                                 ruletype="field",
-                                is_pii="pii" in rule.get("context", []),
+                                is_pii=rule_is_pii(rule),
+                                pii_source=rule_pii_source(rule),
                             )
                         )
                         if stop_on_match:
@@ -868,7 +885,8 @@ class RulesProcessor:
                                 confidence=100,
                                 dataclass=rule["key"],
                                 ruletype="field",
-                                is_pii="pii" in rule.get("context", []),
+                                is_pii=rule_is_pii(rule),
+                                pii_source=rule_pii_source(rule),
                             )
                         )
                         if stop_on_match:
@@ -886,7 +904,8 @@ class RulesProcessor:
                                 confidence=100,
                                 dataclass=rule["key"],
                                 ruletype="field",
-                                is_pii="pii" in rule.get("context", []),
+                                is_pii=rule_is_pii(rule),
+                                pii_source=rule_pii_source(rule),
                             )
                         )
                         if stop_on_match:
@@ -1029,7 +1048,8 @@ class RulesProcessor:
                                 dataclass=rule["key"],
                                 ruletype="data",
                                 evidence={"matched_count": success, "considered_count": total-empty if except_empty else total, "empty_count": empty, "rule_source": rule.get("source")},
-                                is_pii="pii" in rule.get("context", []),
+                                is_pii=rule_is_pii(rule),
+                                pii_source=rule_pii_source(rule),
                             )
                         )
                         if stop_on_match:

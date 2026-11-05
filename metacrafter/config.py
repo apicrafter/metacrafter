@@ -94,6 +94,9 @@ class MetacrafterConfig(BaseModel):
 
     # Registry configuration
     registry_url: Optional[str] = Field(default=None, description="Base URL of the metacrafter-registry service")
+    registry_path: Optional[str] = Field(default=None, description="Local registry snapshot or checkout data/ directory")
+    registry_offline: bool = Field(default=False, description="Never fetch registry data over the network")
+    registry_cache_ttl: float = Field(default=86400, ge=0, description="Seconds a cached registry snapshot is used without checking the network")
 
     # LLM configuration fields
     classification_mode: Optional[str] = Field(default="rules", description="Classification mode: rules, llm, or hybrid")
@@ -298,6 +301,36 @@ class ConfigLoader:
             except Exception as e:  # noqa: BLE001 - fall back to default on any error
                 logging.debug("Registry configuration validation failed (%s)", type(e).__name__)
         return BASE_REGISTRY_URL.rstrip("/")
+
+    @staticmethod
+    def get_registry_settings() -> dict:
+        """Resolve registry adapter settings from the environment and ``.metacrafter``.
+
+        Environment variables win: ``METACRAFTER_REGISTRY_URL``,
+        ``METACRAFTER_REGISTRY_PATH`` and ``METACRAFTER_REGISTRY_OFFLINE`` (1/true/yes).
+        """
+        settings = {
+            "base_url": ConfigLoader.get_registry_url(),
+            "registry_path": None,
+            "offline": False,
+            "cache_ttl": 86400.0,
+        }
+        config = ConfigLoader.load_config()
+        if config:
+            try:
+                validated = MetacrafterConfig(**config)
+                settings["registry_path"] = validated.registry_path
+                settings["offline"] = validated.registry_offline
+                settings["cache_ttl"] = validated.registry_cache_ttl
+            except Exception as e:  # noqa: BLE001 - invalid config falls back to defaults
+                logging.debug("Registry configuration validation failed (%s)", type(e).__name__)
+        env_path = os.environ.get("METACRAFTER_REGISTRY_PATH")
+        if env_path:
+            settings["registry_path"] = env_path
+        env_offline = os.environ.get("METACRAFTER_REGISTRY_OFFLINE")
+        if env_offline is not None:
+            settings["offline"] = env_offline.strip().lower() in ("1", "true", "yes", "on")
+        return settings
 
     @staticmethod
     def get_llm_config() -> Optional[dict]:

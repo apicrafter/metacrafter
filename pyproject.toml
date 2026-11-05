@@ -56,6 +56,10 @@ dependencies = [
 [project.optional-dependencies]
 # Kept for backward compatibility: metacrafter-rules is now a core dependency.
 rules = []
+# Registry package: identify/match/checksums/crosswalks and a bundled snapshot.
+# Not on PyPI yet; install it from GitHub (see ecosystem.lock). Without it,
+# metacrafter reads the published /api/v1/ snapshot directly.
+registry = ["metacrafter-registry>=1.3.0.dev0"]
 # Binary, compressed and XML file formats handled by iterabledata.
 formats = [
     "pyarrow>=10.0",

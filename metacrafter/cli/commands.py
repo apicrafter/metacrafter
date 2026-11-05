@@ -86,6 +86,37 @@ def rules_stats(
     acmd.rules_dumpstats()
 
 
+@rules_app.command('check')
+def rules_check(
+    registry: bool = typer.Option(True, "--registry/--no-registry", help="Check rule keys against metacrafter-registry"),
+    strict: bool = typer.Option(False, "--strict", help="Exit with code 1 when unknown keys exist"),
+    rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
+    registry_path: Optional[str] = typer.Option(None, "--registry-path", help="Local registry snapshot or checkout data/ directory"),
+    registry_offline: Optional[bool] = typer.Option(None, "--registry-offline/--registry-online", help="Never fetch registry data over the network"),
+    output_format: str = typer.Option("table", "--output-format", help="Output format: table or json"),
+):
+    """Check loaded rule keys against the registry: unknown, alias-only and deprecated keys."""
+    from metacrafter.registry.checks import check_rule_keys, format_rule_check
+
+    rulepath_list = rulepath.split(",") if rulepath else None
+    acmd = CrafterCmd(
+        rulepath=rulepath_list,
+        quiet=True,
+        registry_path=registry_path,
+        registry_offline=registry_offline,
+    )
+    if not registry:
+        typer.echo("Nothing to check: --no-registry was given")
+        raise typer.Exit(0)
+    result = check_rule_keys(acmd.processor, acmd.registry)
+    typer.echo(format_rule_check(result, output_format))
+    if not acmd.registry.available:
+        typer.echo("Registry data is not available; keys could not be checked", err=True)
+        raise typer.Exit(2)
+    if strict and result["unknown"]:
+        raise typer.Exit(1)
+
+
 @rules_app.command('list')
 def rules_list(
     debug: bool = typer.Option(False, help="Enable debug logging"),
@@ -148,6 +179,11 @@ def scan_file(
     fields: str = typer.Option(None, "--fields", help="Comma-separated list of specific fields to process"),
     rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
     country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
+    registry_path: Optional[str] = typer.Option(None, "--registry-path", help="Local registry snapshot or checkout data/ directory"),
+    registry_offline: Optional[bool] = typer.Option(None, "--registry-offline/--registry-online", help="Never fetch registry data over the network"),
+    categories: Optional[str] = typer.Option(None, "--categories", help="Report only matches in these registry categories (comma-separated)"),
+    pii_only: bool = typer.Option(False, "--pii-only", help="Report only matches whose datatype is PII"),
+    status: Optional[str] = typer.Option(None, "--status", help="Report only matches with these registry statuses, e.g. stable"),
     output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
@@ -251,6 +287,11 @@ def scan_file(
         debug,
         rulepath=rulepath_list,
         country_codes=country_code_list,
+        registry_path=registry_path,
+        registry_offline=registry_offline,
+        categories=categories,
+        pii_only=pii_only,
+        status=status,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
@@ -317,6 +358,11 @@ def scan_db(
     fields: str = typer.Option(None, "--fields", help="Comma-separated list of specific fields to process"),
     rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
     country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
+    registry_path: Optional[str] = typer.Option(None, "--registry-path", help="Local registry snapshot or checkout data/ directory"),
+    registry_offline: Optional[bool] = typer.Option(None, "--registry-offline/--registry-online", help="Never fetch registry data over the network"),
+    categories: Optional[str] = typer.Option(None, "--categories", help="Report only matches in these registry categories (comma-separated)"),
+    pii_only: bool = typer.Option(False, "--pii-only", help="Report only matches whose datatype is PII"),
+    status: Optional[str] = typer.Option(None, "--status", help="Report only matches with these registry statuses, e.g. stable"),
     output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
@@ -385,6 +431,11 @@ def scan_db(
         debug,
         rulepath=rulepath_list,
         country_codes=country_code_list,
+        registry_path=registry_path,
+        registry_offline=registry_offline,
+        categories=categories,
+        pii_only=pii_only,
+        status=status,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
@@ -438,6 +489,11 @@ def scan_mongodb(
     fields: str = typer.Option(None, "--fields", help="Comma-separated list of specific fields to process"),
     rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
     country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
+    registry_path: Optional[str] = typer.Option(None, "--registry-path", help="Local registry snapshot or checkout data/ directory"),
+    registry_offline: Optional[bool] = typer.Option(None, "--registry-offline/--registry-online", help="Never fetch registry data over the network"),
+    categories: Optional[str] = typer.Option(None, "--categories", help="Report only matches in these registry categories (comma-separated)"),
+    pii_only: bool = typer.Option(False, "--pii-only", help="Report only matches whose datatype is PII"),
+    status: Optional[str] = typer.Option(None, "--status", help="Report only matches with these registry statuses, e.g. stable"),
     output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
@@ -506,6 +562,11 @@ def scan_mongodb(
         debug,
         rulepath=rulepath_list,
         country_codes=country_code_list,
+        registry_path=registry_path,
+        registry_offline=registry_offline,
+        categories=categories,
+        pii_only=pii_only,
+        status=status,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
@@ -561,6 +622,11 @@ def scan_bulk(
     fields: str = typer.Option(None, "--fields", help="Comma-separated list of specific fields to process"),
     rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
     country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
+    registry_path: Optional[str] = typer.Option(None, "--registry-path", help="Local registry snapshot or checkout data/ directory"),
+    registry_offline: Optional[bool] = typer.Option(None, "--registry-offline/--registry-online", help="Never fetch registry data over the network"),
+    categories: Optional[str] = typer.Option(None, "--categories", help="Report only matches in these registry categories (comma-separated)"),
+    pii_only: bool = typer.Option(False, "--pii-only", help="Report only matches whose datatype is PII"),
+    status: Optional[str] = typer.Option(None, "--status", help="Report only matches with these registry statuses, e.g. stable"),
     output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
@@ -627,6 +693,11 @@ def scan_bulk(
         debug,
         rulepath=rulepath_list,
         country_codes=country_code_list,
+        registry_path=registry_path,
+        registry_offline=registry_offline,
+        categories=categories,
+        pii_only=pii_only,
+        status=status,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
