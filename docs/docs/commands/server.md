@@ -8,7 +8,7 @@ description: "Run the Metacrafter HTTP classification API"
 metacrafter server run --host 127.0.0.1 --port 10399
 ```
 
-Starts a Flask API that exposes `POST /api/v1/scan_data`. See
+Starts a FastAPI API that exposes `POST /api/v1/scan_data`. See
 [API server](/integrations/api) for the request body and response shape.
 
 ## Options
@@ -19,7 +19,7 @@ Starts a Flask API that exposes `POST /api/v1/scan_data`. See
 | `--port` | Port (default `10399`) |
 | `--debug` | Verbose server logging |
 
-Optional: `METACRAFTER_SECRET_KEY` for the Flask secret.
+Optional: `METACRAFTER_SECRET_KEY` for the FastAPI secret.
 
 ## Remote CLI scans
 

@@ -1,0 +1,10 @@
+# Versions of sibling ecosystem packages that CI and releases are tested against.
+# metacrafter-rules is a required dependency; until it is published on PyPI, CI
+# installs it from GitHub at this ref.
+metacrafter-rules:
+  repo: apicrafter/metacrafter-rules
+  ref: 19823306b33ab5488293910e4fabff99a4171592
+metacrafter-registry:
+  repo: apicrafter/metacrafter-registry
+  ref: 9caf6a8f19242f5f19f8857ecdd8a3789db3ca61
+  version: 1.3.0.dev0

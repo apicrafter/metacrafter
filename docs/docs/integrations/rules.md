@@ -1,27 +1,120 @@
 ---
 title: "Custom rules"
-description: "YAML rules, match engines, and validator plugins"
+description: "YAML rules, match engines, validators, registry detectors and scoring"
 ---
 # Custom rules
 
-Metacrafter loads rules from every directory in the effective `rulepath`:
+Metacrafter loads rules from every directory in the effective `rulepath`, in order:
 
-1. Built-in `rules/` shipped with the package (when `auto_rules` is true)
-2. Extended [metacrafter-rules](https://github.com/apicrafter/metacrafter-rules) pack if `metacrafter[rules]` is installed
-3. Extra `rulepath` entries and `--rulepath` flags
+1. The default pack from the installed [metacrafter-rules](https://github.com/apicrafter/metacrafter-rules)
+   package (skipped when `auto_rules: false`).
+2. `rulepath` entries from `.metacrafter`.
+3. `--rulepath` flags.
 
-Duplicate `key`s are skipped with a warning. Set `auto_rules: false` for a
-custom-only set.
+A later rule with the same rule id replaces the earlier one (logged at INFO). Rules are
+never loaded implicitly from a `rules/` folder in the current directory.
+
+## Rule file format
+
+Rule files are YAML. Format version 2 is described by a JSON Schema published at
+[`/schema/rule-v2.schema.json`](pathname:///schema/rule-v2.schema.json) and shipped in the package
+(`metacrafter/rules/schema/rule-v2.schema.json`). Files without `format_version` are
+version 1; they use the same structure and stay valid.
+
+```yaml
+format_version: 2
+name: Payments
+description: Payment identifiers
+context: finances        # dot-separated contexts, e.g. pii.ru
+lang: common
+country_code: [gb, de]   # optional
+rules:
+  ibanbyregistry:
+    key: iban            # registry datatype id or alias
+    name: IBAN by registry pattern
+    type: data
+    match: registry
+    rule: iban
+```
+
+Validate files before use:
+
+```bash
+metacrafter rules validate ./custom_rules
+```
+
+Invalid rules are skipped with a diagnostic, never loaded as unchecked patterns.
+
+### Rule keys
+
+| Key | Meaning |
+|---|---|
+| `key` | Registry datatype id or alias. Check with `metacrafter rules check --registry`. |
+| `type` | `field` (column names) or `data` (values) |
+| `match` | `text`, `ppr`, `func`, `regex` or `registry` (see below) |
+| `rule` | Pattern, keyword list, function path or registry id |
+| `validator` | Dotted path to `(value) -> bool`, or `checksum:<algorithm>` |
+| `priority` | 1 (strongest) to 3; weights field-name evidence |
+| `minlen`, `maxlen` | Value length bounds (honoured for every match type) |
+| `fieldrule`, `fieldrulematch` | Field-name guard (`text` or `ppr`) for data and field rules |
+| `is_pii` | Boolean; marks matches as PII |
+| `imprecise` | Skipped unless `--include-imprecise` |
+| `deprecated` | Skipped unless `--include-deprecated` |
 
 ## Match engines
 
-| `match` | Behavior |
-|---------|----------|
-| `text` | Exact match against comma-separated tokens |
+| `match` | Behaviour |
+|---------|-----------|
+| `text` | Case-insensitive match against comma-separated tokens |
 | `ppr` | PyParsing expression in a restricted namespace |
 | `func` | Importable Python function `(value) -> bool` |
+| `regex` | Python regular expression; the whole value must match |
+| `registry` | Uses the regexp and checksum of the registry record named in `rule` |
 
-Rules apply to **fields** (column names) or **data** (values).
+### Registry patterns
+
+`match: registry` keeps detection logic in the registry and heuristics in the rule:
+
+```yaml
+ibanbyregistry:
+  key: iban
+  type: data
+  match: registry
+  rule: iban
+  fieldrule: iban,account
+  fieldrulematch: text
+```
+
+The checksum of the record (here `iban_mod97`) is applied automatically. The rule `key`
+must resolve to the same record as `rule`.
+
+### Regular expressions
+
+```yaml
+docnumber:
+  key: doc_number
+  type: data
+  match: regex
+  rule: '[A-Z]{2}\d{6}'
+  maxlen: 8
+```
+
+Values longer than `maxlen` (default 256 for regex rules) are not matched.
+
+### Checksums
+
+```yaml
+cardnumber:
+  key: credit_card_number
+  type: data
+  match: regex
+  rule: '\d{16}'
+  validator: checksum:luhn
+```
+
+Checksum algorithms come from metacrafter-registry (49 algorithms, for example `luhn`,
+`iban_mod97`, `gtin`, `ru_inn`). They need the `metacrafter-registry` package; without
+it, a rule with a checksum validator is disabled with a diagnostic.
 
 ### Function
 
@@ -34,11 +127,11 @@ runpabyfunc:
   priority: 1
   match: func
   type: data
-  rule: metacrafter.rules.ru.gov.is_ru_law
+  rule: metacrafterext.rules.ru.gov.is_ru_law
 ```
 
-Any importable path works (`mypackage.validators.is_widget_id`) as long as the
-module is on `PYTHONPATH`.
+Any importable path works (`mypackage.validators.is_widget_id`) as long as the module
+is on `PYTHONPATH`. Function rules are trusted executable plugins.
 
 ### Exact text
 
@@ -65,20 +158,47 @@ rukadastr:
   type: data
 ```
 
-`ppr` rules run with PyParsing primitives only (`Word`, `Literal`, `nums`,
-`alphas`, …). `import` / `eval` / `exec` are not available.
+`ppr` rules run with PyParsing primitives only (`Word`, `Literal`, `nums`, `alphas`, …)
+and bounded repetition (`expr * 3`, `expr * (0, 6)`, `expr[0, ...]`). `import`, `eval`
+and attribute access outside a few parser methods are rejected.
 
-## Typical metadata
+## Registry-derived detectors
 
-`key`, `name`, `type`, `match`, `rule`, `priority`, `minlen` / `maxlen`,
-`contexts`, `langs`, `country`, `is_pii`, optional `validator`.
+Many registry datatypes have a regexp but no rule. Metacrafter builds detectors for them
+at load time:
 
-Align `key` with a [registry](/integrations/registry) datatype id.
+| `--registry-detectors` | Detectors added |
+|---|---|
+| `off` | none |
+| `stable` (default) | stable records with a checksum, or with a regexp that matches at most 20% of other records' examples |
+| `all` | every record with a regexp; those outside the `stable` criteria are imprecise |
+
+Derived matches have rule ids `registry:<id>` and `ruletype: registry`. Set the default
+in `.metacrafter` with `registry_detectors: off|stable|all`.
+
+## Confidence scoring
+
+Confidence is 0–100 (`scoring_model: v1`):
+
+- **Value evidence**: the share of non-empty values that match the pattern and pass the
+  validator or checksum, times the pattern specificity (1 for curated rules).
+- **Field-name bonus**: up to +10 when a field rule for the same datatype also matched.
+- **Country**: +5 / −10 for registry detectors when `--country-codes` is set.
+- **Draft penalty**: −5 for draft registry records.
+- **Field-name-only matches** score 60 × priority weight (1 → 60, 2 → 48, 3 → 36).
+
+Each match has an `evidence` object with `hit_rate`, `checksum_rate`, `specificity`,
+`name_score`, counts and `scoring_model`. `--legacy-scoring` restores the pre-1.0 scores
+(share of matching values; 100 for field-name matches).
+
+Confidence is a heuristic, not a calibrated probability.
 
 ## Inspect
 
 ```bash
 metacrafter rules list --rulepath ./custom_rules
+metacrafter rules check --registry
+metacrafter rules validate ./custom_rules
 ```
 
 See [rules](/commands/rules) and [Architecture](/development/architecture).

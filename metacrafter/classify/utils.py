@@ -7,42 +7,30 @@ import xmltodict
 
 
 def dict_generator(indict, pre=None):
-    """Generates schema from dictionary object"""
-    pre = pre[:] if pre else []
-    if isinstance(indict, dict):
-        for key, value in list(indict.items()):
+    """Flatten objects; dots/backslashes in literal keys are escaped.
+
+    Arrays share a field path; each scalar element is a value. Empty containers
+    contribute None. MongoDB _id is intentionally excluded for compatibility.
+    """
+    pre = list(pre or [])
+    if not pre and indict == {}:
+        return
+    if isinstance(indict, dict) and indict:
+        for key, value in indict.items():
             if key == "_id":
                 continue
-            if isinstance(value, dict):
-                #                print 'dgen', value, key, pre
-                yield from dict_generator(value, pre + [key])
-            elif isinstance(value, (list, tuple)):
-                for v in value:
-                    if isinstance(v, dict):
-                        #                print 'dgen', value, key, pre
-                        yield from dict_generator(v, pre + [key])
-            #                    for d in dict_generator(v, [key] + pre):
-            #                        yield d
-            else:
-                yield pre + [key, value]
+            segment = str(key).replace("\\", "\\\\").replace(".", "\\.")
+            yield from dict_generator(value, pre + [segment])
+    elif isinstance(indict, (list, tuple)) and indict:
+        for value in indict:
+            yield from dict_generator(value, pre)
     else:
-        yield indict
+        yield pre + [None if isinstance(indict, (dict, list, tuple)) else indict]
 
 
-def headers(data, limit=1000):
-    """Returns headers of list of dict objects"""
-    iter_num = 0
-    keys = []
-    for item in data:
-        iter_num += 1
-        if iter_num > limit:
-            break
-        dict_gen = dict_generator(item)
-        for i in dict_gen:
-            k = ".".join(i[:-1])
-            if k not in keys:
-                keys.append(k)
-    return keys
+def headers(data, limit=None):
+    """Discover every field in the provided sample in stable encounter order."""
+    return list(dict_to_columns(data if limit is None else data[:limit]))
 
 
 def get_dict_value(object, keys):
@@ -72,19 +60,17 @@ def get_dict_value(object, keys):
 
 
 def dict_to_columns(data):
-    """Converts list of dictionary objects to list of columns"""
-    columns = {}
+    """Collect scalar values and count missing paths as null for each row."""
+    rows = []
+    keys = {}
     for row in data:
-        dk = dict_generator(row)
-        for i in dk:
-            k = ".".join(i[:-1])
-            if k in columns:
-                columns[k].append(i[-1])
-            else:
-                columns[k] = [
-                    i[-1],
-                ]
-    return columns
+        current = {}
+        for pair in dict_generator(row):
+            key = ".".join(pair[:-1])
+            current.setdefault(key, []).append(pair[-1])
+            keys.setdefault(key, None)
+        rows.append(current)
+    return {key: [v for row in rows for v in row.get(key, [None])] for key in keys}
 
 
 def string_to_charrange(s):
@@ -177,8 +163,10 @@ def etree_to_dict(t, prefix_strip=True):
     return d
 
 
-def _seek_xml_lists(data, level=0, path=None, candidates=OrderedDict()):
+def _seek_xml_lists(data, level=0, path=None, candidates=None):
     """Seeks XML lists to find items tags"""
+    if candidates is None:
+        candidates = OrderedDict()
     for key, value in data.items():
         if isinstance(value, list):
             key = f"{path}.{key}" if path is not None else key
@@ -197,27 +185,46 @@ def _seek_xml_lists(data, level=0, path=None, candidates=OrderedDict()):
 
 
 def xml_quick_analyzer(filename):
-    """Analyzes single XML file and returns tag objects.
-    
-    Args:
-        filename: Path to the XML file
-        
-    Returns:
-        Dictionary with 'full' and 'short' tag keys, or None if no candidates found
-        
-    Raises:
-        IOError: If file cannot be read
-        xml.parsers.expat.ExpatError: If XML is malformed
-    """
-    with open(filename, "rb") as f:
-        data = xmltodict.parse(f, process_namespaces=False)
-    candidates = _seek_xml_lists(data, level=0)
-    if len(candidates) > 0:
-        fullkey = str(list(candidates.keys())[0])
-        shortkey = fullkey.rsplit(".", 1)[-1]
-        if len(shortkey.split(":")) > 0:
-            shortkey = shortkey.rsplit(":", 1)[-1]
-        return {"full": fullkey, "short": shortkey}
+    """Discover a record tag from a bounded streaming prefix of XML."""
+    import bz2
+    import gzip
+    import lzma
+    from xml.etree import ElementTree
+    from contextlib import ExitStack
+    suffix = str(filename).lower()
+    opener = gzip.open if suffix.endswith(".gz") else bz2.open if suffix.endswith(".bz2") else lzma.open if suffix.endswith((".xz", ".lzma")) else open
+    if suffix.endswith(".lz4"):
+        import lz4.frame
+        opener = lz4.frame.open
+    if suffix.endswith(".zst"):
+        import zstandard
+        opener = lambda path, mode: zstandard.open(path, mode)
+    stack, counts, containers = [], {}, []
+    events = 0
+    with ExitStack() as resources:
+        stream = resources.enter_context(opener(filename, "rb"))
+        for event, element in ElementTree.iterparse(stream, events=("start", "end")):
+            if event == "start":
+                if len(stack) >= 32:
+                    raise ValueError("XML nesting limit exceeded; supply a record tag")
+                stack.append(element.tag)
+                key = tuple(stack)
+                counts[key] = counts.get(key, 0) + 1
+                events += 1
+                if len(stack) == 3 and tuple(stack[:2]) not in containers:
+                    containers.append(tuple(stack[:2]))
+                if len(stack) == 2 and counts[key] > 1:
+                    return {"full": ".".join(key), "short": key[-1].rsplit("}", 1)[-1]}
+                if events >= 2000:
+                    break
+            else:
+                stack.pop()
+                element.clear()
+    repeated = [key for key, count in counts.items() if count > 1]
+    candidates = sorted(repeated, key=len) or containers
+    if candidates:
+        key = candidates[0]
+        return {"full": ".".join(key), "short": key[-1].rsplit("}", 1)[-1]}
     return None
 
 

@@ -1,0 +1,218 @@
+[
+  {
+    "id": "agriculture",
+    "name": "Agriculture, livestock and food",
+    "count": 3,
+    "url": "https://registry.apicrafter.io/category/agriculture"
+  },
+  {
+    "id": "chemistry",
+    "name": "Chemistry",
+    "count": 26,
+    "url": "https://registry.apicrafter.io/category/chemistry"
+  },
+  {
+    "id": "common",
+    "name": "Common",
+    "count": 187,
+    "url": "https://registry.apicrafter.io/category/common"
+  },
+  {
+    "id": "companies",
+    "name": "Companies/business/organizations",
+    "count": 236,
+    "url": "https://registry.apicrafter.io/category/companies"
+  },
+  {
+    "id": "cryptocurrency",
+    "name": "Cryptocurrency",
+    "count": 30,
+    "url": "https://registry.apicrafter.io/category/cryptocurrency"
+  },
+  {
+    "id": "cryptography",
+    "name": "Cryptographic identifiers",
+    "count": 42,
+    "url": "https://registry.apicrafter.io/category/cryptography"
+  },
+  {
+    "id": "datetime",
+    "name": "Date and time",
+    "count": 79,
+    "url": "https://registry.apicrafter.io/category/datetime"
+  },
+  {
+    "id": "dublincore",
+    "name": "Dublin Core",
+    "count": 16,
+    "url": "https://registry.apicrafter.io/category/dublincore"
+  },
+  {
+    "id": "ecommerce",
+    "name": "E-commerce",
+    "count": 18,
+    "url": "https://registry.apicrafter.io/category/ecommerce"
+  },
+  {
+    "id": "education",
+    "name": "Education",
+    "count": 18,
+    "url": "https://registry.apicrafter.io/category/education"
+  },
+  {
+    "id": "energy",
+    "name": "Energy (electricity, gas, metering)",
+    "count": 6,
+    "url": "https://registry.apicrafter.io/category/energy"
+  },
+  {
+    "id": "environment",
+    "name": "Environment",
+    "count": 12,
+    "url": "https://registry.apicrafter.io/category/environment"
+  },
+  {
+    "id": "finances",
+    "name": "Finances and banking",
+    "count": 233,
+    "url": "https://registry.apicrafter.io/category/finances"
+  },
+  {
+    "id": "geo",
+    "name": "Geographic identifiers",
+    "count": 361,
+    "url": "https://registry.apicrafter.io/category/geo"
+  },
+  {
+    "id": "government",
+    "name": "Government related",
+    "count": 120,
+    "url": "https://registry.apicrafter.io/category/government"
+  },
+  {
+    "id": "gs1",
+    "name": "GS1 standards",
+    "count": 49,
+    "url": "https://registry.apicrafter.io/category/gs1"
+  },
+  {
+    "id": "identifiers",
+    "name": "Universal unique identifiers",
+    "count": 36,
+    "url": "https://registry.apicrafter.io/category/identifiers"
+  },
+  {
+    "id": "industry",
+    "name": "Industry",
+    "count": 44,
+    "url": "https://registry.apicrafter.io/category/industry"
+  },
+  {
+    "id": "internet",
+    "name": "Internet",
+    "count": 43,
+    "url": "https://registry.apicrafter.io/category/internet"
+  },
+  {
+    "id": "legal",
+    "name": "Legal and compliance",
+    "count": 23,
+    "url": "https://registry.apicrafter.io/category/legal"
+  },
+  {
+    "id": "media",
+    "name": "Media and entertainment",
+    "count": 55,
+    "url": "https://registry.apicrafter.io/category/media"
+  },
+  {
+    "id": "medical",
+    "name": "Medical/pharma identifiers",
+    "count": 84,
+    "url": "https://registry.apicrafter.io/category/medical"
+  },
+  {
+    "id": "objectids",
+    "name": "Objects identifiers",
+    "count": 56,
+    "url": "https://registry.apicrafter.io/category/objectids"
+  },
+  {
+    "id": "persons",
+    "name": "Person related",
+    "count": 275,
+    "url": "https://registry.apicrafter.io/category/persons"
+  },
+  {
+    "id": "pii",
+    "name": "Personally identifiable information",
+    "count": 428,
+    "url": "https://registry.apicrafter.io/category/pii"
+  },
+  {
+    "id": "publishing",
+    "name": "Publishing and print",
+    "count": 21,
+    "url": "https://registry.apicrafter.io/category/publishing"
+  },
+  {
+    "id": "realestate",
+    "name": "Real estate",
+    "count": 23,
+    "url": "https://registry.apicrafter.io/category/realestate"
+  },
+  {
+    "id": "science",
+    "name": "Scientific",
+    "count": 84,
+    "url": "https://registry.apicrafter.io/category/science"
+  },
+  {
+    "id": "secrets",
+    "name": "Secrets and credentials (passwords, keys, tokens)",
+    "count": 71,
+    "url": "https://registry.apicrafter.io/category/secrets"
+  },
+  {
+    "id": "shipping",
+    "name": "Shipping and delivery",
+    "count": 21,
+    "url": "https://registry.apicrafter.io/category/shipping"
+  },
+  {
+    "id": "software",
+    "name": "Software development",
+    "count": 35,
+    "url": "https://registry.apicrafter.io/category/software"
+  },
+  {
+    "id": "telecom",
+    "name": "Telecommunications",
+    "count": 25,
+    "url": "https://registry.apicrafter.io/category/telecom"
+  },
+  {
+    "id": "texts",
+    "name": "Texts and  articles",
+    "count": 7,
+    "url": "https://registry.apicrafter.io/category/texts"
+  },
+  {
+    "id": "transport",
+    "name": "Transportation",
+    "count": 46,
+    "url": "https://registry.apicrafter.io/category/transport"
+  },
+  {
+    "id": "useraccounts",
+    "name": "User accounts in products and services",
+    "count": 19,
+    "url": "https://registry.apicrafter.io/category/useraccounts"
+  },
+  {
+    "id": "values",
+    "name": "All measurable values (percentage, amount and e.t.c)",
+    "count": 15,
+    "url": "https://registry.apicrafter.io/category/values"
+  }
+]

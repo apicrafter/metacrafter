@@ -216,7 +216,7 @@ class TestSQLiteEncodingIssue17:
             )
             
             # scan_db returns None when output is written
-            assert result is None
+            assert isinstance(result, dict) and result["report_version"] == 3
             
             # Verify output file was created (even if some data had issues)
             assert output_file.exists()
@@ -254,7 +254,7 @@ class TestSQLiteEncodingIssue17:
             output_format="json"
         )
         
-        assert result is None
+        assert isinstance(result, dict) and result["report_version"] == 3
         assert output_file.exists()
         
         # Verify output contains valid JSON
@@ -285,7 +285,7 @@ class TestSQLiteEncodingIssue17:
                 output_format="json"
             )
             
-            assert result is None
+            assert isinstance(result, dict) and result["report_version"] == 3
             assert output_file.exists()
             
         except Exception as e:
@@ -328,6 +328,7 @@ class TestSQLiteEncodingIssue17:
         
         # Insert data that might cause issues
         # We'll use a workaround to insert problematic bytes
+        conn.commit()
         conn_bytes = sqlite3.connect(str(db_path))
         conn_bytes.text_factory = bytes
         cursor_bytes = conn_bytes.cursor()
@@ -354,7 +355,7 @@ class TestSQLiteEncodingIssue17:
                 output_format="json"
             )
             
-            assert result is None
+            assert isinstance(result, dict) and result["report_version"] == 3
             assert output_file.exists()
             
         except Exception as e:
@@ -407,7 +408,7 @@ class TestSQLiteEncodingIssue17:
                 limit=10,
                 dformat="short"
             )
-            assert result is None
+            assert isinstance(result, dict) and result["report_version"] == 3
         except Exception as e:
             error_msg = str(e)
             if "Could not decode to UTF-8" in error_msg:
@@ -470,7 +471,7 @@ class TestSQLiteEncodingIssue17:
             output_format="json"
         )
         
-        assert result is None
+        assert isinstance(result, dict) and result["report_version"] == 3
         assert output_file.exists()
         
         # Verify output is valid JSON

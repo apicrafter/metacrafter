@@ -28,13 +28,41 @@ Metacrafter is a rule-based data classification engine designed to automatically
 
 ### Key Features
 
-- **Rule-Based Classification**: Extensible YAML-based rule system with 111+ labeling rules
+- **Rule-Based Classification**: YAML rules from metacrafter-rules (about 1,270 rules), plus detectors derived from registry patterns
 - **Multi-Format Support**: Handles CSV, JSON, JSONL, XML, Parquet, Avro, ORC, Excel, BSON, and more
 - **Database Integration**: Supports SQL databases (via SQLAlchemy) and MongoDB
 - **Language & Context Awareness**: Rules can be filtered by language and context (e.g., PII detection)
 - **Date Pattern Detection**: 312+ date detection patterns using the `qddate` library
-- **REST API Server**: Built-in Flask-based API server for remote classification
+- **HTTP API and MCP server**: FastAPI server (`/v2/scan`, `/v2/classify`) and an MCP server for AI agents
 - **Registry Integration**: Links to semantic data types registry at `registry.apicrafter.io`
+
+## Package layout (1.0)
+
+```
+metacrafter/
+  scan_service.py   CrafterCmd: shared scan service used by CLI, SDK, HTTP and MCP
+  core/             compatibility exports (metacrafter.core.CrafterCmd)
+  config.py         .metacrafter loading, rulepath resolution, registry/LLM/MCP settings
+  registry/         RegistryAdapter (sources, canonical ids, enrichment), rule key checks
+  rules/            rule format JSON Schema (v2) and validation
+  classify/         RulesProcessor (loading, matching), Analyzer (statistics), LLM classifiers
+  engine/           scoring model, checksum validators, registry-derived detectors
+  report/           report version 3 models and schema, legacy and Markdown renderings
+  sources.py        SQL, DuckDB and MongoDB adapters; sampling.py: head/reservoir sampling
+  integrations/     DataHub, OpenMetadata, Atlas, crosswalk labels, Frictionless
+  interfaces/       FastAPI HTTP API, MCP server
+  product_tools.py  report diff, PII inventory, policy check, rule lint/test/draft, evaluate
+  ecosystem.py      registry-example rule tests, thresholds and benchmark comparison
+  cli/              Typer command definitions
+```
+
+Every interface goes through `CrafterCmd`, so SDK, CLI, HTTP and MCP results are the same for
+the same input and options. A scan runs: source → sample → statistics → field-name rules →
+value rules and registry detectors → scoring with evidence → registry resolution and
+enrichment → optional LLM for unresolved fields → report version 3.
+
+The rest of this page describes components in more detail; where it mentions `core.py`, read
+`scan_service.py`.
 
 ## High-Level Architecture
 
@@ -81,7 +109,7 @@ Metacrafter is a rule-based data classification engine designed to automatically
 
 ## Core Components
 
-### 1. CLI Layer (`metacrafter/core.py`)
+### 1. CLI Layer (`metacrafter/cli/commands.py`)
 
 The CLI layer is built using **Typer** and provides three main command groups:
 
@@ -91,7 +119,7 @@ The CLI layer is built using **Typer** and provides three main command groups:
 
 **Entry Point**: `metacrafter/__main__.py` → `core.app()`
 
-### 2. CrafterCmd Class (`metacrafter/core.py`)
+### 2. CrafterCmd Class (`metacrafter/scan_service.py`)
 
 The central orchestrator class that coordinates all operations:
 
@@ -503,15 +531,13 @@ MongoDB support via `pymongo`:
 
 ### Server Components
 
-**MetacrafterApp** (`metacrafter/server/api.py`):
-- Flask application factory
-- Dependency injection for rules processor and date parser
-- Lazy initialization of heavy components
+**MetacrafterAPI** (`metacrafter/interfaces/http_api.py`):
+- FastAPI application with OpenAPI at `/openapi.json`
+- One scan service per process, created on first use or by `/ready`
+- Request limits (body size, records, nesting) and an optional bearer token
+- `metacrafter.server.api.MetacrafterApp` remains as a compatibility alias
 
-**Server Manager** (`metacrafter/server/manager.py`):
-- Server startup and configuration
-- Secret key management (from environment)
-- Debug logging configuration
+See [API server](/integrations/api) for routes.
 
 ### API Endpoints
 

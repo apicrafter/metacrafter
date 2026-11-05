@@ -2,6 +2,7 @@
 """Base LLM provider abstract class."""
 import json
 import logging
+import math
 import time
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, Optional
@@ -43,12 +44,16 @@ class BaseLLMProvider(ABC):
         """Whether this provider supports JSON mode."""
         pass
     
+    #: True when the provider runs on this machine (no data leaves it).
+    is_local: bool = False
+
     @abstractmethod
     def _call_api(
         self,
         prompt: str,
         temperature: float = 0.0,
-        max_tokens: int = 500
+        max_tokens: int = 500,
+        schema: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Make API call to the provider.
@@ -67,7 +72,8 @@ class BaseLLMProvider(ABC):
         self,
         prompt: str,
         temperature: float = 0.0,
-        max_tokens: int = 500
+        max_tokens: int = 500,
+        schema: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Classify a field using the LLM.
@@ -82,7 +88,11 @@ class BaseLLMProvider(ABC):
         """
         for attempt in range(self.max_retries):
             try:
-                content = self._call_api(prompt, temperature, max_tokens)
+                content = (
+                    self._call_api(prompt, temperature, max_tokens, schema=schema)
+                    if schema is not None
+                    else self._call_api(prompt, temperature, max_tokens)
+                )
                 
                 # Parse JSON response
                 result = self._parse_response(content)
@@ -97,7 +107,9 @@ class BaseLLMProvider(ABC):
                     result["confidence"] = 0.0
                 else:
                     # Ensure confidence is between 0 and 1
-                    result["confidence"] = max(0.0, min(1.0, float(result["confidence"])))
+                    value = result["confidence"]
+                    if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or not 0 <= value <= 1:
+                        raise ValueError("Invalid provider confidence")
                 
                 if "reason" not in result:
                     result["reason"] = ""
@@ -105,7 +117,7 @@ class BaseLLMProvider(ABC):
                 return result
                 
             except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON response (attempt {attempt + 1}): {e}")
+                logger.error("LLM operation failed (%s)", type(e).__name__)
                 if attempt < self.max_retries - 1:
                     time.sleep(self.retry_delay * (attempt + 1))
                     continue
@@ -117,18 +129,13 @@ class BaseLLMProvider(ABC):
                 }
             
             except Exception as e:
-                logger.error(f"Error in classification (attempt {attempt + 1}): {e}")
+                logger.error("LLM operation failed (%s)", type(e).__name__)
                 if attempt < self.max_retries - 1:
                     wait_time = self.retry_delay * (2 ** attempt)  # Exponential backoff
                     logger.info(f"Waiting {wait_time} seconds before retry...")
                     time.sleep(wait_time)
                     continue
-                # Return default on final failure
-                return {
-                    "datatype_id": None,
-                    "confidence": 0.0,
-                    "reason": f"Error: {str(e)}"
-                }
+                raise
         
         # Should not reach here, but return default if we do
         return {
@@ -172,7 +179,7 @@ class BaseLLMProvider(ABC):
         try:
             return json.loads(content)
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON from response: {content[:200]}")
+            logger.error("Provider returned invalid JSON; contents omitted")
             raise
     
     def classify_batch(

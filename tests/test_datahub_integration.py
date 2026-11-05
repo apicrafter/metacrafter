@@ -172,6 +172,8 @@ class TestDataHubExporter:
         )
         
         dataset_urn = "urn:li:dataset:(urn:li:dataPlatform:postgres,users,PROD)"
+        exporter.graph = Mock()
+        exporter.graph.get_aspect.return_value = None
         stats = exporter.export_scan_results(
             dataset_urn=dataset_urn,
             scan_report=sample_scan_report,
@@ -194,6 +196,8 @@ class TestDataHubExporter:
         )
         
         dataset_urn = "urn:li:dataset:(urn:li:dataPlatform:postgres,users,PROD)"
+        exporter.graph = Mock()
+        exporter.graph.get_aspect.return_value = None
         stats = exporter.export_scan_results(
             dataset_urn=dataset_urn,
             scan_report=sample_scan_report,
@@ -217,3 +221,27 @@ class TestDataHubExporterWithoutSDK:
                 datahub_url="http://localhost:8080",
             )
 
+
+
+def test_registry_properties_and_canonical_datatype():
+    from metacrafter.integrations.labels import match_datatype, registry_properties
+
+    match = {
+        "dataclass": "ssn",
+        "rule_key": "ssn",
+        "datatype": "usssn",
+        "is_pii": True,
+        "pii_source": "registry",
+        "registry": {
+            "name": "US Social Security Number",
+            "status": "stable",
+            "categories": ["pii", "persons"],
+            "mappings": {"presidio": "US_SSN"},
+        },
+    }
+    assert match_datatype(match) == "usssn"
+    props = registry_properties(match)
+    assert props["metacrafter_datatype_status"] == "stable"
+    assert props["metacrafter_mapping_presidio"] == "US_SSN"
+    assert props["metacrafter_rule_key"] == "ssn"
+    assert props["metacrafter_pii_source"] == "registry"

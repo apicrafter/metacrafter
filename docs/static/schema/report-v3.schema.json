@@ -1,0 +1,708 @@
+{
+  "$defs": {
+    "AggregateReport": {
+      "additionalProperties": true,
+      "description": "Report of several sources (SQL databases, MongoDB, bulk scans).",
+      "properties": {
+        "complete": {
+          "default": true,
+          "title": "Complete",
+          "type": "boolean"
+        },
+        "errors": {
+          "items": {},
+          "title": "Errors",
+          "type": "array"
+        },
+        "report_version": {
+          "const": 3,
+          "default": 3,
+          "title": "Report Version",
+          "type": "integer"
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/ScanReport"
+          },
+          "title": "Sources",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sources"
+      ],
+      "title": "AggregateReport",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": true,
+      "description": "How a confidence value was reached (see scoring model v1).",
+      "properties": {
+        "checksum_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Checksum Rate"
+        },
+        "considered_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Considered Count"
+        },
+        "empty_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Empty Count"
+        },
+        "hit_rate": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hit Rate"
+        },
+        "matched_count": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Matched Count"
+        },
+        "name_score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name Score"
+        },
+        "scoring_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scoring Model"
+        },
+        "specificity": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Specificity"
+        }
+      },
+      "title": "Evidence",
+      "type": "object"
+    },
+    "FieldPII": {
+      "additionalProperties": true,
+      "properties": {
+        "datatypes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Datatypes",
+          "type": "array"
+        },
+        "is_pii": {
+          "default": false,
+          "title": "Is Pii",
+          "type": "boolean"
+        }
+      },
+      "title": "FieldPII",
+      "type": "object"
+    },
+    "FieldReport": {
+      "additionalProperties": true,
+      "properties": {
+        "datatype_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Datatype Url"
+        },
+        "field": {
+          "title": "Field",
+          "type": "string"
+        },
+        "ftype": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ftype"
+        },
+        "matches": {
+          "items": {
+            "$ref": "#/$defs/Match"
+          },
+          "title": "Matches",
+          "type": "array"
+        },
+        "pii": {
+          "$ref": "#/$defs/FieldPII"
+        },
+        "stats": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stats"
+        },
+        "tags": {
+          "default": null,
+          "title": "Tags"
+        }
+      },
+      "required": [
+        "field"
+      ],
+      "title": "FieldReport",
+      "type": "object"
+    },
+    "Match": {
+      "additionalProperties": true,
+      "description": "One datatype detected on a field.",
+      "properties": {
+        "classurl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Classurl"
+        },
+        "confidence": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "dataclass": {
+          "description": "Rule key as written in the rule (kept for older consumers)",
+          "title": "Dataclass",
+          "type": "string"
+        },
+        "datatype": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Canonical registry id, null when unknown",
+          "title": "Datatype"
+        },
+        "evidence": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Evidence"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Format"
+        },
+        "is_pii": {
+          "default": false,
+          "title": "Is Pii",
+          "type": "boolean"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Registry pattern record of a date format",
+          "title": "Pattern"
+        },
+        "pii_source": {
+          "anyOf": [
+            {
+              "enum": [
+                "rule",
+                "registry",
+                "context"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pii Source"
+        },
+        "registry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RegistryRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "replaced_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Replaced By"
+        },
+        "rule_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rule Key"
+        },
+        "ruleid": {
+          "title": "Ruleid",
+          "type": "string"
+        },
+        "ruletype": {
+          "title": "Ruletype",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ruleid",
+        "dataclass",
+        "confidence",
+        "ruletype"
+      ],
+      "title": "Match",
+      "type": "object"
+    },
+    "RegistryProvenance": {
+      "additionalProperties": true,
+      "properties": {
+        "base_url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Url"
+        },
+        "generated_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Generated At"
+        },
+        "git_sha": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Git Sha"
+        },
+        "source": {
+          "title": "Source",
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "title": "RegistryProvenance",
+      "type": "object"
+    },
+    "RegistryRef": {
+      "additionalProperties": true,
+      "description": "Registry metadata of a matched datatype.",
+      "properties": {
+        "categories": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Categories",
+          "type": "array"
+        },
+        "classification": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Classification"
+        },
+        "country": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Country",
+          "type": "array"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "is_pii": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Is Pii"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "mappings": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "title": "Mappings",
+          "type": "object"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "replaced_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Replaced By"
+        },
+        "status": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        }
+      },
+      "title": "RegistryRef",
+      "type": "object"
+    },
+    "ScanReport": {
+      "additionalProperties": true,
+      "description": "Report of one scanned source (file, table, collection or in-memory data).",
+      "properties": {
+        "complete": {
+          "default": true,
+          "title": "Complete",
+          "type": "boolean"
+        },
+        "data": {
+          "items": {
+            "$ref": "#/$defs/FieldReport"
+          },
+          "title": "Data",
+          "type": "array"
+        },
+        "errors": {
+          "items": {},
+          "title": "Errors",
+          "type": "array"
+        },
+        "registry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RegistryProvenance"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "report_version": {
+          "const": 3,
+          "default": 3,
+          "title": "Report Version",
+          "type": "integer"
+        },
+        "rules_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rules Version"
+        },
+        "samples_included": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Samples Included"
+        },
+        "sampling": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sampling"
+        },
+        "scoring_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Scoring Model"
+        },
+        "source": {
+          "default": "memory",
+          "title": "Source",
+          "type": "string"
+        },
+        "tool": {
+          "$ref": "#/$defs/ToolInfo"
+        }
+      },
+      "title": "ScanReport",
+      "type": "object"
+    },
+    "ToolInfo": {
+      "additionalProperties": true,
+      "properties": {
+        "name": {
+          "default": "metacrafter",
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "title": "ToolInfo",
+      "type": "object"
+    }
+  },
+  "$id": "https://apicrafter.github.io/metacrafter/schema/report-v3.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/ScanReport"
+    },
+    {
+      "$ref": "#/$defs/AggregateReport"
+    }
+  ],
+  "title": "Metacrafter scan report (version 3)"
+}

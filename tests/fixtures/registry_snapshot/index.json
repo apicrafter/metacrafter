@@ -1,0 +1,28 @@
+{
+  "name": "metacrafter-registry",
+  "version": "1.3.0.dev0-test",
+  "git_sha": "9caf6a8f19242f5f19f8857ecdd8a3789db3ca61",
+  "generated_at": "2026-11-05T17:14:34+00:00",
+  "base_url": "https://registry.apicrafter.io",
+  "datatype_url_template": "https://registry.apicrafter.io/datatype/{id}",
+  "counts": {
+    "datatypes": 18
+  },
+  "files": {
+    "api/v1/datatypes.jsonl": {
+      "path": "api/v1/datatypes.jsonl",
+      "sha256": "aa87ab7db2e1ad3ede7aad5a28ea1aaa76d63c2de580553d889cca1cb3ba9ddc",
+      "size": 25532
+    },
+    "api/v1/aliases.json": {
+      "path": "api/v1/aliases.json",
+      "sha256": "de68395f11352caaf4720e2db2ee2e5d7c54a1958930b9ebc250ebc235fcd395",
+      "size": 112
+    },
+    "api/v1/categories.json": {
+      "path": "api/v1/categories.json",
+      "sha256": "1c33ae7fc6215c49399d487b6478440d56acd9239224a3fd94a2a09886133aa1",
+      "size": 5279
+    }
+  }
+}

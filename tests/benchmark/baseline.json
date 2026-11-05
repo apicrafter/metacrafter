@@ -1,0 +1,108 @@
+{
+  "datatypes": {
+    "active_boolean": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "aebankaccount": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "aeiban": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "bankaccount": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "boolean": {
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "country": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "countrycode_alpha2": {
+      "precision": null,
+      "recall": 0.0
+    },
+    "currency": {
+      "precision": null,
+      "recall": 0.0
+    },
+    "date": {
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "datetime": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "de_iban": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "egbankaccount": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "egiban": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "email": {
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "iban": {
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "inn": {
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "ipv4": {
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "okvalpha": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "rufias": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "sabankaccount": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "saiban": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "trbankaccount": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "url": {
+      "precision": 1.0,
+      "recall": 1.0
+    },
+    "userid": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "username": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "uuid": {
+      "precision": 1.0,
+      "recall": 1.0
+    }
+  }
+}

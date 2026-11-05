@@ -4,6 +4,7 @@ import pytest
 import json
 import tempfile
 from pathlib import Path
+from tests.llm_helpers import OPENAI_COMPATIBLE_POST, mock_chat
 from unittest.mock import Mock, patch, MagicMock
 
 # Mock dependencies that may not be available
@@ -56,7 +57,7 @@ class TestLLMClassifier:
         return registry_file
     
     @patch('metacrafter.classify.llm.embedder.OpenAI')
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
+    @patch(OPENAI_COMPATIBLE_POST)
     def test_llm_classifier_init(self, mock_provider_openai, mock_embedder_openai, tmp_path):
         """Test LLMClassifier initialization."""
         from metacrafter.classify.llm import LLMClassifier
@@ -66,17 +67,10 @@ class TestLLMClassifier:
         
         # Mock OpenAI clients
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(2)]
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
-        mock_provider_client = Mock()
-        mock_provider_response = Mock()
-        mock_provider_response.choices = [Mock()]
-        mock_provider_response.choices[0].message.content = '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}'
-        mock_provider_client.chat.completions.create.return_value = mock_provider_response
-        mock_provider_openai.return_value = mock_provider_client
+        mock_chat(mock_provider_openai, '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}')
         
         classifier = LLMClassifier(
             registry_path=str(registry_file),
@@ -91,7 +85,7 @@ class TestLLMClassifier:
         assert classifier.index_path == index_path
     
     @patch('metacrafter.classify.llm.embedder.OpenAI')
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
+    @patch(OPENAI_COMPATIBLE_POST)
     def test_llm_classifier_default_registry_path(self, mock_provider_openai, mock_embedder_openai, tmp_path, monkeypatch):
         """Test LLMClassifier finds default registry path."""
         from metacrafter.classify.llm import LLMClassifier
@@ -100,34 +94,26 @@ class TestLLMClassifier:
         registry_dir = tmp_path / "metacrafter-registry" / "data"
         registry_dir.mkdir(parents=True)
         registry_file = registry_dir / "datatypes_latest.jsonl"
-        self.create_test_registry(registry_dir.parent.parent)
+        self.create_test_registry(registry_dir).replace(registry_file)
         
         # Mock OpenAI clients
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(2)]
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
-        mock_provider_client = Mock()
-        mock_provider_response = Mock()
-        mock_provider_response.choices = [Mock()]
-        mock_provider_response.choices[0].message.content = '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}'
-        mock_provider_client.chat.completions.create.return_value = mock_provider_response
-        mock_provider_openai.return_value = mock_provider_client
+        mock_chat(mock_provider_openai, '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}')
         
         # Change to directory where registry would be found
         original_cwd = Path.cwd()
         try:
-            monkeypatch.chdir(tmp_path)
-            # This should find the registry
-            # Note: This test may need adjustment based on actual path discovery logic
-            pass
+            monkeypatch.chdir(registry_dir)
+            classifier = LLMClassifier(embedding_api_key="test-key", llm_api_key="test-key")
+            assert classifier.registry_path.resolve() == registry_file.resolve()
         finally:
             monkeypatch.chdir(original_cwd)
     
     @patch('metacrafter.classify.llm.embedder.OpenAI')
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
+    @patch(OPENAI_COMPATIBLE_POST)
     def test_llm_classifier_classify_field(self, mock_provider_openai, mock_embedder_openai, tmp_path):
         """Test classifying a single field."""
         from metacrafter.classify.llm import LLMClassifier
@@ -137,18 +123,11 @@ class TestLLMClassifier:
         
         # Mock embeddings
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(3)]  # 2 datatypes + 1 query
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
         # Mock LLM response
-        mock_provider_client = Mock()
-        mock_provider_response = Mock()
-        mock_provider_response.choices = [Mock()]
-        mock_provider_response.choices[0].message.content = '{"datatype_id": "email", "confidence": 0.95, "reason": "Matches email pattern"}'
-        mock_provider_client.chat.completions.create.return_value = mock_provider_response
-        mock_provider_openai.return_value = mock_provider_client
+        mock_chat(mock_provider_openai, '{"datatype_id": "email", "confidence": 0.95, "reason": "Matches email pattern"}')
         
         classifier = LLMClassifier(
             registry_path=str(registry_file),
@@ -171,7 +150,7 @@ class TestLLMClassifier:
         assert "matches" in result
     
     @patch('metacrafter.classify.llm.embedder.OpenAI')
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
+    @patch(OPENAI_COMPATIBLE_POST)
     def test_llm_classifier_classify_batch(self, mock_provider_openai, mock_embedder_openai, tmp_path):
         """Test batch classification."""
         from metacrafter.classify.llm import LLMClassifier
@@ -181,18 +160,11 @@ class TestLLMClassifier:
         
         # Mock embeddings
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(4)]  # 2 datatypes + 2 queries
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
         # Mock LLM responses
-        mock_provider_client = Mock()
-        mock_provider_response = Mock()
-        mock_provider_response.choices = [Mock()]
-        mock_provider_response.choices[0].message.content = '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}'
-        mock_provider_client.chat.completions.create.return_value = mock_provider_response
-        mock_provider_openai.return_value = mock_provider_client
+        mock_chat(mock_provider_openai, '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}')
         
         classifier = LLMClassifier(
             registry_path=str(registry_file),
@@ -214,7 +186,7 @@ class TestLLMClassifier:
         assert results[1]["field"] == "phone"
     
     @patch('metacrafter.classify.llm.embedder.OpenAI')
-    @patch('metacrafter.classify.llm.providers.ollama.requests.post')
+    @patch(OPENAI_COMPATIBLE_POST)
     def test_llm_classifier_with_ollama(self, mock_post, mock_embedder_openai, tmp_path):
         """Test LLMClassifier with Ollama provider."""
         from metacrafter.classify.llm import LLMClassifier
@@ -224,25 +196,19 @@ class TestLLMClassifier:
         
         # Mock embeddings (still uses OpenAI)
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(3)]
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
-        # Mock Ollama response
-        mock_response = Mock()
-        mock_response.json.return_value = {
-            "message": {"content": '{"datatype_id": "email", "confidence": 0.85, "reason": "test"}'}
-        }
-        mock_response.raise_for_status = Mock()
-        mock_post.return_value = mock_response
+        # Ollama uses the OpenAI-compatible chat completions API at /v1
+        mock_chat(mock_post, '{"datatype_id": "email", "confidence": 0.85, "reason": "test"}')
         
         classifier = LLMClassifier(
             registry_path=str(registry_file),
             index_path=str(index_path),
             embedding_api_key="test-key",
             llm_provider="ollama",
-            llm_base_url="http://localhost:11434",
+            embedding_provider="openai",
+            llm_base_url="http://localhost:11434/v1",
             rebuild_index=True
         )
         
@@ -285,6 +251,7 @@ class TestLLMClassifierErrors:
                     LLMClassifier(
                         registry_path=registry_path,
                         embedding_api_key=None,
+                        embedding_provider="openai",
                         llm_provider="ollama"
                     )
         finally:

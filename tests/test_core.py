@@ -30,46 +30,14 @@ class TestCrafterCmd:
         # Should have loaded some rules
         assert len(cmd.processor.field_rules) > 0 or len(cmd.processor.data_rules) > 0
 
-    def test_prepare_with_config_file(self):
-        # Create a temporary config file
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".metacrafter", delete=False
-        ) as f:
-            import yaml
-
-            config = {"rulepath": ["rules"]}
-            yaml.dump(config, f)
-            config_path = f.name
-
-        try:
-            # Change to directory with config file
-            original_dir = os.getcwd()
-            config_dir = os.path.dirname(config_path)
-            os.chdir(config_dir)
-            config_filename = os.path.basename(config_path)
-
-            # Temporarily rename if .metacrafter exists
-            original_config = None
-            if os.path.exists(".metacrafter"):
-                original_config = ".metacrafter.backup"
-                os.rename(".metacrafter", original_config)
-
-            try:
-                os.rename(config_filename, ".metacrafter")
-                cmd = CrafterCmd(remote=None, debug=False)
-                assert cmd.processor is not None
-            finally:
-                if os.path.exists(".metacrafter"):
-                    os.remove(".metacrafter")
-                if original_config and os.path.exists(original_config):
-                    os.rename(original_config, ".metacrafter")
-                os.chdir(original_dir)
-        except Exception:
-            # Cleanup
-            if os.path.exists(config_path):
-                os.remove(config_path)
-            if os.path.exists(".metacrafter.backup"):
-                os.rename(".metacrafter.backup", ".metacrafter")
+    def test_prepare_with_config_file(self, tmp_path, monkeypatch):
+        import yaml
+        from metacrafter.config import DEFAULT_RULEPATH
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / ".metacrafter").write_text(yaml.safe_dump({"auto_rules": False, "rulepath": DEFAULT_RULEPATH}))
+        cmd = CrafterCmd()
+        assert cmd.processor is not None
+        assert len(cmd.processor.field_rules) + len(cmd.processor.data_rules) >= 130
 
     def test_scan_data_simple(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -109,7 +77,7 @@ class TestCrafterCmd:
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
             # scan_file returns None when output is written to stdout
             # or returns empty list on error, so we just verify it doesn't raise
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_scan_file_jsonl(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -120,7 +88,7 @@ class TestCrafterCmd:
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
             # scan_file returns None when output is written to stdout
             # or returns empty list on error
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_scan_file_with_delimiter(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -131,7 +99,7 @@ class TestCrafterCmd:
             result = cmd.scan_file(
                 fixture_path, delimiter=";", limit=10, dformat="short"
             )
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_scan_file_with_encoding(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -142,13 +110,13 @@ class TestCrafterCmd:
             result = cmd.scan_file(
                 fixture_path, encoding="cp1251", limit=10, dformat="short"
             )
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_scan_file_invalid_file(self):
         cmd = CrafterCmd(remote=None, debug=False)
         result = cmd.scan_file("/nonexistent/file.csv", limit=10)
-        # Should return None or empty list on error
-        assert result is None or result == []
+        # Failed sources retain the explicit empty-list error return.
+        assert result == []
 
     def test_scan_file_output_to_file(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -175,18 +143,12 @@ class TestCrafterCmd:
     def test_rules_list(self):
         cmd = CrafterCmd(remote=None, debug=False)
         # This prints to stdout, but we can test it doesn't crash
-        try:
-            cmd.rules_list()
-        except Exception as e:
-            pass
+        cmd.rules_list()
 
     def test_rules_dumpstats(self):
         cmd = CrafterCmd(remote=None, debug=False)
         # This prints to stdout, but we can test it doesn't crash
-        try:
-            cmd.rules_dumpstats()
-        except Exception as e:
-            pass
+        cmd.rules_dumpstats()
 
     def test_craftercmd_country_code_filter(self, tmp_path):
         rule_dir = tmp_path / "rules"
@@ -234,8 +196,8 @@ rules:
             country_codes=["us"],
         )
         assert cmd.processor is not None
-        assert len(cmd.processor.field_rules) == 1
-        assert cmd.processor.field_rules[0]["key"] == "us_field"
+        assert all("us" in r["country_code"] for r in cmd.processor.field_rules)
+        assert any(rule["key"] == "us_field" for rule in cmd.processor.field_rules)
 
     def test_write_results_no_output(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -250,10 +212,7 @@ rules:
             ],
         }
         # This prints to stdout, test doesn't crash
-        try:
-            cmd._write_results(report, "test.csv", "short", None)
-        except Exception as e:
-            pass
+        cmd._write_results(report, "test.csv", "short", None)
 
     def test_write_results_with_output(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -309,10 +268,7 @@ rules:
             ],
         }
 
-        try:
-            cmd._write_results(report, "test.csv", "full", None)
-        except Exception as e:
-            pass
+        cmd._write_results(report, "test.csv", "full", None)
 
     def test_write_db_results(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -323,10 +279,7 @@ rules:
             }
         }
 
-        try:
-            cmd._write_db_results(db_results, "short", None)
-        except Exception as e:
-            pass
+        cmd._write_db_results(db_results, "short", None)
 
     def test_write_db_results_with_output(self):
         cmd = CrafterCmd(remote=None, debug=False)

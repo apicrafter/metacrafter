@@ -42,7 +42,7 @@ def load_registry(jsonl_path: Union[str, Path]) -> List[Dict[str, Any]]:
                     datatype = json.loads(line)
                 datatypes.append(datatype)
             except (json.JSONDecodeError, ValueError) as e:
-                logger.warning(f"Failed to parse line {line_num} in {jsonl_path}: {e}")
+                logger.warning("LLM operation failed (%s)", type(e).__name__)
                 continue
     
     logger.info(f"Loaded {len(datatypes)} datatypes from {jsonl_path}")

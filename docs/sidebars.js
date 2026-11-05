@@ -20,6 +20,7 @@ const sidebars = {
       label: 'Getting Started',
       items: [
         'getting-started/installation',
+        'getting-started/migration',
         'getting-started/quick-start',
         'getting-started/when-to-use',
         'getting-started/cookbook',
@@ -58,7 +59,7 @@ const sidebars = {
         {
           type: 'category',
           label: 'Rules',
-          items: ['commands/rules'],
+          items: ['commands/rules', 'commands/report-tools'],
         },
         {
           type: 'category',
@@ -87,7 +88,9 @@ const sidebars = {
       items: [
         'integrations/sdk',
         'integrations/api',
+        'integrations/mcp',
         'integrations/registry',
+        'integrations/report',
         'integrations/llm',
         'integrations/rules',
         'integrations/datahub',
@@ -101,6 +104,7 @@ const sidebars = {
       items: [
         'development/contributing',
         'development/architecture',
+        'development/ecosystem',
         'development/community',
       ],
     },

@@ -1,94 +1,62 @@
 # -*- coding: utf-8 -*-
-"""LLM provider implementations."""
-from typing import Dict, Any, Optional, Type
+"""LLM providers: one OpenAI-compatible client with presets, plus Anthropic.
+
+Provider names: ``openai``, ``openrouter``, ``perplexity``, ``ollama``, ``lmstudio``
+(presets of :class:`OpenAICompatibleProvider`), ``openai-compatible`` (no preset
+defaults beyond OpenAI's; pass ``base_url``) and ``anthropic``.
+"""
+from typing import Dict, Type
 
 from .base import BaseLLMProvider
+from .lmstudio import LMStudioProvider
+from .ollama import OllamaProvider
+from .openai import OpenAIProvider
+from .openai_compatible import PRESETS, OpenAICompatibleProvider
+from .openrouter import OpenRouterProvider
+from .perplexity import PerplexityProvider
 
-# Import providers with graceful handling of missing dependencies
-try:
-    from .openai import OpenAIProvider
-except ImportError:
-    OpenAIProvider = None
 
-try:
-    from .openrouter import OpenRouterProvider
-except ImportError:
-    OpenRouterProvider = None
+def _anthropic_provider(**kwargs):
+    from .anthropic import AnthropicProvider
 
-try:
-    from .ollama import OllamaProvider
-except ImportError:
-    OllamaProvider = None
+    return AnthropicProvider(**kwargs)
 
-try:
-    from .lmstudio import LMStudioProvider
-except ImportError:
-    LMStudioProvider = None
 
-try:
-    from .perplexity import PerplexityProvider
-except ImportError:
-    PerplexityProvider = None
-
-# Provider registry (only include available providers)
-_PROVIDERS: Dict[str, Type[BaseLLMProvider]] = {}
-if OpenAIProvider is not None:
-    _PROVIDERS["openai"] = OpenAIProvider
-if OpenRouterProvider is not None:
-    _PROVIDERS["openrouter"] = OpenRouterProvider
-if OllamaProvider is not None:
-    _PROVIDERS["ollama"] = OllamaProvider
-if LMStudioProvider is not None:
-    _PROVIDERS["lmstudio"] = LMStudioProvider
-if PerplexityProvider is not None:
-    _PROVIDERS["perplexity"] = PerplexityProvider
+_PROVIDERS: Dict[str, object] = {
+    "openai": OpenAIProvider,
+    "openrouter": OpenRouterProvider,
+    "ollama": OllamaProvider,
+    "lmstudio": LMStudioProvider,
+    "perplexity": PerplexityProvider,
+    "openai-compatible": OpenAICompatibleProvider,
+    "anthropic": _anthropic_provider,
+}
 
 
 def get_provider(provider_name: str, **kwargs) -> BaseLLMProvider:
-    """
-    Get a provider instance by name.
-    
-    Args:
-        provider_name: Name of the provider (openai, openrouter, ollama, lmstudio, perplexity)
-        **kwargs: Provider-specific configuration parameters
-        
-    Returns:
-        Provider instance
-        
-    Raises:
-        ValueError: If provider name is not recognized
-    """
+    """Return a provider instance by name (see module docstring)."""
     provider_name = provider_name.lower()
     if provider_name not in _PROVIDERS:
         raise ValueError(
-            f"Unknown provider: {provider_name}. "
-            f"Supported providers: {', '.join(_PROVIDERS.keys())}"
+            f"Unknown provider: {provider_name}. Supported providers: {', '.join(_PROVIDERS)}"
         )
-    
-    provider_class = _PROVIDERS[provider_name]
-    return provider_class(**kwargs)
+    return _PROVIDERS[provider_name](**kwargs)
 
 
 def list_providers() -> list:
-    """List all available provider names."""
-    return list(_PROVIDERS.keys())
+    """List all provider names."""
+    return list(_PROVIDERS)
 
 
 __all__ = [
     "BaseLLMProvider",
+    "OpenAICompatibleProvider",
+    "OpenAIProvider",
+    "OpenRouterProvider",
+    "OllamaProvider",
+    "LMStudioProvider",
+    "PerplexityProvider",
+    "PRESETS",
     "get_provider",
     "list_providers",
 ]
-
-# Conditionally export providers if available
-if OpenAIProvider is not None:
-    __all__.append("OpenAIProvider")
-if OpenRouterProvider is not None:
-    __all__.append("OpenRouterProvider")
-if OllamaProvider is not None:
-    __all__.append("OllamaProvider")
-if LMStudioProvider is not None:
-    __all__.append("LMStudioProvider")
-if PerplexityProvider is not None:
-    __all__.append("PerplexityProvider")
-

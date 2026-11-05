@@ -24,6 +24,7 @@ from metacrafter.core import (
     DEFAULT_TABLE_FORMAT,
     _resolve_output_target,
     _split_option_list,
+    app,
     export_app,
     rules_app,
     scan_app,
@@ -46,6 +47,23 @@ def register_commands():
 # Server Commands
 # ============================================================================
 
+@app.command('mcp')
+def mcp_serve(
+    transport: str = typer.Option("stdio", "--transport", help="stdio or streamable-http"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Host for streamable-http"),
+    port: int = typer.Option(8765, "--port", help="Port for streamable-http"),
+):
+    """Run the MCP server for AI agents (classify_columns, scan_file, scan_sql, explain_match, list_rules)."""
+    from metacrafter.exceptions import require_extra
+
+    require_extra("mcp", "mcp", "The MCP server")
+    if transport not in ("stdio", "streamable-http"):
+        raise typer.BadParameter("--transport must be stdio or streamable-http")
+    from metacrafter.interfaces.mcp_server import serve
+
+    serve(transport=transport, host=host, port=port)
+
+
 @server_app.command('run')
 def server_run(
     host: str = typer.Option("127.0.0.1", "--host", help="IP or hostname to bind the API server to"),
@@ -54,7 +72,11 @@ def server_run(
 ):
     """Start the API server that exposes the classifier via HTTP."""
     logging.info("Run server with classifier API")
-    from metacrafter.server.manager import run_server
+    from metacrafter.exceptions import require_extra
+
+    require_extra("fastapi", "server", "The API server")
+    require_extra("uvicorn", "server", "The API server")
+    from metacrafter.interfaces.http_api import run_server
 
     run_server(host, port, debug)
 
@@ -83,12 +105,94 @@ def rules_stats(
     acmd.rules_dumpstats()
 
 
+@rules_app.command('validate')
+def rules_validate(
+    path: str = typer.Argument(..., help="Rule file or directory to validate"),
+    output_format: str = typer.Option("table", "--output-format", help="Output format: table or json"),
+):
+    """Validate rule files against the rule format JSON Schema (version 2)."""
+    from pathlib import Path as _Path
+
+    import yaml as _yaml
+
+    from metacrafter.rules.validation import validate_rule_file
+
+    target = _Path(path)
+    files = sorted(target.rglob("*.yaml")) if target.is_dir() else [target]
+    problems = []
+    for filename in files:
+        try:
+            document = _yaml.safe_load(filename.read_text(encoding="utf-8"))
+        except (OSError, _yaml.YAMLError) as error:
+            problems.append({"file": str(filename), "rule": None, "error": str(error)})
+            continue
+        file_errors, rule_errors = validate_rule_file(document)
+        problems.extend({"file": str(filename), "rule": None, "error": e} for e in file_errors)
+        for rule_id, errors in rule_errors.items():
+            problems.extend({"file": str(filename), "rule": rule_id, "error": e} for e in errors)
+    if output_format == "json":
+        typer.echo(json.dumps({"files": len(files), "problems": problems}, indent=2, ensure_ascii=False))
+    else:
+        for problem in problems:
+            where = problem["file"] + (f" [{problem['rule']}]" if problem["rule"] else "")
+            typer.echo(f"{where}: {problem['error']}")
+        typer.echo(f"{len(files)} file(s) checked, {len(problems)} problem(s)")
+    if problems:
+        raise typer.Exit(1)
+
+
+@rules_app.command('check')
+def rules_check(
+    registry: bool = typer.Option(True, "--registry/--no-registry", help="Check rule keys against metacrafter-registry"),
+    strict: bool = typer.Option(False, "--strict", help="Exit with code 1 when unknown keys exist"),
+    rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
+    registry_path: Optional[str] = typer.Option(None, "--registry-path", help="Local registry snapshot or checkout data/ directory"),
+    registry_offline: Optional[bool] = typer.Option(None, "--registry-offline/--registry-online", help="Never fetch registry data over the network"),
+    output_format: str = typer.Option("table", "--output-format", help="Output format: table or json"),
+    allow_unknown: Optional[str] = typer.Option(None, "--allow-unknown", help="File listing known unresolved keys (YAML mapping or list) that --strict tolerates"),
+):
+    """Check loaded rule keys against the registry: unknown, alias-only and deprecated keys."""
+    from metacrafter.registry.checks import check_rule_keys, format_rule_check
+
+    rulepath_list = rulepath.split(",") if rulepath else None
+    acmd = CrafterCmd(
+        rulepath=rulepath_list,
+        quiet=True,
+        registry_path=registry_path,
+        registry_offline=registry_offline,
+    )
+    if not registry:
+        typer.echo("Nothing to check: --no-registry was given")
+        raise typer.Exit(0)
+    result = check_rule_keys(acmd.processor, acmd.registry)
+    typer.echo(format_rule_check(result, output_format))
+    if not acmd.registry.available:
+        typer.echo("Registry data is not available; keys could not be checked", err=True)
+        raise typer.Exit(2)
+    if strict:
+        allowed = set()
+        if allow_unknown:
+            import yaml as _yaml
+
+            with open(allow_unknown, encoding="utf-8") as handle:
+                listed = _yaml.safe_load(handle) or []
+            allowed = set(listed.keys() if isinstance(listed, dict) else listed)
+        new_unknown = sorted({e["key"] for e in result["unknown"]} - allowed)
+        compile_errors = [d for d in result.get("diagnostics", []) if d.get("error") == "Pattern compilation failed"]
+        if new_unknown or compile_errors:
+            if new_unknown:
+                typer.echo("Unresolved rule keys not in the allow list: " + ", ".join(new_unknown), err=True)
+            if compile_errors:
+                typer.echo(f"{len(compile_errors)} rule pattern(s) failed to compile", err=True)
+            raise typer.Exit(1)
+
+
 @rules_app.command('list')
 def rules_list(
     debug: bool = typer.Option(False, help="Enable debug logging"),
     rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
     country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
-    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
+    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, csv, md (Markdown) or legacy (pre-1.0 JSON)"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
     table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Table style: 'auto' (rich on terminals), 'rich', 'plain', or any tabulate format (simple, grid, github, ...)"),
 ):
@@ -145,7 +249,16 @@ def scan_file(
     fields: str = typer.Option(None, "--fields", help="Comma-separated list of specific fields to process"),
     rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
     country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
-    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
+    registry_path: Optional[str] = typer.Option(None, "--registry-path", help="Local registry snapshot or checkout data/ directory"),
+    registry_offline: Optional[bool] = typer.Option(None, "--registry-offline/--registry-online", help="Never fetch registry data over the network"),
+    categories: Optional[str] = typer.Option(None, "--categories", help="Report only matches in these registry categories (comma-separated)"),
+    pii_only: bool = typer.Option(False, "--pii-only", help="Report only matches whose datatype is PII"),
+    status: Optional[str] = typer.Option(None, "--status", help="Report only matches with these registry statuses, e.g. stable"),
+    registry_detectors: Optional[str] = typer.Option(None, "--registry-detectors", help="Detectors derived from registry regexps: off, stable (default) or all"),
+    legacy_scoring: bool = typer.Option(False, "--legacy-scoring", help="Use pre-1.0 confidence scores (share of matching values; 100 for field names)"),
+    include_deprecated: bool = typer.Option(False, "--include-deprecated", help="Also run rules marked deprecated"),
+    include_samples: bool = typer.Option(False, "--include-samples", help="Keep raw values (dictionary values, string min/max) in json, yaml and md output"),
+    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, csv, md (Markdown) or legacy (pre-1.0 JSON)"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
@@ -163,13 +276,21 @@ def scan_file(
     classification_mode: str = typer.Option(None, "--classification-mode", help="Classification mode: rules (default), llm, or hybrid"),
     llm_only: bool = typer.Option(False, "--llm-only", help="Use only LLM classification (shortcut for --classification-mode llm)"),
     use_llm: bool = typer.Option(False, "--use-llm", help="Use LLM as fallback (shortcut for --classification-mode hybrid)"),
-    llm_provider: str = typer.Option("openai", "--llm-provider", help="LLM provider: openai, openrouter, ollama, lmstudio, perplexity"),
+    llm_provider: Optional[str] = typer.Option(None, "--llm-provider", help="LLM provider: openai, openrouter, ollama, lmstudio, perplexity"),
     llm_registry: Optional[str] = typer.Option(None, "--llm-registry", help="Path to registry JSONL file"),
     llm_index: Optional[str] = typer.Option(None, "--llm-index", help="Path to vector index directory"),
     llm_model: Optional[str] = typer.Option(None, "--llm-model", help="LLM model name (provider-specific default if not specified)"),
     llm_base_url: Optional[str] = typer.Option(None, "--llm-base-url", help="Base URL for provider (for Ollama, LM Studio custom URLs)"),
     llm_api_key: Optional[str] = typer.Option(None, "--llm-api-key", help="API key for provider (or use provider-specific env var)"),
-    llm_min_confidence: float = typer.Option(50.0, "--llm-min-confidence", help="Minimum confidence for LLM results (default: 50.0)"),
+    explain: bool = typer.Option(False, help="Include rejected value-rule candidates"),
+    sampling: str = typer.Option("head", help="head or reservoir"),
+    seed: int = typer.Option(0, help="Reservoir sampling seed"),
+    sample_policy: str = typer.Option("names-only", help="LLM samples: names-only, redacted, raw"),
+    llm_fallback: str = typer.Option("error", help="LLM failure: error or rules"),
+    embedding_provider: Optional[str] = typer.Option(None),
+    embedding_model: Optional[str] = typer.Option(None),
+    embedding_base_url: Optional[str] = typer.Option(None),
+    llm_min_confidence: Optional[float] = typer.Option(None, "--llm-min-confidence", help="Minimum confidence for LLM results (default: 50.0)"),
 ):
     """Scan a single file and classify its fields."""
     # Fail fast (non-zero exit) when scanning a local file that does not exist.
@@ -200,7 +321,7 @@ def scan_file(
         raise typer.BadParameter("--retry-delay must be >= 0")
     if timeout is not None and timeout < 0:
         raise typer.BadParameter("--timeout must be >= 0")
-    if llm_min_confidence < 0 or llm_min_confidence > 100:
+    if llm_min_confidence is not None and (llm_min_confidence < 0 or llm_min_confidence > 100):
         raise typer.BadParameter("--llm-min-confidence must be between 0 and 100")
     
     # Determine classification mode from flags
@@ -219,7 +340,7 @@ def scan_file(
     use_llm_flag = final_classification_mode in ("llm", "hybrid") if final_classification_mode else False
     llm_only_flag = final_classification_mode == "llm" if final_classification_mode else False
     
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
+    allowed_output_formats = {"table", "json", "yaml", "csv", "md", "legacy"}
     output_format_value = output_format.lower()
     if output_format_value not in allowed_output_formats:
         raise typer.BadParameter(
@@ -240,6 +361,15 @@ def scan_file(
         debug,
         rulepath=rulepath_list,
         country_codes=country_code_list,
+        registry_path=registry_path,
+        registry_offline=registry_offline,
+        categories=categories,
+        pii_only=pii_only,
+        status=status,
+        registry_detectors=registry_detectors,
+        legacy_scoring=legacy_scoring,
+        include_deprecated=include_deprecated,
+        include_samples=include_samples,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
@@ -256,6 +386,9 @@ def scan_file(
         llm_model=llm_model,
         llm_api_key=llm_api_key,
         llm_base_url=llm_base_url,
+        sample_policy=sample_policy, llm_fallback=llm_fallback,
+        embedding_provider=embedding_provider, embedding_model=embedding_model,
+        embedding_base_url=embedding_base_url,
     )
     acmd.scan_file(
         filename=filename,
@@ -278,6 +411,7 @@ def scan_file(
         dict_share=dict_share,
         empty_values=empty_values_list,
         compression=compression,
+        sampling=sampling, seed=seed, explain=explain,
         classification_mode=final_classification_mode,
         llm_min_confidence=llm_min_confidence,
     )
@@ -302,7 +436,16 @@ def scan_db(
     fields: str = typer.Option(None, "--fields", help="Comma-separated list of specific fields to process"),
     rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
     country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
-    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
+    registry_path: Optional[str] = typer.Option(None, "--registry-path", help="Local registry snapshot or checkout data/ directory"),
+    registry_offline: Optional[bool] = typer.Option(None, "--registry-offline/--registry-online", help="Never fetch registry data over the network"),
+    categories: Optional[str] = typer.Option(None, "--categories", help="Report only matches in these registry categories (comma-separated)"),
+    pii_only: bool = typer.Option(False, "--pii-only", help="Report only matches whose datatype is PII"),
+    status: Optional[str] = typer.Option(None, "--status", help="Report only matches with these registry statuses, e.g. stable"),
+    registry_detectors: Optional[str] = typer.Option(None, "--registry-detectors", help="Detectors derived from registry regexps: off, stable (default) or all"),
+    legacy_scoring: bool = typer.Option(False, "--legacy-scoring", help="Use pre-1.0 confidence scores (share of matching values; 100 for field names)"),
+    include_deprecated: bool = typer.Option(False, "--include-deprecated", help="Also run rules marked deprecated"),
+    include_samples: bool = typer.Option(False, "--include-samples", help="Keep raw values (dictionary values, string min/max) in json, yaml and md output"),
+    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, csv, md (Markdown) or legacy (pre-1.0 JSON)"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
@@ -331,7 +474,7 @@ def scan_db(
     
     if verbose and quiet:
         raise typer.BadParameter("Cannot use --verbose and --quiet together")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
+    allowed_output_formats = {"table", "json", "yaml", "csv", "md", "legacy"}
     output_format_value = output_format.lower()
     if output_format_value not in allowed_output_formats:
         raise typer.BadParameter(
@@ -350,7 +493,7 @@ def scan_db(
         raise typer.BadParameter("--retry-delay must be >= 0")
     if timeout is not None and timeout < 0:
         raise typer.BadParameter("--timeout must be >= 0")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
+    allowed_output_formats = {"table", "json", "yaml", "csv", "md", "legacy"}
     output_format_value = output_format.lower()
     if output_format_value not in allowed_output_formats:
         raise typer.BadParameter(
@@ -370,6 +513,15 @@ def scan_db(
         debug,
         rulepath=rulepath_list,
         country_codes=country_code_list,
+        registry_path=registry_path,
+        registry_offline=registry_offline,
+        categories=categories,
+        pii_only=pii_only,
+        status=status,
+        registry_detectors=registry_detectors,
+        legacy_scoring=legacy_scoring,
+        include_deprecated=include_deprecated,
+        include_samples=include_samples,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
@@ -423,7 +575,16 @@ def scan_mongodb(
     fields: str = typer.Option(None, "--fields", help="Comma-separated list of specific fields to process"),
     rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
     country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
-    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
+    registry_path: Optional[str] = typer.Option(None, "--registry-path", help="Local registry snapshot or checkout data/ directory"),
+    registry_offline: Optional[bool] = typer.Option(None, "--registry-offline/--registry-online", help="Never fetch registry data over the network"),
+    categories: Optional[str] = typer.Option(None, "--categories", help="Report only matches in these registry categories (comma-separated)"),
+    pii_only: bool = typer.Option(False, "--pii-only", help="Report only matches whose datatype is PII"),
+    status: Optional[str] = typer.Option(None, "--status", help="Report only matches with these registry statuses, e.g. stable"),
+    registry_detectors: Optional[str] = typer.Option(None, "--registry-detectors", help="Detectors derived from registry regexps: off, stable (default) or all"),
+    legacy_scoring: bool = typer.Option(False, "--legacy-scoring", help="Use pre-1.0 confidence scores (share of matching values; 100 for field names)"),
+    include_deprecated: bool = typer.Option(False, "--include-deprecated", help="Also run rules marked deprecated"),
+    include_samples: bool = typer.Option(False, "--include-samples", help="Keep raw values (dictionary values, string min/max) in json, yaml and md output"),
+    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, csv, md (Markdown) or legacy (pre-1.0 JSON)"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
@@ -452,7 +613,7 @@ def scan_mongodb(
     
     if verbose and quiet:
         raise typer.BadParameter("Cannot use --verbose and --quiet together")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
+    allowed_output_formats = {"table", "json", "yaml", "csv", "md", "legacy"}
     output_format_value = output_format.lower()
     if output_format_value not in allowed_output_formats:
         raise typer.BadParameter(
@@ -471,7 +632,7 @@ def scan_mongodb(
         raise typer.BadParameter("--retry-delay must be >= 0")
     if timeout is not None and timeout < 0:
         raise typer.BadParameter("--timeout must be >= 0")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
+    allowed_output_formats = {"table", "json", "yaml", "csv", "md", "legacy"}
     output_format_value = output_format.lower()
     if output_format_value not in allowed_output_formats:
         raise typer.BadParameter(
@@ -491,6 +652,15 @@ def scan_mongodb(
         debug,
         rulepath=rulepath_list,
         country_codes=country_code_list,
+        registry_path=registry_path,
+        registry_offline=registry_offline,
+        categories=categories,
+        pii_only=pii_only,
+        status=status,
+        registry_detectors=registry_detectors,
+        legacy_scoring=legacy_scoring,
+        include_deprecated=include_deprecated,
+        include_samples=include_samples,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
@@ -546,7 +716,16 @@ def scan_bulk(
     fields: str = typer.Option(None, "--fields", help="Comma-separated list of specific fields to process"),
     rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
     country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
-    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
+    registry_path: Optional[str] = typer.Option(None, "--registry-path", help="Local registry snapshot or checkout data/ directory"),
+    registry_offline: Optional[bool] = typer.Option(None, "--registry-offline/--registry-online", help="Never fetch registry data over the network"),
+    categories: Optional[str] = typer.Option(None, "--categories", help="Report only matches in these registry categories (comma-separated)"),
+    pii_only: bool = typer.Option(False, "--pii-only", help="Report only matches whose datatype is PII"),
+    status: Optional[str] = typer.Option(None, "--status", help="Report only matches with these registry statuses, e.g. stable"),
+    registry_detectors: Optional[str] = typer.Option(None, "--registry-detectors", help="Detectors derived from registry regexps: off, stable (default) or all"),
+    legacy_scoring: bool = typer.Option(False, "--legacy-scoring", help="Use pre-1.0 confidence scores (share of matching values; 100 for field names)"),
+    include_deprecated: bool = typer.Option(False, "--include-deprecated", help="Also run rules marked deprecated"),
+    include_samples: bool = typer.Option(False, "--include-samples", help="Keep raw values (dictionary values, string min/max) in json, yaml and md output"),
+    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, csv, md (Markdown) or legacy (pre-1.0 JSON)"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
@@ -575,7 +754,7 @@ def scan_bulk(
     
     if verbose and quiet:
         raise typer.BadParameter("Cannot use --verbose and --quiet together")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
+    allowed_output_formats = {"table", "json", "yaml", "csv", "md", "legacy"}
     output_format_value = output_format.lower()
     if output_format_value not in allowed_output_formats:
         raise typer.BadParameter(
@@ -592,7 +771,7 @@ def scan_bulk(
         raise typer.BadParameter("--retry-delay must be >= 0")
     if timeout is not None and timeout < 0:
         raise typer.BadParameter("--timeout must be >= 0")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
+    allowed_output_formats = {"table", "json", "yaml", "csv", "md", "legacy"}
     output_format_value = output_format.lower()
     if output_format_value not in allowed_output_formats:
         raise typer.BadParameter(
@@ -612,6 +791,15 @@ def scan_bulk(
         debug,
         rulepath=rulepath_list,
         country_codes=country_code_list,
+        registry_path=registry_path,
+        registry_offline=registry_offline,
+        categories=categories,
+        pii_only=pii_only,
+        status=status,
+        registry_detectors=registry_detectors,
+        legacy_scoring=legacy_scoring,
+        include_deprecated=include_deprecated,
+        include_samples=include_samples,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
@@ -648,6 +836,38 @@ def scan_bulk(
 # Export Commands
 # ============================================================================
 
+@export_app.command('labels')
+def export_labels_cmd(
+    report: str = typer.Argument(..., help="Saved scan report (JSON or YAML)"),
+    system: str = typer.Option(..., "--system", help="Target system: presidio, google_dlp, dpv, purview, schema_org or wikidata"),
+    min_confidence: float = typer.Option(0.0, "--min-confidence", help="Skip matches below this confidence"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file (default: stdout)"),
+):
+    """Map report matches to labels of another classification system via registry mappings."""
+    from metacrafter.integrations.crosswalk import export_labels
+    from metacrafter.product_tools import emit, load_document
+
+    try:
+        result = export_labels(load_document(report), system, min_confidence)
+    except ValueError as error:
+        typer.echo(f"Error: {error}", err=True)
+        raise typer.Exit(2)
+    emit(result, output)
+
+
+@export_app.command('frictionless')
+def export_frictionless_cmd(
+    report: str = typer.Argument(..., help="Saved scan report (JSON or YAML)"),
+    min_confidence: float = typer.Option(0.0, "--min-confidence", help="Ignore matches below this confidence"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file (default: stdout)"),
+):
+    """Write a Frictionless Data Package with semantic field annotations (rdfType, registry URL)."""
+    from metacrafter.integrations.frictionless import export_frictionless
+    from metacrafter.product_tools import emit, load_document
+
+    emit(export_frictionless(load_document(report), min_confidence), output)
+
+
 @export_app.command('datahub')
 def export_datahub(
     file: str = typer.Argument(..., help="Path to JSON file containing Metacrafter scan results"),
@@ -663,6 +883,8 @@ def export_datahub(
     min_confidence: float = typer.Option(0.0, "--min-confidence", help="Minimum confidence threshold (0-100)"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
+    source: Optional[str] = typer.Option(None, help="Source identity for an aggregate report"),
+    dry_run: bool = typer.Option(False, help="Plan writes without performing them"),
 ):
     """Export Metacrafter scan results to DataHub metadata catalog.
     
@@ -711,8 +933,14 @@ def export_datahub(
         raise typer.BadParameter(f"Scan results file not found: {file}")
     
     try:
-        with open(file, 'r', encoding='utf8') as f:
-            scan_report = json.load(f)
+        from metacrafter.product_tools import load_document
+        from metacrafter.reports import report_sources
+        reports = report_sources(load_document(file))
+        if source:
+            reports = [report for report in reports if report["source"] == source]
+        if len(reports) != 1:
+            raise ValueError("Select exactly one report source with --source")
+        scan_report = reports[0]
     except json.JSONDecodeError as e:
         raise typer.BadParameter(f"Invalid JSON in scan results file: {e}")
     except Exception as e:
@@ -747,6 +975,7 @@ def export_datahub(
         stats = exporter.export_scan_results(
             dataset_urn=dataset_urn,
             scan_report=scan_report,
+            dry_run=dry_run,
             add_pii_tags=add_pii_tags,
             add_datatype_tags=add_datatype_tags,
             link_glossary_terms=link_glossary_terms,
@@ -790,6 +1019,8 @@ def export_openmetadata(
     min_confidence: float = typer.Option(0.0, "--min-confidence", help="Minimum confidence threshold (0-100)"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
+    source: Optional[str] = typer.Option(None, help="Source identity for an aggregate report"),
+    dry_run: bool = typer.Option(False, help="Plan writes without performing them"),
 ):
     """Export Metacrafter scan results to OpenMetadata metadata catalog.
     
@@ -838,8 +1069,14 @@ def export_openmetadata(
         raise typer.BadParameter(f"Scan results file not found: {file}")
     
     try:
-        with open(file, 'r', encoding='utf8') as f:
-            scan_report = json.load(f)
+        from metacrafter.product_tools import load_document
+        from metacrafter.reports import report_sources
+        reports = report_sources(load_document(file))
+        if source:
+            reports = [report for report in reports if report["source"] == source]
+        if len(reports) != 1:
+            raise ValueError("Select exactly one report source with --source")
+        scan_report = reports[0]
     except json.JSONDecodeError as e:
         raise typer.BadParameter(f"Invalid JSON in scan results file: {e}")
     except Exception as e:
@@ -874,6 +1111,7 @@ def export_openmetadata(
         stats = exporter.export_scan_results(
             table_fqn=table_fqn,
             scan_report=scan_report,
+            dry_run=dry_run,
             add_pii_tags=add_pii_tags,
             add_datatype_tags=add_datatype_tags,
             link_glossary_terms=link_glossary_terms,
@@ -918,6 +1156,8 @@ def export_atlas(
     entity_type: str = typer.Option("rdbms_column", "--entity-type", help="Atlas entity type for columns (default: rdbms_column)"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
+    source: Optional[str] = typer.Option(None, help="Source identity for an aggregate report"),
+    dry_run: bool = typer.Option(False, help="Plan writes without performing them"),
 ):
     """Export Metacrafter scan results to Apache Atlas metadata catalog.
     
@@ -975,8 +1215,14 @@ def export_atlas(
         raise typer.BadParameter(f"Scan results file not found: {file}")
     
     try:
-        with open(file, 'r', encoding='utf8') as f:
-            scan_report = json.load(f)
+        from metacrafter.product_tools import load_document
+        from metacrafter.reports import report_sources
+        reports = report_sources(load_document(file))
+        if source:
+            reports = [report for report in reports if report["source"] == source]
+        if len(reports) != 1:
+            raise ValueError("Select exactly one report source with --source")
+        scan_report = reports[0]
     except json.JSONDecodeError as e:
         raise typer.BadParameter(f"Invalid JSON in scan results file: {e}")
     except Exception as e:
@@ -1012,6 +1258,7 @@ def export_atlas(
         stats = exporter.export_scan_results(
             table_qualified_name=table_qn,
             scan_report=scan_report,
+            dry_run=dry_run,
             entity_type=entity_type,
             add_pii_classifications=add_pii_classifications,
             add_datatype_classifications=add_datatype_classifications,
@@ -1038,3 +1285,8 @@ def export_atlas(
             traceback.print_exc()
         raise typer.BadParameter(f"Failed to export to Apache Atlas: {e}")
 
+
+# Product workflows operate on saved reports and never write to external services.
+from metacrafter.core import app
+from metacrafter.product_tools import register_product_commands
+register_product_commands(app, rules_app, scan_app, export_app)

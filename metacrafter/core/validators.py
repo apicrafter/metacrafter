@@ -97,3 +97,15 @@ def parse_country_codes(country_codes: Optional[str]) -> Optional[List[str]]:
         return [cc.strip().lower() for cc in codes]
     return None
 
+
+
+def validate_asn(value):
+    """Validate the 32-bit autonomous system number range."""
+    text = str(value).removeprefix("AS") if hasattr(str, "removeprefix") else str(value).replace("AS", "", 1)
+    return text.isdigit() and 0 <= int(text) <= 4294967295
+
+
+def validate_language_tag(value):
+    """Validate the language-tag syntax; registry assignment is separate."""
+    import re
+    return bool(re.fullmatch(r"[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*", str(value)))

@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
 """DataHub integration module for exporting Metacrafter scan results."""
+from metacrafter.reports import normalize_report, validate_options
+from metacrafter.integrations.outcomes import perform
 import logging
 import os
+import time
+import copy
 from typing import Dict, Any, List, Optional
+from metacrafter.integrations.labels import match_datatype, registry_properties
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +18,8 @@ try:
     from datahub.metadata.schema_classes import (
         TagAssociationClass,
         GlossaryTermAssociationClass,
-        SchemaFieldPropertiesClass,
+        DatasetPropertiesClass,
+        AuditStampClass,
         GlobalTagsClass,
         GlossaryTermsClass,
         ChangeTypeClass,
@@ -74,6 +80,8 @@ class DataHubExporter:
         self.token = token or os.getenv("DATAHUB_TOKEN")
         self.timeout = timeout
         self.replace = replace
+        self.graph = None
+        self._metadata_cache = {}
         
         # Initialize DataHub REST emitter
         self.emitter = DatahubRestEmitter(
@@ -93,6 +101,7 @@ class DataHubExporter:
         link_glossary_terms: bool = True,
         add_properties: bool = True,
         min_confidence: float = 0.0,
+        dry_run: bool = False,
     ) -> Dict[str, Any]:
         """Export Metacrafter scan results to DataHub.
         
@@ -126,6 +135,9 @@ class DataHubExporter:
             "errors": [],
         }
         
+        stats.update(attempted=0, succeeded=0, skipped=0, failed=0, planned=[])
+        validate_options(1, min_confidence)
+        scan_report = normalize_report(scan_report)
         # Extract field data from scan report
         field_data = scan_report.get("data", [])
         if not field_data:
@@ -162,7 +174,7 @@ class DataHubExporter:
                 # Collect tags to add
                 tags_to_add = []
                 if add_pii_tags:
-                    pii_tags = self._extract_pii_tags(field_info)
+                    pii_tags = self._extract_pii_tags(dict(field_info, matches=filtered_matches, tags=[]))
                     tags_to_add.extend(pii_tags)
                 
                 if add_datatype_tags:
@@ -171,22 +183,22 @@ class DataHubExporter:
                 
                 # Add tags
                 if tags_to_add:
-                    self._add_tags(field_urn, tags_to_add)
-                    stats["tags_added"] += len(tags_to_add)
+                    if perform(stats, dry_run, self._add_tags, field_urn, tags_to_add):
+                        stats["tags_added"] += len(tags_to_add)
                 
                 # Link glossary terms
                 if link_glossary_terms:
                     glossary_terms = self._extract_glossary_terms(filtered_matches)
                     for term in glossary_terms:
-                        self._link_glossary_term(field_urn, term)
-                        stats["glossary_terms_linked"] += 1
+                        if perform(stats, dry_run, self._link_glossary_term, field_urn, term):
+                            stats["glossary_terms_linked"] += 1
                 
                 # Add custom properties
                 if add_properties:
                     properties = self._build_properties(field_info, best_match)
                     if properties:
-                        self._add_properties(field_urn, properties)
-                        stats["properties_added"] += len(properties)
+                        if perform(stats, dry_run, self._add_properties, field_urn, properties):
+                            stats["properties_added"] += len(properties)
                 
                 stats["fields_processed"] += 1
                 
@@ -224,7 +236,7 @@ class DataHubExporter:
         Returns:
             List of PII tag names
         """
-        tags = []
+        tags = ["PII"] if any(m.get("is_pii") for m in field_info.get("matches", [])) else []
         
         # Check tags field
         field_tags = field_info.get("tags", [])
@@ -234,14 +246,6 @@ class DataHubExporter:
         if "pii" in [t.lower() for t in field_tags]:
             tags.append("PII")
         
-        # Check matches for PII indicators
-        matches = field_info.get("matches", [])
-        for match in matches:
-            # Some datatypes are inherently PII
-            dataclass = match.get("dataclass", "").lower()
-            if dataclass in ["email", "phone", "ssn", "passport", "creditcard"]:
-                tags.append("PII")
-                break
         
         return list(set(tags))  # Remove duplicates
     
@@ -256,7 +260,7 @@ class DataHubExporter:
         """
         tags = []
         for match in matches:
-            dataclass = match.get("dataclass")
+            dataclass = match_datatype(match)
             if dataclass:
                 # Capitalize first letter for tag name
                 tag_name = dataclass[0].upper() + dataclass[1:] if len(dataclass) > 1 else dataclass.upper()
@@ -274,7 +278,7 @@ class DataHubExporter:
         """
         terms = []
         for match in matches:
-            dataclass = match.get("dataclass")
+            dataclass = match_datatype(match)
             if dataclass:
                 # Generate glossary term URN
                 # Assuming terms follow pattern: urn:li:glossaryTerm:datatype_name
@@ -307,9 +311,10 @@ class DataHubExporter:
         datatype_url = field_info.get("datatype_url") or best_match.get("classurl")
         if datatype_url:
             properties["metacrafter_datatype_url"] = datatype_url
+        properties.update(registry_properties(best_match))
         
         # Add datatype name
-        dataclass = best_match.get("dataclass")
+        dataclass = match_datatype(best_match)
         if dataclass:
             properties["metacrafter_datatype"] = dataclass
         
@@ -325,6 +330,17 @@ class DataHubExporter:
         
         return properties
     
+    def _existing_aspect(self, urn, aspect_type):
+        key = (urn, aspect_type)
+        if key in self._metadata_cache:
+            return self._metadata_cache[key]
+        if self.graph is None:
+            from datahub.ingestion.graph.client import DataHubGraph, DatahubClientConfig
+            self.graph = DataHubGraph(DatahubClientConfig(server=self.datahub_url, token=self.token))
+        aspect = self.graph.get_aspect(entity_urn=urn, aspect_type=aspect_type)
+        self._metadata_cache[key] = aspect
+        return aspect
+
     def _add_tags(self, field_urn: str, tags: List[str]) -> None:
         """Add tags to a DataHub schema field.
         
@@ -343,7 +359,11 @@ class DataHubExporter:
             ]
             
             # Create GlobalTags aspect
-            global_tags = GlobalTagsClass(tags=tag_associations)
+            existing = self._existing_aspect(field_urn, GlobalTagsClass)
+            combined = {association.tag: association for association in ((existing.tags if existing else []) + tag_associations)}
+            if existing and set(combined) == {tag.tag for tag in existing.tags}:
+                return False
+            global_tags = GlobalTagsClass(tags=list(combined.values()))
             
             # Create MCP for adding tags
             mcp = MetadataChangeProposalWrapper(
@@ -355,11 +375,11 @@ class DataHubExporter:
             )
             
             self.emitter.emit(mcp)
+            self._metadata_cache[(field_urn, type(mcp.aspect))] = mcp.aspect
             logger.debug(f"Added tags {tags} to field {field_urn}")
         except Exception as e:
             logger.error(f"Error adding tags to {field_urn}: {e}")
-            # Don't raise - tags are optional
-            pass
+            raise
     
     def _link_glossary_term(self, field_urn: str, term_urn: str) -> None:
         """Link a glossary term to a DataHub schema field.
@@ -372,7 +392,11 @@ class DataHubExporter:
             term_association = GlossaryTermAssociationClass(urn=term_urn)
             
             # Create GlossaryTerms aspect
-            glossary_terms = GlossaryTermsClass(terms=[term_association])
+            existing = self._existing_aspect(field_urn, GlossaryTermsClass)
+            combined = {association.urn: association for association in ((existing.terms if existing else []) + [term_association])}
+            if existing and set(combined) == {term.urn for term in existing.terms}:
+                return False
+            glossary_terms = GlossaryTermsClass(terms=list(combined.values()), auditStamp=AuditStampClass(time=int(time.time()*1000), actor="urn:li:corpuser:metacrafter"))
             
             # Create MCP for adding glossary term
             mcp = MetadataChangeProposalWrapper(
@@ -384,11 +408,11 @@ class DataHubExporter:
             )
             
             self.emitter.emit(mcp)
+            self._metadata_cache[(field_urn, type(mcp.aspect))] = mcp.aspect
             logger.debug(f"Linked glossary term {term_urn} to field {field_urn}")
         except Exception as e:
             logger.error(f"Error linking glossary term {term_urn} to {field_urn}: {e}")
-            # Don't raise - glossary terms are optional
-            pass
+            raise
     
     def _add_properties(self, field_urn: str, properties: Dict[str, str]) -> None:
         """Add custom properties to a DataHub schema field.
@@ -400,25 +424,18 @@ class DataHubExporter:
         if not properties:
             return
         
-        try:
-            # Create properties aspect
-            field_properties = SchemaFieldPropertiesClass(
-                customProperties=properties
-            )
-            
-            # Create MCP for adding properties
-            mcp = MetadataChangeProposalWrapper(
-                entityType="schemaField",
-                changeType=ChangeTypeClass.UPSERT,
-                entityUrn=field_urn,
-                aspectName="schemaFieldProperties",
-                aspect=field_properties,
-            )
-            
-            self.emitter.emit(mcp)
-            logger.debug(f"Added {len(properties)} properties to field {field_urn}")
-        except Exception as e:
-            logger.error(f"Error adding properties to {field_urn}: {e}")
-            # Don't raise - properties are optional
-            pass
-
+        from datahub.metadata.urns import SchemaFieldUrn
+        field = SchemaFieldUrn.from_string(field_urn)
+        dataset_urn = str(field.parent)
+        existing = self._existing_aspect(dataset_urn, DatasetPropertiesClass)
+        aspect = copy.deepcopy(existing) if existing else DatasetPropertiesClass()
+        additions = {"metacrafter.%s.%s" % (field.field_path, key): value for key, value in properties.items()}
+        before = dict(aspect.customProperties or {})
+        after = dict(before, **additions)
+        if before == after:
+            return False
+        aspect.customProperties = after
+        proposal = MetadataChangeProposalWrapper(entityType="dataset", changeType=ChangeTypeClass.UPSERT,
+            entityUrn=dataset_urn, aspectName="datasetProperties", aspect=aspect)
+        self.emitter.emit(proposal)
+        self._metadata_cache[(dataset_urn, DatasetPropertiesClass)] = aspect

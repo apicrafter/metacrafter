@@ -1,0 +1,7 @@
+{
+  "email_person": "email",
+  "eui48": "mac_address",
+  "guid": "uuid",
+  "md5": "md5hash",
+  "ssn": "usssn"
+}

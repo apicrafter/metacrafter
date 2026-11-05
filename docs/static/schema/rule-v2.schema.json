@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://apicrafter.github.io/metacrafter/schema/rule-v2.schema.json",
+  "title": "Metacrafter rule file (format version 2)",
+  "description": "A YAML file with a group of classification rules. Files without format_version are version 1 and use the same structure without the version-2 match types and validator forms.",
+  "type": "object",
+  "required": ["name", "description", "context", "lang", "rules"],
+  "properties": {
+    "format_version": {"enum": [1, 2]},
+    "name": {"type": "string", "minLength": 1},
+    "description": {"type": "string"},
+    "context": {"type": "string", "minLength": 1, "description": "Dot-separated contexts, e.g. common or pii.ru"},
+    "lang": {"type": "string", "minLength": 1},
+    "country_code": {
+      "oneOf": [
+        {"type": "string"},
+        {"type": "array", "items": {"type": "string"}},
+        {"type": "null"}
+      ]
+    },
+    "rules": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"$ref": "#/$defs/rule"}
+    }
+  },
+  "$defs": {
+    "rule": {
+      "type": "object",
+      "required": ["key", "type", "match", "rule"],
+      "properties": {
+        "key": {"type": "string", "pattern": "^[A-Za-z0-9_]+$", "description": "Registry datatype id or alias"},
+        "name": {"type": "string"},
+        "type": {"enum": ["field", "data"]},
+        "match": {"enum": ["text", "ppr", "func", "regex", "registry"]},
+        "rule": {"type": "string", "minLength": 1},
+        "validator": {
+          "type": "string",
+          "pattern": "^(checksum:[a-z0-9_]+|[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+)$",
+          "description": "Dotted path to a Python function, or checksum:<algorithm> from metacrafter-registry"
+        },
+        "priority": {"type": "integer", "minimum": 1, "maximum": 3, "description": "1 is the strongest field-name evidence"},
+        "minlen": {"type": "integer", "minimum": 0},
+        "maxlen": {"type": "integer", "minimum": 1},
+        "imprecise": {"oneOf": [{"type": "boolean"}, {"enum": [0, 1]}]},
+        "is_pii": {"type": "boolean"},
+        "deprecated": {"type": "boolean"},
+        "disabled": {"type": "boolean"},
+        "fieldrule": {"type": "string", "minLength": 1},
+        "fieldrulematch": {"enum": ["text", "ppr"]},
+        "country_code": {
+          "oneOf": [
+            {"type": "string"},
+            {"type": "array", "items": {"type": "string"}}
+          ]
+        }
+      },
+      "dependentRequired": {"fieldrule": ["fieldrulematch"]},
+      "additionalProperties": true
+    }
+  }
+}

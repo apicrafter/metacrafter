@@ -1,267 +1,153 @@
 # -*- coding: utf-8 -*-
-"""Tests for LLM provider implementations."""
-import pytest
+"""LLM providers: OpenAI-compatible presets, structured output fallback, Anthropic."""
 import json
-from unittest.mock import Mock, patch, MagicMock
-import os
+from unittest.mock import Mock, patch
 
-# Test base provider
+import pytest
+import requests
+
+from tests.llm_helpers import OPENAI_COMPATIBLE_POST, mock_chat
+
+SCHEMA = {
+    "type": "object",
+    "properties": {
+        "datatype_id": {"anyOf": [{"type": "string", "enum": ["email"]}, {"type": "null"}]},
+        "confidence": {"type": "number"},
+        "reason": {"type": "string"},
+    },
+    "required": ["datatype_id", "confidence", "reason"],
+    "additionalProperties": False,
+}
+
+
 def test_base_provider_abstract():
-    """Test that BaseLLMProvider is abstract."""
     from metacrafter.classify.llm.providers.base import BaseLLMProvider
-    
-    # Should not be able to instantiate directly
+
     with pytest.raises(TypeError):
         BaseLLMProvider()
 
 
-class TestOpenAIProvider:
-    """Tests for OpenAI provider."""
-    
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
-    def test_openai_provider_init(self, mock_openai_class):
-        """Test OpenAI provider initialization."""
-        from metacrafter.classify.llm.providers.openai import OpenAIProvider
-        
-        provider = OpenAIProvider(api_key="test-key", model="gpt-4o-mini")
-        assert provider.model == "gpt-4o-mini"
-        assert provider.api_key == "test-key"
-        assert provider.supports_json_mode() is True
-        assert provider.get_default_model() == "gpt-4o-mini"
-    
-    @patch.dict(os.environ, {'OPENAI_API_KEY': 'env-key'})
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
-    def test_openai_provider_env_key(self, mock_openai_class):
-        """Test OpenAI provider uses env var for API key."""
-        from metacrafter.classify.llm.providers.openai import OpenAIProvider
-        
-        provider = OpenAIProvider()
-        assert provider.api_key == "env-key"
-    
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
-    def test_openai_provider_no_key(self, mock_openai_class):
-        """Test OpenAI provider raises error without API key."""
-        from metacrafter.classify.llm.providers.openai import OpenAIProvider
-        
-        with patch.dict(os.environ, {}, clear=True):
-            with pytest.raises(ValueError, match="OpenAI API key required"):
-                OpenAIProvider()
-    
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
-    def test_openai_provider_classify(self, mock_openai_class):
-        """Test OpenAI provider classification."""
-        from metacrafter.classify.llm.providers.openai import OpenAIProvider
-        
-        # Mock OpenAI client
-        mock_client = Mock()
-        mock_response = Mock()
-        mock_response.choices = [Mock()]
-        mock_response.choices[0].message.content = '{"datatype_id": "email", "confidence": 0.95, "reason": "Matches email pattern"}'
-        mock_client.chat.completions.create.return_value = mock_response
-        mock_openai_class.return_value = mock_client
-        
-        provider = OpenAIProvider(api_key="test-key")
-        provider.client = mock_client
-        
-        result = provider.classify("Test prompt")
-        assert result["datatype_id"] == "email"
-        assert result["confidence"] == 0.95
-        assert "reason" in result
+@pytest.mark.parametrize(
+    "name,env,base",
+    [
+        ("openai", "OPENAI_API_KEY", "https://api.openai.com/v1"),
+        ("openrouter", "OPENROUTER_API_KEY", "https://openrouter.ai/api/v1"),
+        ("perplexity", "PERPLEXITY_API_KEY", "https://api.perplexity.ai"),
+    ],
+)
+def test_remote_presets_need_keys(name, env, base, monkeypatch):
+    from metacrafter.classify.llm.providers import get_provider
+
+    monkeypatch.delenv(env, raising=False)
+    with pytest.raises(ValueError, match=env):
+        get_provider(name)
+    monkeypatch.setenv(env, "k")
+    provider = get_provider(name)
+    assert provider.base_url == base
+    assert provider.api_key == "k"
+    assert provider.is_local is False
 
 
-class TestOpenRouterProvider:
-    """Tests for OpenRouter provider."""
-    
-    @patch('metacrafter.classify.llm.providers.openrouter.OpenAI')
-    def test_openrouter_provider_init(self, mock_openai_class):
-        """Test OpenRouter provider initialization."""
-        from metacrafter.classify.llm.providers.openrouter import OpenRouterProvider
-        
-        provider = OpenRouterProvider(api_key="test-key", model="openai/gpt-4o-mini")
-        assert provider.model == "openai/gpt-4o-mini"
-        assert provider.get_default_model() == "openai/gpt-4o-mini"
-        assert provider.supports_json_mode() is True
-        
-        # Verify OpenAI was called with correct base URL
-        mock_openai_class.assert_called_once()
-        call_kwargs = mock_openai_class.call_args[1]
-        assert call_kwargs["base_url"] == "https://openrouter.ai/api/v1"
-        assert "HTTP-Referer" in call_kwargs["default_headers"]
-        assert "X-Title" in call_kwargs["default_headers"]
+@pytest.mark.parametrize("name", ["ollama", "lmstudio"])
+def test_local_presets(name):
+    from metacrafter.classify.llm.providers import get_provider
+
+    provider = get_provider(name)
+    assert provider.is_local is True
+    assert provider.api_key is None
 
 
-class TestOllamaProvider:
-    """Tests for Ollama provider."""
-    
-    def test_ollama_provider_init(self):
-        """Test Ollama provider initialization."""
-        from metacrafter.classify.llm.providers.ollama import OllamaProvider
-        
-        provider = OllamaProvider(base_url="http://localhost:11434", model="llama3")
-        assert provider.model == "llama3"
-        assert provider.base_url == "http://localhost:11434"
-        assert provider.api_url == "http://localhost:11434/api/chat"
-        assert provider.get_default_model() == "llama3"
-        assert provider.supports_json_mode() is True
-    
-    @patch('metacrafter.classify.llm.providers.ollama.requests.post')
-    def test_ollama_provider_classify(self, mock_post):
-        """Test Ollama provider classification."""
-        from metacrafter.classify.llm.providers.ollama import OllamaProvider
-        
-        # Mock response
-        mock_response = Mock()
-        mock_response.json.return_value = {
-            "message": {"content": '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}'}
-        }
-        mock_response.raise_for_status = Mock()
-        mock_post.return_value = mock_response
-        
-        provider = OllamaProvider()
-        result = provider.classify("Test prompt")
-        
-        assert result["datatype_id"] == "email"
-        assert result["confidence"] == 0.9
-        mock_post.assert_called_once()
-        call_data = mock_post.call_args[1]["json"]
-        assert call_data["model"] == "llama3"
-        assert call_data["format"] == "json"
-    
-    @patch('metacrafter.classify.llm.providers.ollama.requests.post')
-    def test_ollama_provider_connection_error(self, mock_post):
-        """Test Ollama provider handles connection errors."""
-        from metacrafter.classify.llm.providers.ollama import OllamaProvider
-        import requests
-        
-        mock_post.side_effect = requests.exceptions.ConnectionError("Connection refused")
-        
-        provider = OllamaProvider()
-        with pytest.raises(requests.exceptions.ConnectionError):
-            provider.classify("Test prompt")
+def test_base_url_override_controls_locality():
+    from metacrafter.classify.llm.providers import get_provider
+
+    assert get_provider("openai-compatible", api_key="k", base_url="http://127.0.0.1:8000/v1").is_local
+    assert not get_provider("openai-compatible", api_key="k", base_url="https://llm.example.com/v1").is_local
 
 
-class TestLMStudioProvider:
-    """Tests for LM Studio provider."""
-    
-    @patch('metacrafter.classify.llm.providers.lmstudio.OpenAI')
-    def test_lmstudio_provider_init(self, mock_openai_class):
-        """Test LM Studio provider initialization."""
-        from metacrafter.classify.llm.providers.lmstudio import LMStudioProvider
-        
-        provider = LMStudioProvider(base_url="http://localhost:1234/v1", model="local-model")
-        assert provider.model == "local-model"
-        assert provider.base_url == "http://localhost:1234/v1"
-        assert provider.get_default_model() == "local-model"
-        assert provider.supports_json_mode() is True
-        
-        # Verify OpenAI was called with correct base URL
-        mock_openai_class.assert_called_once()
-        call_kwargs = mock_openai_class.call_args[1]
-        assert call_kwargs["base_url"] == "http://localhost:1234/v1"
+@patch(OPENAI_COMPATIBLE_POST)
+def test_classify_sends_json_schema(mock_post):
+    from metacrafter.classify.llm.providers import OpenAIProvider
+
+    mock_chat(mock_post, '{"datatype_id": "email", "confidence": 0.9, "reason": "r"}')
+    provider = OpenAIProvider(api_key="k")
+    result = provider.classify("prompt", schema=SCHEMA)
+    assert result["datatype_id"] == "email"
+    payload = mock_post.call_args.kwargs["json"]
+    assert payload["response_format"]["type"] == "json_schema"
+    assert payload["response_format"]["json_schema"]["schema"] == SCHEMA
+    assert mock_post.call_args.kwargs["headers"]["Authorization"] == "Bearer k"
 
 
-class TestPerplexityProvider:
-    """Tests for Perplexity provider."""
-    
-    def test_perplexity_provider_init(self):
-        """Test Perplexity provider initialization."""
-        from metacrafter.classify.llm.providers.perplexity import PerplexityProvider
-        
-        provider = PerplexityProvider(api_key="test-key", model="llama-3.1-sonar-small-128k-online")
-        assert provider.model == "llama-3.1-sonar-small-128k-online"
-        assert provider.api_key == "test-key"
-        assert provider.get_default_model() == "llama-3.1-sonar-small-128k-online"
-        assert provider.supports_json_mode() is False  # Perplexity doesn't have explicit JSON mode
-    
-    @patch.dict(os.environ, {'PERPLEXITY_API_KEY': 'env-key'})
-    def test_perplexity_provider_env_key(self):
-        """Test Perplexity provider uses env var for API key."""
-        from metacrafter.classify.llm.providers.perplexity import PerplexityProvider
-        
-        provider = PerplexityProvider()
-        assert provider.api_key == "env-key"
-    
-    @patch('metacrafter.classify.llm.providers.perplexity.requests.post')
-    def test_perplexity_provider_classify(self, mock_post):
-        """Test Perplexity provider classification."""
-        from metacrafter.classify.llm.providers.perplexity import PerplexityProvider
-        
-        # Mock response
-        mock_response = Mock()
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": '{"datatype_id": "email", "confidence": 0.85, "reason": "test"}'}}]
-        }
-        mock_response.raise_for_status = Mock()
-        mock_post.return_value = mock_response
-        
-        provider = PerplexityProvider(api_key="test-key")
-        result = provider.classify("Test prompt")
-        
-        assert result["datatype_id"] == "email"
-        assert result["confidence"] == 0.85
-        mock_post.assert_called_once()
-        call_headers = mock_post.call_args[1]["headers"]
-        assert call_headers["Authorization"] == "Bearer test-key"
+@patch(OPENAI_COMPATIBLE_POST)
+def test_schema_rejected_falls_back_to_json_object(mock_post):
+    from metacrafter.classify.llm.providers import OllamaProvider
+
+    bad = Mock(status_code=400)
+    good = Mock(status_code=200)
+    good.raise_for_status.return_value = None
+    good.json.return_value = {"choices": [{"message": {"content": '{"datatype_id": null, "confidence": 0, "reason": ""}'}}]}
+    mock_post.side_effect = [bad, good]
+    result = OllamaProvider().classify("prompt", schema=SCHEMA)
+    assert result["datatype_id"] is None
+    assert mock_post.call_args.kwargs["json"]["response_format"] == {"type": "json_object"}
 
 
-class TestProviderFactory:
-    """Tests for provider factory."""
-    
-    def test_get_provider_openai(self):
-        """Test getting OpenAI provider."""
-        from metacrafter.classify.llm.providers import get_provider
-        
-        with patch('metacrafter.classify.llm.providers.openai.OpenAI'):
-            provider = get_provider("openai", api_key="test-key")
-            assert provider is not None
-            assert provider.model == "gpt-4o-mini"  # Default model
-    
-    def test_get_provider_ollama(self):
-        """Test getting Ollama provider."""
-        from metacrafter.classify.llm.providers import get_provider
-        
-        provider = get_provider("ollama", base_url="http://localhost:11434")
-        assert provider is not None
-        assert provider.base_url == "http://localhost:11434"
-    
-    def test_get_provider_invalid(self):
-        """Test getting invalid provider raises error."""
-        from metacrafter.classify.llm.providers import get_provider
-        
-        with pytest.raises(ValueError, match="Unknown provider"):
-            get_provider("invalid_provider")
-    
-    def test_list_providers(self):
-        """Test listing available providers."""
-        from metacrafter.classify.llm.providers import list_providers
-        
-        providers = list_providers()
-        assert isinstance(providers, list)
-        assert "openai" in providers
-        assert "ollama" in providers
+@patch(OPENAI_COMPATIBLE_POST)
+def test_connection_error(mock_post):
+    from metacrafter.classify.llm.providers import OllamaProvider
+
+    mock_post.side_effect = requests.exceptions.ConnectionError("refused")
+    provider = OllamaProvider(max_retries=1)
+    with pytest.raises(ConnectionError):
+        provider.classify("prompt")
 
 
-class TestProviderJSONParsing:
-    """Tests for JSON parsing in providers."""
-    
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
-    def test_parse_json_from_text(self, mock_openai_class):
-        """Test parsing JSON from text response."""
-        from metacrafter.classify.llm.providers.openai import OpenAIProvider
-        
-        # Mock client with text response (no JSON mode)
-        mock_client = Mock()
-        mock_response = Mock()
-        mock_response.choices = [Mock()]
-        # Response with extra text around JSON
-        mock_response.choices[0].message.content = 'Here is the result: {"datatype_id": "phone", "confidence": 0.8, "reason": "test"}'
-        mock_client.chat.completions.create.return_value = mock_response
-        mock_openai_class.return_value = mock_client
-        
-        provider = OpenAIProvider(api_key="test-key")
-        provider.client = mock_client
-        
-        result = provider.classify("Test prompt")
-        assert result["datatype_id"] == "phone"
-        assert result["confidence"] == 0.8
+def test_parse_json_from_text():
+    from metacrafter.classify.llm.providers import OllamaProvider
 
+    provider = OllamaProvider()
+    assert provider._parse_response('Answer: {"datatype_id": "email", "confidence": 0.5}')["datatype_id"] == "email"
+
+
+def test_provider_factory():
+    from metacrafter.classify.llm.providers import get_provider, list_providers
+
+    names = list_providers()
+    assert {"openai", "openrouter", "ollama", "lmstudio", "perplexity", "openai-compatible", "anthropic"} <= set(names)
+    with pytest.raises(ValueError, match="Unknown provider"):
+        get_provider("nope")
+
+
+def _anthropic_response(text, stop_reason="end_turn"):
+    block = Mock(type="text", text=text)
+    return Mock(content=[block], stop_reason=stop_reason, stop_details=None)
+
+
+def test_anthropic_provider_structured_output_and_fallbacks():
+    pytest.importorskip("anthropic")
+    from metacrafter.classify.llm.providers.anthropic import AnthropicProvider
+
+    with patch("anthropic.Anthropic") as client_cls:
+        client = client_cls.return_value
+        client.beta.messages.create.return_value = _anthropic_response('{"datatype_id": "email", "confidence": 0.8, "reason": "r"}')
+        provider = AnthropicProvider(api_key="k")
+        result = provider.classify("prompt", schema=SCHEMA)
+    assert result["datatype_id"] == "email"
+    kwargs = client.beta.messages.create.call_args.kwargs
+    assert kwargs["model"] == "claude-opus-5-5"
+    assert kwargs["output_config"]["format"] == {"type": "json_schema", "schema": SCHEMA}
+    assert kwargs["fallbacks"] == "default"
+    assert kwargs["betas"] == ["server-side-fallback-2026-07-01"]
+    assert "temperature" not in kwargs
+    assert provider.is_local is False
+
+
+def test_anthropic_refusal_is_an_error():
+    pytest.importorskip("anthropic")
+    from metacrafter.classify.llm.providers.anthropic import AnthropicProvider
+
+    with patch("anthropic.Anthropic") as client_cls:
+        client_cls.return_value.beta.messages.create.return_value = _anthropic_response("", stop_reason="refusal")
+        provider = AnthropicProvider(api_key="k", max_retries=1)
+        with pytest.raises(RuntimeError, match="declined"):
+            provider.classify("prompt", schema=SCHEMA)

@@ -4,7 +4,7 @@ import pytest
 import os
 import tempfile
 import yaml
-from metacrafter.config import ConfigLoader, MetacrafterConfig
+from metacrafter.config import ConfigLoader, MetacrafterConfig, DEFAULT_RULEPATH
 
 
 class TestLLMConfig:
@@ -13,7 +13,7 @@ class TestLLMConfig:
     def test_metacrafter_config_llm_fields(self):
         """Test MetacrafterConfig includes LLM fields."""
         config = MetacrafterConfig(
-            rulepath=["rules"],
+            
             classification_mode="hybrid",
             llm_provider="openai",
             llm_model="gpt-4o-mini",
@@ -27,7 +27,7 @@ class TestLLMConfig:
     
     def test_metacrafter_config_llm_defaults(self):
         """Test MetacrafterConfig LLM field defaults."""
-        config = MetacrafterConfig(rulepath=["rules"])
+        config = MetacrafterConfig()
         
         assert config.classification_mode == "rules"
         assert config.llm_provider == "openai"
@@ -37,7 +37,7 @@ class TestLLMConfig:
         """Test validation of classification_mode."""
         with pytest.raises(ValueError, match="classification_mode must be one of"):
             MetacrafterConfig(
-                rulepath=["rules"],
+                
                 classification_mode="invalid_mode"
             )
     
@@ -45,7 +45,7 @@ class TestLLMConfig:
         """Test validation of llm_provider."""
         with pytest.raises(ValueError, match="llm_provider must be one of"):
             MetacrafterConfig(
-                rulepath=["rules"],
+                
                 llm_provider="invalid_provider"
             )
     
@@ -53,13 +53,13 @@ class TestLLMConfig:
         """Test validation of llm_min_confidence."""
         with pytest.raises(ValueError, match="llm_min_confidence must be between"):
             MetacrafterConfig(
-                rulepath=["rules"],
+                
                 llm_min_confidence=150.0  # Invalid: > 100
             )
         
         with pytest.raises(ValueError, match="llm_min_confidence must be between"):
             MetacrafterConfig(
-                rulepath=["rules"],
+                
                 llm_min_confidence=-10.0  # Invalid: < 0
             )
     
@@ -69,7 +69,7 @@ class TestLLMConfig:
             mode='w', suffix='.metacrafter', delete=False
         ) as f:
             config = {
-                "rulepath": ["rules"],
+                "rulepath": list(DEFAULT_RULEPATH),
                 "classification_mode": "hybrid",
                 "llm_provider": "openai",
                 "llm_model": "gpt-4o-mini",
@@ -136,7 +136,7 @@ class TestLLMConfig:
             mode='w', suffix='.metacrafter', delete=False
         ) as f:
             config = {
-                "rulepath": ["rules"],
+                "rulepath": list(DEFAULT_RULEPATH),
                 "classification_mode": "llm"
             }
             yaml.dump(config, f)
@@ -190,7 +190,7 @@ class TestLLMConfig:
             mode='w', suffix='.metacrafter', delete=False
         ) as f:
             config = {
-                "rulepath": ["rules"],
+                "rulepath": list(DEFAULT_RULEPATH),
                 "llm_provider": "ollama"
             }
             yaml.dump(config, f)

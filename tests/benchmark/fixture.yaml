@@ -1,0 +1,27 @@
+# Synthetic labelled benchmark for `metacrafter evaluate --baseline`.
+# All values are made up or documentation examples; none is real personal data.
+- items:
+    - {contact_email: alice@example.com, user_id: 3f2504e0-4f89-11d3-9a0c-0305e82c3301, website: "https://www.example.com/about", is_active: "true"}
+    - {contact_email: bob@example.org, user_id: 6fa459ea-ee8a-3ca4-894e-db77e160355e, website: "https://example.net/", is_active: "false"}
+    - {contact_email: carol.smith@example.net, user_id: 16fd2706-8baf-433b-82eb-8c7fada847da, website: "http://docs.example.org/page", is_active: "true"}
+  labels:
+    contact_email: [email]
+    user_id: [uuid]
+    website: [url]
+    is_active: [boolean]
+- items:
+    - {iban: GB82WEST12345698765432, created: "2025-05-15", ip: 192.0.2.10}
+    - {iban: DE89370400440532013000, created: "1993-12-30", ip: 198.51.100.7}
+    - {iban: FR1420041010050500013M02606, created: "2024-01-02", ip: 203.0.113.99}
+  labels:
+    iban: [iban]
+    created: [date]
+    ip: [ipv4]
+- items:
+    - {inn: "7707083893", country: RU, currency: RUB}
+    - {inn: "7728168971", country: DE, currency: EUR}
+    - {inn: "7736050003", country: FR, currency: USD}
+  labels:
+    inn: [inn]
+    country: [countrycode_alpha2]
+    currency: [currency]

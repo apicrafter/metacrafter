@@ -16,7 +16,7 @@ class TestTextFormats:
         )
         if os.path.exists(fixture_path):
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_tsv_format(self):
         """Test TSV file scanning."""
@@ -28,7 +28,7 @@ class TestTextFormats:
             result = cmd.scan_file(
                 fixture_path, delimiter="\t", limit=10, dformat="short"
             )
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_json_format(self):
         """Test JSON array file scanning."""
@@ -38,7 +38,7 @@ class TestTextFormats:
         )
         if os.path.exists(fixture_path):
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_jsonl_format(self):
         """Test JSONL file scanning."""
@@ -48,7 +48,7 @@ class TestTextFormats:
         )
         if os.path.exists(fixture_path):
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_ndjson_format(self):
         """Test NDJSON file scanning."""
@@ -58,7 +58,7 @@ class TestTextFormats:
         )
         if os.path.exists(fixture_path):
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_xml_format(self):
         """Test XML file scanning."""
@@ -70,7 +70,7 @@ class TestTextFormats:
             result = cmd.scan_file(
                 fixture_path, limit=10, dformat="short"
             )
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
 
 class TestBinaryFormats:
@@ -84,7 +84,7 @@ class TestBinaryFormats:
         )
         if os.path.exists(fixture_path):
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_parquet_format(self):
         """Test Parquet file scanning."""
@@ -94,7 +94,7 @@ class TestBinaryFormats:
         )
         if os.path.exists(fixture_path):
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_avro_format(self):
         """Test Avro file scanning."""
@@ -104,7 +104,7 @@ class TestBinaryFormats:
         )
         if os.path.exists(fixture_path):
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_orc_format(self):
         """Test ORC file scanning."""
@@ -114,7 +114,7 @@ class TestBinaryFormats:
         )
         if os.path.exists(fixture_path):
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_pickle_format(self):
         """Test Pickle file scanning."""
@@ -124,7 +124,7 @@ class TestBinaryFormats:
         )
         if os.path.exists(fixture_path):
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
 
 class TestExcelFormats:
@@ -138,7 +138,7 @@ class TestExcelFormats:
         )
         if os.path.exists(fixture_path):
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_xlsx_format(self):
         """Test Excel .xlsx file scanning."""
@@ -148,7 +148,7 @@ class TestExcelFormats:
         )
         if os.path.exists(fixture_path):
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
 
 class TestCompressionFormats:
@@ -164,7 +164,7 @@ class TestCompressionFormats:
             result = cmd.scan_file(
                 fixture_path, limit=10, dformat="short", compression="auto"
             )
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_bzip2_compression(self):
         """Test bzip2-compressed CSV file."""
@@ -176,7 +176,7 @@ class TestCompressionFormats:
             result = cmd.scan_file(
                 fixture_path, limit=10, dformat="short", compression="auto"
             )
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_xz_compression(self):
         """Test xz-compressed CSV file."""
@@ -188,7 +188,7 @@ class TestCompressionFormats:
             result = cmd.scan_file(
                 fixture_path, limit=10, dformat="short", compression="auto"
             )
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_lz4_compression(self):
         """Test lz4-compressed CSV file."""
@@ -200,7 +200,7 @@ class TestCompressionFormats:
             result = cmd.scan_file(
                 fixture_path, limit=10, dformat="short", compression="auto"
             )
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_zstandard_compression(self):
         """Test zstandard-compressed CSV file."""
@@ -212,7 +212,7 @@ class TestCompressionFormats:
             result = cmd.scan_file(
                 fixture_path, limit=10, dformat="short", compression="auto"
             )
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_brotli_compression(self):
         """Test Brotli-compressed CSV file."""
@@ -224,7 +224,7 @@ class TestCompressionFormats:
             result = cmd.scan_file(
                 fixture_path, limit=10, dformat="short", compression="auto"
             )
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_zip_compression(self):
         """Test ZIP-compressed CSV file."""
@@ -236,7 +236,7 @@ class TestCompressionFormats:
             result = cmd.scan_file(
                 fixture_path, limit=10, dformat="short", compression="auto"
             )
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_xml_lz4_compression(self):
         """Test lz4-compressed XML file."""
@@ -248,7 +248,7 @@ class TestCompressionFormats:
             result = cmd.scan_file(
                 fixture_path, limit=10, dformat="short", compression="auto"
             )
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
 
 class TestFormatDetection:
@@ -263,7 +263,7 @@ class TestFormatDetection:
         if os.path.exists(fixture_path):
             # Should auto-detect CSV without specifying format
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_auto_detect_jsonl(self):
         """Test automatic JSONL format detection."""
@@ -273,7 +273,7 @@ class TestFormatDetection:
         )
         if os.path.exists(fixture_path):
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_unsupported_format_handling(self):
         """Test error handling for unsupported formats."""
@@ -288,7 +288,7 @@ class TestFormatDetection:
         try:
             result = cmd.scan_file(temp_path, limit=10)
             # Should handle gracefully, not raise exception
-            assert result is None or result == []
+            assert result == []
         finally:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
@@ -304,7 +304,7 @@ class TestFormatDetection:
         try:
             result = cmd.scan_file(temp_path, limit=10)
             # Should handle empty file gracefully
-            assert result is None or result == []
+            assert isinstance(result, dict) and result["report_version"] == 3
         finally:
             if os.path.exists(temp_path):
                 os.unlink(temp_path)
@@ -319,7 +319,7 @@ class TestFormatDetection:
             result = cmd.scan_file(
                 fixture_path, delimiter=";", limit=10, dformat="short"
             )
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_custom_encoding(self):
         """Test file with custom encoding."""
@@ -334,5 +334,5 @@ class TestFormatDetection:
                 limit=10,
                 dformat="short",
             )
-            assert result is None or isinstance(result, list)
+            assert isinstance(result, dict) and result["report_version"] == 3
 

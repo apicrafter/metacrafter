@@ -138,13 +138,16 @@ class TestAtlasExporter:
         classifications = exporter._extract_pii_classifications(field_info)
         assert "PII" in classifications
         
-        # Test with email datatype
+        # PII comes from the match (registry-enriched), not from a list of datatypes
         field_info = {
             "tags": [],
-            "matches": [{"dataclass": "email"}],
+            "matches": [{"dataclass": "rusnils", "datatype": "rusnils", "is_pii": True, "pii_source": "registry"}],
         }
         classifications = exporter._extract_pii_classifications(field_info)
         assert "PII" in classifications
+
+        field_info = {"tags": [], "matches": [{"dataclass": "email", "is_pii": False}]}
+        assert "PII" not in exporter._extract_pii_classifications(field_info)
     
     def test_extract_datatype_classifications(self):
         """Test datatype classification extraction."""
