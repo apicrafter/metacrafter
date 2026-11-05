@@ -57,13 +57,15 @@ metacrafter/
 ├── openspec/               # Change proposals and ROADMAP.md
 ├── devdocs/                # Plans and reviews (MODERNIZATION_PLAN.md)
 ├── docs/                   # Docusaurus site (content in docs/docs/)
-├── ecosystem.lock          # Pinned metacrafter-rules and metacrafter-registry commits
+├── ecosystem.lock          # Pinned rules release and the registry version baselines use
 └── pyproject.toml
 ```
 
-Rules are not stored here: the default pack comes from the required `metacrafter-rules`
-package (`metacrafterext.rules.rules_dir()`). Datatypes come from metacrafter-registry through
-`metacrafter.registry.RegistryAdapter`.
+Rules are not stored here and are not a Python dependency: the default pack is downloaded
+from the pinned GitHub release of metacrafter-rules (`metacrafter/rules/pack.py`, verified by
+SHA-256, cached in `~/.cache/metacrafter/rules/`). Datatypes come from the registry website
+(`/api/v1/`) through `metacrafter.registry.RegistryAdapter`; the registry's Python package is
+not used.
 
 ## Key Components
 

@@ -2,19 +2,18 @@
 """Single access point to metacrafter-registry data.
 
 Every consumer (scan output, HTTP API, exporters, LLM, CLI) resolves datatypes
-through :class:`RegistryAdapter`. The adapter wraps
-``metacrafter_registry.Registry`` when that package is installed and falls back
-to a small built-in loader for the published ``/api/v1/`` files otherwise.
+through :class:`RegistryAdapter`. Metacrafter talks to the registry only through the
+files its website publishes under ``/api/v1/``; it does not use the registry's Python
+package (see ``openspec/changes/update-ecosystem-distribution``).
 
 Source order (see ``openspec/changes/add-registry-integration/design.md``):
 
-1. ``registry_path``: a snapshot directory (``datatypes.jsonl``) or a registry
-   checkout ``data/`` directory;
+1. ``registry_path``: a snapshot directory with the ``/api/v1/`` files
+   (``metacrafter registry fetch --to DIR`` writes one);
 2. a fresh, hash-verified local cache;
 3. a network fetch from the configured base URL (unless offline), verified
    against the manifest SHA-256 values;
-4. a stale but verified cache;
-5. the snapshot bundled with the ``metacrafter-registry`` package.
+4. a stale but verified cache.
 
 When nothing loads, the adapter is still usable: it resolves nothing and builds
 URLs from the configured base URL, and its provenance says ``unavailable``.
@@ -94,17 +93,20 @@ class DatatypeRef:
         return {k: v for k, v in data.items() if v not in (None, [], {})}
 
 
-class _SnapshotRegistry:
-    """Minimal stand-in for ``metacrafter_registry.Registry`` (lookup only)."""
+class SnapshotRegistry:
+    """Registry records loaded from published ``/api/v1/`` files."""
 
     def __init__(self, datatypes, aliases, manifest, source):
+        from metacrafter.registry.identify import RecordIndex
+
         self.datatypes = {r["id"]: r for r in datatypes}
         self.aliases = dict(aliases or {})
         self.manifest = dict(manifest or {})
         self.source = source
+        self.index = RecordIndex(self.datatypes)
 
     @classmethod
-    def from_directory(cls, directory: Path, source: str = "") -> "_SnapshotRegistry":
+    def from_directory(cls, directory: Path, source: str = "") -> "SnapshotRegistry":
         def read_json(name, default):
             path = directory / name
             return json.loads(path.read_text("utf-8")) if path.exists() else default
@@ -135,14 +137,8 @@ class _SnapshotRegistry:
         return self.datatypes.get(canonical) if canonical else None
 
 
-def _registry_package():
-    try:
-        import metacrafter_registry  # noqa: F401
-        from metacrafter_registry.client import Registry
-
-        return Registry
-    except Exception:  # pragma: no cover - depends on the environment
-        return None
+# Backward-compatible name.
+_SnapshotRegistry = SnapshotRegistry
 
 
 def _http_get(url: str, timeout: float) -> bytes:
@@ -230,18 +226,16 @@ class RegistryAdapter:
 
     @classmethod
     def from_directory(cls, directory, base_url: Optional[str] = None, source: Optional[str] = None) -> "RegistryAdapter":
-        """Load a snapshot directory or a registry checkout ``data/`` directory."""
+        """Load a snapshot directory with the published ``/api/v1/`` files."""
         directory = Path(directory)
-        registry_cls = _registry_package()
-        if registry_cls is not None:
-            registry = registry_cls.load(directory)
-        elif (directory / "datatypes.jsonl").exists():
-            registry = _SnapshotRegistry.from_directory(directory)
-        else:
+        if not (directory / "datatypes.jsonl").exists():
             raise FileNotFoundError(
-                f"{directory} has no datatypes.jsonl; reading a registry checkout needs the "
-                "metacrafter-registry package"
+                f"{directory} is not a registry snapshot (no datatypes.jsonl). "
+                "Create one with: metacrafter registry fetch --to DIR"
             )
+        if not verify_snapshot(directory):
+            raise ValueError(f"Registry snapshot {directory} does not match its manifest hashes")
+        registry = SnapshotRegistry.from_directory(directory)
         return cls._wrap(registry, base_url, source or f"path:{directory}")
 
     @classmethod
@@ -291,14 +285,6 @@ class RegistryAdapter:
         if index.exists() and verify_snapshot(cache):
             return cls._from_cache(cache, base, "cache (stale)")
 
-        registry_cls = _registry_package()
-        if registry_cls is not None:
-            try:
-                registry = registry_cls.load()
-                return cls._wrap(registry, base, getattr(registry, "source", "") or "registry package")
-            except Exception as exc:  # noqa: BLE001
-                logger.debug("No bundled registry snapshot: %s", exc)
-
         logger.warning(
             "No registry data available (offline=%s); datatype ids are not resolved. "
             "Set registry_path or allow network access to %s.",
@@ -309,11 +295,7 @@ class RegistryAdapter:
 
     @classmethod
     def _from_cache(cls, cache: Path, base: str, kind: str) -> "RegistryAdapter":
-        registry_cls = _registry_package()
-        if registry_cls is not None:
-            registry = registry_cls.from_directory(cache, source=f"{kind}:{cache}")
-        else:
-            registry = _SnapshotRegistry.from_directory(cache, source=f"{kind}:{cache}")
+        registry = SnapshotRegistry.from_directory(cache, source=f"{kind}:{cache}")
         return cls._wrap(registry, base, f"{kind}:{cache}")
 
     # --- lookup ------------------------------------------------------------
@@ -417,56 +399,26 @@ class RegistryAdapter:
         """Registry pattern record id for a qddate format key (e.g. ``dt:date:date_9``)."""
         if self.registry is None or not date_format:
             return None
-        crosswalk = getattr(self.registry, "crosswalk", None)
-        if crosswalk is not None:
-            try:
-                found = crosswalk("qddate", date_format)
-            except Exception:  # noqa: BLE001 - fall back to a plain scan
-                found = []
-            if found:
-                first = found[0]
-                return first.get("id") if isinstance(first, dict) else str(first)
-        wanted = {date_format, date_format.split(":t_", 1)[0]}
-        parts = date_format.split(":")
-        if len(parts) > 3:
-            wanted.add(":".join(parts[:3]))
-        for record in self.registry:
-            values = (record.get("mappings") or {}).get("qddate")
-            values = values if isinstance(values, list) else [values]
-            if any(v in wanted for v in values if v):
-                return record["id"]
-        return None
+        return self.registry.index.qddate_pattern(date_format)
 
     def specificities(self, ids: Iterable[str]) -> Dict[str, float]:
-        """``1 - broadness`` for the regexps of ``ids``.
-
-        Broadness is the share of other records' positive examples that a regexp also
-        fully matches (the same measure ``metacrafter_registry`` uses), computed only
-        for the requested records.
-        """
+        """``1 - broadness`` of the regexps of ``ids`` (share of other records' examples matched)."""
         if self.registry is None:
             return {}
-        corpus = [
-            (record["id"], str(example.get("value")))
-            for record in self.registry
-            for example in record.get("examples") or []
-            if isinstance(example, dict) and example.get("valid", True) and example.get("value") is not None
-        ]
-        result: Dict[str, float] = {}
-        for rid in ids:
-            record = self.record(rid) or {}
-            regexp = record.get("regexp")
-            if not regexp:
-                continue
-            try:
-                pattern = re.compile(regexp)
-            except re.error:
-                continue
-            others = [value for owner, value in corpus if owner != rid]
-            matched = sum(1 for value in others if pattern.fullmatch(value))
-            broadness = round(matched / len(others), 3) if others else 0.0
-            result[rid] = round(1.0 - broadness, 3)
-        return result
+        return {rid: round(1.0 - b, 3) for rid, b in self.registry.index.broadness(ids).items()}
+
+    def identify(self, values: Iterable[Any], *, field_name: Optional[str] = None,
+                 country: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
+        """Rank registry datatypes for sample values of one column (runs locally)."""
+        if self.registry is None:
+            return []
+        return self.registry.index.identify(values, field_name=field_name, country=country, limit=limit)
+
+    def search(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
+        """Records matching query tokens (id, aliases, names, categories, description)."""
+        if self.registry is None:
+            return []
+        return self.registry.index.search(query, limit=limit)
 
     # --- match enrichment --------------------------------------------------
 

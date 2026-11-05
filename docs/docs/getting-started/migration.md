@@ -7,8 +7,10 @@ description: "Breaking changes from 0.0.x and how to adapt"
 ## Installation
 
 - **Python 3.10 or newer.** Python 3.8 and 3.9 users can stay on 0.0.x.
-- **`metacrafter-rules` is required.** It provides the default rule pack. Install it
-  from GitHub until it is on PyPI. See [Installation](/getting-started/installation).
+- **The default rule pack is downloaded.** On first use, Metacrafter fetches the pinned
+  metacrafter-rules GitHub release and verifies it. You do not need to install
+  `metacrafter-rules`. For offline machines, run `metacrafter rules fetch` beforehand or set
+  `rules_dir`. See [Installation](/getting-started/installation).
 - **The in-repository `rules/` directory is gone.** Rules no longer load from a `rules/`
   folder in the current directory. List your own directories in `rulepath`.
 - **Optional dependencies moved to extras.** MongoDB, DuckDB, the HTTP server and binary

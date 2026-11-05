@@ -49,17 +49,18 @@ Each step ends with a green test suite and a commit.
 
 | Item | Change | Owner |
 |---|---|---|
-| Publish `metacrafter-rules` and `metacrafter-registry` on PyPI (blocks a PyPI release of metacrafter) | `add-registry-integration` 1.1, `add-rules-optional-extra` 1.4 | maintainer |
+| ~~Publish `metacrafter-rules` and `metacrafter-registry` on PyPI~~ Not needed: rules come from GitHub releases and the registry from its website (`update-ecosystem-distribution`) | `update-ecosystem-distribution` | done in this repo |
 | Archive the `metacrafter-llm` repository | `refactor-metacrafter-foundation` 5.1 | maintainer |
 | `--pack` once the registry implements `add-datatype-packs` | `update-detection-engine` 4.3 | metacrafter-registry |
 | Hyphenated ISBN golden test after the ISBN rule fix | `update-detection-engine` 5.2 | metacrafter-rules |
 | Delete the superseded `update-registry-resolution` draft | — | this repo |
 | Archive delivered changes (`openspec archive <id>`) after the release | all | this repo |
 
+Distribution (decided 2026-11-05, `update-ecosystem-distribution`): neither
+`metacrafter-rules` nor `metacrafter-registry` is published on PyPI. The rule pack is
+downloaded from a pinned GitHub release; the registry is read from its website.
+
 Blocked outside this repository:
-- **PyPI publication.** `metacrafter-rules` and `metacrafter-registry` are not on PyPI.
-  CI installs them from GitHub at the commits pinned in `ecosystem.lock`. A PyPI release
-  of metacrafter waits for both packages.
 - **Archive the `metacrafter-llm` repository.** Owner action.
 - **Fix the 32 unresolved rule keys** in `metacrafter-rules`.
 

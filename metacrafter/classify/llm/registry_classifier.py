@@ -60,7 +60,6 @@ def shortlist(adapter, field_name: str, values: List[Any], country: Optional[str
     """Candidate registry records for one field, best first (at most ``k``)."""
     if adapter is None or not adapter.available:
         return []
-    registry = adapter.registry
     samples = [str(v).strip() for v in values if v is not None and str(v).strip()][:MAX_SAMPLES]
     ids: List[str] = []
 
@@ -69,40 +68,21 @@ def shortlist(adapter, field_name: str, values: List[Any], country: Optional[str
         if canonical and canonical not in ids:
             ids.append(canonical)
 
-    if hasattr(registry, "identify"):
+    try:
+        for cand in adapter.identify(samples, field_name=field_name, country=country, limit=k):
+            add(cand["id"])
+    except Exception as exc:  # noqa: BLE001 - shortlist is best effort
+        logger.debug("Registry identify failed: %s", exc)
+    if field_name:
         try:
-            for cand in registry.identify(samples, field_name=field_name, country=country, limit=k):
-                add(cand["id"])
-        except Exception as exc:  # noqa: BLE001 - shortlist is best effort
-            logger.debug("Registry identify failed: %s", exc)
-    if hasattr(registry, "search") and field_name:
-        try:
-            query = " ".join(sorted(_tokens(field_name)))
-            for cand in registry.search(query, limit=k):
-                add(cand["id"])
+            # Search requires every token to match, so also try each name token alone
+            # ("contact_email" -> "contact email", "contact", "email").
+            name_tokens = sorted(_tokens(field_name))
+            for query in [" ".join(name_tokens)] + [t for t in name_tokens if len(t) >= 3]:
+                for cand in adapter.search(query, limit=k):
+                    add(cand["id"])
         except Exception as exc:  # noqa: BLE001
             logger.debug("Registry search failed: %s", exc)
-    if not ids:
-        # Fallback without the registry package: token overlap with id, aliases and name,
-        # plus regexp hits on the samples.
-        field_tokens = _tokens(field_name or "")
-        scored = []
-        for record in registry:
-            names = [record["id"], record.get("name", ""), *(record.get("aliases") or [])]
-            overlap = max((len(field_tokens & _tokens(n)) / len(field_tokens | _tokens(n)) for n in names if _tokens(n)), default=0.0) if field_tokens else 0.0
-            hits = 0.0
-            regexp = record.get("regexp")
-            if regexp and samples:
-                try:
-                    pattern = re.compile(regexp)
-                    hits = sum(1 for s in samples if pattern.fullmatch(s)) / len(samples)
-                except re.error:
-                    hits = 0.0
-            score = overlap + hits
-            if score > 0:
-                scored.append((score, record["id"]))
-        for _, rid in sorted(scored, key=lambda item: (-item[0], item[1]))[:k]:
-            add(rid)
     return [adapter.record(rid) for rid in ids[:k] if adapter.record(rid)]
 
 

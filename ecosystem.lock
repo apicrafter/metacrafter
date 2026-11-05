@@ -1,10 +1,14 @@
-# Versions of sibling ecosystem packages that CI and releases are tested against.
-# metacrafter-rules is a required dependency; until it is published on PyPI, CI
-# installs it from GitHub at this ref.
+# Sibling ecosystem data that metacrafter is tested against.
+# metacrafter-rules: the default rule pack, downloaded from this GitHub release. The tag and
+#   sha256 must match metacrafter/rules/pack.py (DEFAULT_RELEASE, DEFAULT_SHA256).
+# metacrafter-registry: read from its website (/api/v1/). version and git_sha are the
+#   registry the baselines in tests/ecosystem/ were recorded against; CI gates block only
+#   while the live registry still has this version.
 metacrafter-rules:
   repo: apicrafter/metacrafter-rules
-  ref: 19823306b33ab5488293910e4fabff99a4171592
+  release: v0.0.2
+  sha256: 6828315bda4e36ba7afcb24ba949bcaea73faff4b08cc2b4f2d8609b26f6d946
 metacrafter-registry:
-  repo: apicrafter/metacrafter-registry
-  ref: 9caf6a8f19242f5f19f8857ecdd8a3789db3ca61
+  base_url: https://registry.apicrafter.io
   version: 1.3.0.dev0
+  git_sha: 9caf6a8f19242f5f19f8857ecdd8a3789db3ca61

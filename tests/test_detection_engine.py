@@ -172,7 +172,6 @@ def test_registry_rule_key_mismatch_is_disabled(tmp_path, registry):
 
 
 def test_registry_rule_uses_regexp_and_checksum(tmp_path, registry):
-    pytest.importorskip("metacrafter_registry")
     processor = load(tmp_path, """
   ibanbyregistry:
     key: iban
@@ -188,7 +187,6 @@ def test_registry_rule_uses_regexp_and_checksum(tmp_path, registry):
 
 
 def test_checksum_validator(tmp_path):
-    pytest.importorskip("metacrafter_registry")
     processor = load(tmp_path, """
   card:
     key: card
@@ -215,7 +213,6 @@ def test_unknown_checksum_disables_rule(tmp_path):
 
 
 def test_registry_detector_finds_uncovered_stable_type(tmp_path, registry):
-    pytest.importorskip("metacrafter_registry")
     processor = load(tmp_path, """
   placeholder:
     key: email

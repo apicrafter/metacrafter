@@ -22,13 +22,17 @@ Repository assessment and proposed work: [Code quality review and improvement pl
 
 ## Installation
 
-Requires Python 3.10+. The default rule pack, [metacrafter-rules](https://github.com/apicrafter/metacrafter-rules),
-is a required dependency that is not on PyPI yet, so install it from GitHub first:
+Requires Python 3.10+.
 
 ```bash
-pip install "metacrafter-rules @ git+https://github.com/apicrafter/metacrafter-rules"
 pip install metacrafter
 ```
+
+The default rule pack is downloaded on first use from the pinned
+[metacrafter-rules](https://github.com/apicrafter/metacrafter-rules) GitHub release (verified
+by SHA-256 and cached). Registry data comes from
+[registry.apicrafter.io](https://registry.apicrafter.io). For offline use, run
+`metacrafter rules fetch` and `metacrafter registry fetch --to DIR`.
 
 Optional extras:
 
