@@ -9,10 +9,18 @@ This roadmap reconciles three planning rounds:
 | Round | Where | State |
 |---|---|---|
 | July 2026 ecosystem review | 7 changes, untracked in the main checkout (`openspec/changes/`) | Superseded; see the table at the end |
-| 2026-10-01 Codex repository review | branch `codex/repository-review-2026-10-01`. Only `improve-scan-result-integrity` is committed; 7 more drafts are untracked in the Codex worktree. Beads `metacrafter-2` … `metacrafter-13`. | Reliability fixes; kept as prerequisites |
+| 2026-10-01 Codex repository review | [`REPOSITORY_REVIEW_AND_IMPROVEMENT_PLAN.md`](../REPOSITORY_REVIEW_AND_IMPROVEMENT_PLAN.md) and 8 changes, all in this branch (copied from branch `codex/repository-review-2026-10-01` and its worktree). Beads `metacrafter-2` … `metacrafter-13`. | Reliability fixes; kept as prerequisites |
 | 2026-11-05 modernization plan | this branch, 7 changes | Registry, engine, report, agents, contract |
 
 Beads epic: `metacrafter-76s`.
+
+> **Uncommitted implementation.** As of 2026-11-05 the Codex worktree
+> (`~/.codex/worktrees/repository-review/metacrafter`) holds about 2000 lines of
+> uncommitted code for the Codex changes. It includes a deleted `core.py`, new `scan_service.py`, `sources.py`,
+> `reports.py`, `sampling.py`, `privacy.py`, `product_tools.py`, and a vendored
+> `metacrafter/builtin_rules/`. Their task lists are still unchecked. The vendored rules
+> contradict accepted decision 2 (see `refactor-metacrafter-foundation`); drop them when
+> that work is committed.
 
 **Approval gate:** Do not implement a change until its proposal is approved.
 
@@ -96,7 +104,7 @@ Beads epic: `metacrafter-76s`.
 | `modernize-metacrafter-packaging` | July (untracked) | `refactor-metacrafter-foundation` (extras, Python); `add-report-v2` (typed models) |
 | `expand-metacrafter-llm-platform` | July (untracked) | `add-registry-integration`, `add-agent-interfaces`, `update-llm-classification` |
 | `add-ecosystem-product-features` | July (untracked) | `add-report-and-rule-product-tools`, `add-ecosystem-contract-tests`, `update-detection-engine` |
-| `update-registry-resolution` | Codex (untracked) | `add-registry-integration` |
+| `update-registry-resolution` | Codex | `add-registry-integration`; do not implement, delete after `add-registry-integration` is approved |
 
 ## Working with OpenSpec
 

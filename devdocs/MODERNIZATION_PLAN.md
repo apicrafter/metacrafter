@@ -367,7 +367,7 @@ OpenSpec change: `add-ecosystem-contract-tests` (заменяет `add-ecosystem
 
 **Июльский план 2026 года.** Это `openspec/ROADMAP.md` и 7 changes. Они лежат незакоммиченными в основном checkout. Новые предложения заменяют их; таблица соответствия — в ROADMAP.
 
-**Обзор Codex от 2026-10-01.** Это ветка `codex/repository-review-2026-10-01` и задачи `metacrafter-2` … `metacrafter-13` в bd. Обзор нашёл надёжностные дефекты, которые этот план не дублирует:
+**Обзор Codex от 2026-10-01.** Это `REPOSITORY_REVIEW_AND_IMPROVEMENT_PLAN.md`, 8 changes (перенесены в эту ветку из ветки и worktree `codex/repository-review-2026-10-01`) и задачи `metacrafter-2` … `metacrafter-13` в bd. Незакоммиченная реализация этих changes лежит в worktree Codex. Обзор нашёл надёжностные дефекты, которые этот план не дублирует:
 - маппинг статистики;
 - SQL-кавычки и схемы;
 - сериализация отчётов;
@@ -390,6 +390,6 @@ OpenSpec change: `add-ecosystem-contract-tests` (заменяет `add-ecosystem
 
 ## 12. Следующие шаги
 
-1. Закоммитить черновики Codex (7 из 8 changes не в git) или перенести их в эту ветку. Без этого ROADMAP ссылается на файлы, которых нет в репозитории.
+1. Решить судьбу незакоммиченной реализации в worktree Codex. Закоммитить её в ветку Codex без `metacrafter/builtin_rules/`, который противоречит решению 2.
 2. Запросить у владельца registry публикацию на PyPI. Это критический путь этапа 1.
 3. Начать этап 0 с `update-hermetic-quality-gates`: без него остальные изменения нечем проверять.
