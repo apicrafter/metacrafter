@@ -12,21 +12,49 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from metacrafter.exceptions import ConfigurationError
 
 DEFAULT_METACRAFTER_CONFIGFILE = ".metacrafter"
-def discover_extended_rules_path() -> Optional[str]:
-    """Return the rules directory of the installed ``metacrafter-rules`` package.
+_LAST_PACK_ERROR: Optional[str] = None
 
-    ``metacrafter-rules`` is a required dependency and provides the default rule pack.
-    Returns ``None`` when the package is missing or ships no YAML rules.
-    """
+
+def _rules_settings() -> dict:
+    """Rule pack settings from ``.metacrafter`` (environment variables override in pack.py)."""
     try:
-        from metacrafterext.rules import rules_dir
-    except ImportError:
-        return None
+        config = ConfigLoader.load_config() or {}
+    except Exception:  # noqa: BLE001 - invalid config files are reported elsewhere
+        config = {}
+    return {
+        "rules_dir": config.get("rules_dir"),
+        "release": config.get("rules_release"),
+        "sha256": config.get("rules_sha256"),
+        "offline": bool(config.get("rules_offline", False)),
+    }
 
-    path = Path(rules_dir())
-    if path.is_dir() and any(path.rglob("*.yaml")):
-        return str(path)
-    return None
+
+def discover_extended_rules_path() -> Optional[str]:
+    """Return the rules directory of the default rule pack (metacrafter-rules).
+
+    The pack comes from ``rules_dir``, an installed ``metacrafterext`` package, the cache
+    or a verified download of the pinned GitHub release (see ``metacrafter.rules.pack``).
+    Returns ``None`` when no pack can be resolved; the reason is kept for the error message.
+    """
+    global _LAST_PACK_ERROR
+    from metacrafter.rules.pack import RulePackError, activate, resolve_pack
+
+    try:
+        pack = resolve_pack(**_rules_settings())
+    except RulePackError as exc:
+        _LAST_PACK_ERROR = str(exc)
+        logging.error("%s", exc)
+        return None
+    if pack is None:
+        _LAST_PACK_ERROR = (
+            "no cached rule pack and rules_offline is set; run `metacrafter rules fetch` "
+            "or set rules_dir"
+        )
+        return None
+    activate(pack)
+    _LAST_PACK_ERROR = None
+    logging.debug("Default rule pack: %s (%s)", pack.rules_dir, pack.source)
+    return str(pack.rules_dir)
 
 
 def default_rulepath() -> List[str]:
@@ -35,10 +63,11 @@ def default_rulepath() -> List[str]:
     return [path] if path else []
 
 
-# Resolved once at import time for callers that need a constant. The default pack
-# always comes from the installed ``metacrafter-rules`` package, never from the
-# current working directory.
-DEFAULT_RULEPATH: List[str] = default_rulepath()
+def __getattr__(name: str):
+    # DEFAULT_RULEPATH is resolved on access (it may download the rule pack), not at import.
+    if name == "DEFAULT_RULEPATH":
+        return default_rulepath()
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _normalize_rulepath_key(path: str) -> str:
@@ -73,9 +102,7 @@ def build_rulepath(
             logging.debug("Using default rule pack from metacrafter-rules: %s", default_pack)
             add(default_pack)
         else:
-            logging.warning(
-                "metacrafter-rules is not installed; no default rule pack is available"
-            )
+            logging.warning("No default rule pack is available (%s)", _LAST_PACK_ERROR)
     for path in user_paths or []:
         add(path)
     return ordered
@@ -100,6 +127,10 @@ class MetacrafterConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     rulepath: List[str] = Field(default_factory=list)
+    rules_dir: Optional[str] = Field(default=None, description="Local metacrafter-rules checkout or unpacked rule pack")
+    rules_release: Optional[str] = Field(default=None, description="metacrafter-rules release tag (needs rules_sha256)")
+    rules_sha256: Optional[str] = Field(default=None, description="SHA-256 of the rules_release archive")
+    rules_offline: bool = Field(default=False, description="Never download the rule pack")
     auto_rules: bool = Field(
         default=True,
         description="When true, load the default rule pack from metacrafter-rules",
@@ -287,9 +318,10 @@ class ConfigLoader:
 
         paths = build_rulepath(user_paths=user_paths, auto_rules=auto_rules)
         if not paths:
+            reason = f" Default rule pack: {_LAST_PACK_ERROR}." if _LAST_PACK_ERROR else ""
             raise ConfigurationError(
-                "No rule directories are configured. Install metacrafter-rules, "
-                "or set 'rulepath' in .metacrafter, or pass --rulepath."
+                "No rule directories are configured." + reason + " Run `metacrafter rules fetch`, "
+                "set 'rules_dir' or 'rulepath' in .metacrafter, or pass --rulepath."
             )
         return paths
     

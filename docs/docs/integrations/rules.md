@@ -6,8 +6,10 @@ description: "YAML rules, match engines, validators, registry detectors and scor
 
 Metacrafter loads rules from every directory in the effective `rulepath`, in order:
 
-1. The default pack from the installed [metacrafter-rules](https://github.com/apicrafter/metacrafter-rules)
-   package (skipped when `auto_rules: false`).
+1. The default pack: the pinned [metacrafter-rules](https://github.com/apicrafter/metacrafter-rules)
+   GitHub release, downloaded once and verified by SHA-256 (or `rules_dir`, an installed
+   `metacrafterext`, or the cache; see [Installation](/getting-started/installation)).
+   Skipped when `auto_rules: false`.
 2. `rulepath` entries from `.metacrafter`.
 3. `--rulepath` flags.
 
@@ -112,9 +114,9 @@ cardnumber:
   validator: checksum:luhn
 ```
 
-Checksum algorithms come from metacrafter-registry (49 algorithms, for example `luhn`,
-`iban_mod97`, `gtin`, `ru_inn`). They need the `metacrafter-registry` package; without
-it, a rule with a checksum validator is disabled with a diagnostic.
+Checksum algorithms are the registry's own (49 algorithms, for example `luhn`, `iban_mod97`,
+`gtin`, `ru_inn`), vendored into metacrafter so they work without the registry package. An
+unknown algorithm name disables the rule with a diagnostic.
 
 ### Function
 
@@ -131,7 +133,9 @@ runpabyfunc:
 ```
 
 Any importable path works (`mypackage.validators.is_widget_id`) as long as the module
-is on `PYTHONPATH`. Function rules are trusted executable plugins.
+is on `PYTHONPATH`. Function rules are trusted executable plugins. The `metacrafterext`
+validators of the default pack are imported from the verified release archive (or from
+`rules_dir`).
 
 ### Exact text
 

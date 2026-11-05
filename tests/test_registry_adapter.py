@@ -86,7 +86,6 @@ def test_unavailable_adapter_builds_urls():
 
 
 def test_offline_without_sources_is_unavailable(tmp_path, monkeypatch):
-    monkeypatch.setattr(adapter_mod, "_registry_package", lambda: None)
     reg = RegistryAdapter.load(offline=True, cache_dir=str(tmp_path / "cache"))
     assert reg.provenance.source == "unavailable"
 
@@ -115,7 +114,6 @@ def test_fetch_verifies_hashes_and_falls_back(tmp_path, monkeypatch):
     assert reg.resolve("guid").canonical_id == "uuid"
 
     files["datatypes.jsonl"] = b'{"id": "tampered"}\n'
-    monkeypatch.setattr(adapter_mod, "_registry_package", lambda: None)
     reg2 = RegistryAdapter.load(base_url="https://registry.example", cache_dir=str(tmp_path / "c2"))
     assert reg2.provenance.source == "unavailable"
 

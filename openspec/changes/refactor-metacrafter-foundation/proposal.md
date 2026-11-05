@@ -1,5 +1,7 @@
 # Change: Modernize the Metacrafter runtime foundation
 
+> **Status (2026-11-05):** the `Required Rules Package` requirement and the package-based rule pack resolution are superseded by `update-ecosystem-distribution`: the rule pack comes from a pinned GitHub release, not a Python dependency.
+
 ## Why
 
 Metacrafter 0.0.6 still declares Python 3.8 support, uses the pydantic v1 validator API

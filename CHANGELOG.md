@@ -5,7 +5,24 @@ All notable changes to Metacrafter will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 1.0.0.dev0
+## [Unreleased]
+
+### Changed
+
+- **Rule pack from GitHub releases.** The default rule pack is downloaded on first use from
+  the pinned metacrafter-rules release (`v0.0.2`), verified by SHA-256 and cached.
+  `metacrafter-rules` is no longer a Python dependency. New command: `metacrafter rules fetch`.
+  New settings: `rules_dir`, `rules_release` + `rules_sha256`, `rules_offline`.
+- **Registry through its website.** Metacrafter no longer uses the `metacrafter-registry`
+  package:
+  - the registry's checksum algorithms are vendored;
+  - value identification, search and the qddate crosswalk run on the downloaded `/api/v1/` data;
+  - `registry_path` must be a snapshot directory, which `metacrafter registry fetch --to DIR` writes;
+  - the `registry` extra is removed.
+- **CI.** The ecosystem gate uses the live registry. It blocks while the registry version
+  matches `ecosystem.lock` and reports otherwise.
+
+## [1.0.0.dev0] - 2026-11-05
 
 Registry-driven modernization (see `devdocs/MODERNIZATION_PLAN.md`, `openspec/ROADMAP.md`)
 together with the fixes from the 2026-10-01 repository review. Migration guide:
@@ -14,10 +31,9 @@ together with the fixes from the 2026-10-01 repository review. Migration guide:
 ### Breaking
 
 - Python 3.10 or newer.
-- `metacrafter-rules` is a required dependency and provides the default rule pack. The
-  in-repository `rules/` directory is removed; rules no longer load from `./rules`.
-  `metacrafter-rules` and `metacrafter-registry` are not on PyPI yet: install them from
-  GitHub (`python scripts/ecosystem_ref.py <name>` prints the pinned requirement).
+- The in-repository `rules/` directory is removed; rules no longer load from `./rules`.
+  The default rule pack comes from metacrafter-rules (see Unreleased for how it is
+  distributed now).
 - Optional dependencies moved to extras: `mongodb`, `duckdb`, `server` (now FastAPI +
   uvicorn instead of Flask), `formats` (Parquet, ORC, Excel, XML, compression), `mcp`,
   `llm` (Anthropic SDK), `llm-chroma` (deprecated vector index). Missing extras raise

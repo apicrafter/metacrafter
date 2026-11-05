@@ -1,7 +1,7 @@
 name: Ecosystem compatibility
 
-# Weekly check of metacrafter against the current HEAD of metacrafter-rules and
-# metacrafter-registry. On failure, one tracking issue is opened or updated.
+# Weekly check of metacrafter against the current HEAD of metacrafter-rules and the live
+# registry website. On failure, one tracking issue is opened or updated.
 on:
   schedule:
     - cron: "0 6 * * 1"
@@ -20,45 +20,32 @@ jobs:
         with:
           repository: apicrafter/metacrafter-rules
           path: metacrafter-rules
-      - uses: actions/checkout@v4
-        with:
-          repository: apicrafter/metacrafter-registry
-          path: metacrafter-registry
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install HEAD of rules and registry
+      - name: Install
         run: |
           python -m pip install --upgrade pip
-          pip install ./metacrafter-rules ./metacrafter-registry
           pip install -e '.[dev]'
-      - name: Rule keys resolve to registry ids
-        id: keys
+      - name: Download the registry snapshot
+        run: metacrafter registry fetch --to registry-snapshot
+      - name: Checks against rules HEAD and the live registry
+        id: gate
         continue-on-error: true
-        run: |
-          metacrafter rules check --registry --strict \
-            --registry-path metacrafter-registry/data --registry-offline \
-            --allow-unknown tests/ecosystem/known_unresolved_rule_keys.yaml > keys.txt 2>&1
-      - name: Rules on registry examples
-        id: examples
-        continue-on-error: true
-        run: |
-          metacrafter rules test --registry-examples \
-            --registry-path metacrafter-registry/data \
-            --thresholds tests/ecosystem/rule_thresholds.yaml \
-            -o examples.json > examples.txt 2>&1
+        env:
+          METACRAFTER_RULES_DIR: metacrafter-rules
+        run: python scripts/ecosystem_gate.py registry-snapshot --always-block > gate.txt 2>&1
       - name: Open or update the tracking issue
-        if: steps.keys.outcome == 'failure' || steps.examples.outcome == 'failure'
+        if: steps.gate.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
             echo "Weekly ecosystem check failed on $(date -u +%F) (run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID})."
             echo
-            echo "rules @ $(git -C metacrafter-rules rev-parse --short HEAD), registry @ $(git -C metacrafter-registry rev-parse --short HEAD)"
+            echo "rules @ $(git -C metacrafter-rules rev-parse --short HEAD), registry $(python -c "import json;m=json.load(open('registry-snapshot/index.json'));print(m.get('version'), m.get('git_sha','')[:7])")"
             echo
-            echo '### Rule keys'; echo '```'; tail -n 40 keys.txt; echo '```'
-            echo '### Registry examples'; echo '```'; tail -n 40 examples.txt; echo '```'
+            echo '```'; tail -n 80 gate.txt; echo '```'
           } > body.md
           number=$(gh issue list --label ecosystem-drift --state open --json number --jq '.[0].number')
           if [ -n "$number" ]; then
@@ -68,5 +55,5 @@ jobs:
             gh issue create --title "Ecosystem drift: rules or registry changed" --label ecosystem-drift --body-file body.md
           fi
       - name: Fail when checks failed
-        if: steps.keys.outcome == 'failure' || steps.examples.outcome == 'failure'
+        if: steps.gate.outcome == 'failure'
         run: exit 1

@@ -64,6 +64,35 @@ def mcp_serve(
     serve(transport=transport, host=host, port=port)
 
 
+registry_app = typer.Typer(help="Commands for registry data (metacrafter-registry).")
+app.add_typer(registry_app, name="registry", help="Download registry snapshots for offline use.")
+
+
+@registry_app.command('fetch')
+def registry_fetch(
+    to: str = typer.Option(..., "--to", help="Directory to write the snapshot to"),
+    registry_url: Optional[str] = typer.Option(None, "--registry-url", help="Registry base URL (default: configured URL)"),
+):
+    """Download the registry's /api/v1/ snapshot (verified by SHA-256) into a directory.
+
+    Use the directory with `registry_path` (or --registry-path) for offline scans.
+    """
+    from pathlib import Path as _Path
+
+    from metacrafter.registry.adapter import fetch_snapshot
+
+    base = (registry_url or ConfigLoader.get_registry_url()).rstrip("/")
+    try:
+        target = fetch_snapshot(base, _Path(to))
+    except Exception as error:  # noqa: BLE001
+        typer.echo(f"Error: could not fetch the registry from {base}: {error}", err=True)
+        raise typer.Exit(1)
+    import json as _json
+
+    manifest = _json.loads((target / "index.json").read_text("utf-8"))
+    typer.echo(f"Registry {manifest.get('version')} ({manifest.get('git_sha', '')[:7]}) written to {target}")
+
+
 @server_app.command('run')
 def server_run(
     host: str = typer.Option("127.0.0.1", "--host", help="IP or hostname to bind the API server to"),
@@ -103,6 +132,25 @@ def rules_stats(
         ]
     acmd = CrafterCmd(debug=debug, rulepath=rulepath_list, country_codes=country_code_list)
     acmd.rules_dumpstats()
+
+
+@rules_app.command('fetch')
+def rules_fetch(
+    release: Optional[str] = typer.Option(None, "--release", help="metacrafter-rules release tag (default: the pinned release)"),
+    sha256: Optional[str] = typer.Option(None, "--sha256", help="SHA-256 of the release archive (required with --release)"),
+    force: bool = typer.Option(False, "--force", help="Download again even when cached"),
+):
+    """Download and verify the metacrafter-rules release used as the default rule pack."""
+    from metacrafter.rules.pack import DEFAULT_RELEASE, DEFAULT_SHA256, RulePackError, fetch_pack
+
+    if release and release != DEFAULT_RELEASE and not sha256:
+        raise typer.BadParameter("--sha256 is required with --release")
+    try:
+        pack = fetch_pack(release or DEFAULT_RELEASE, sha256 or DEFAULT_SHA256, force=force)
+    except RulePackError as error:
+        typer.echo(f"Error: {error}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"{pack.release}: {pack.rules_dir} ({pack.source})")
 
 
 @rules_app.command('validate')

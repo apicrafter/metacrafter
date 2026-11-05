@@ -16,18 +16,15 @@ from metacrafter.config import (
 )
 
 
-def test_discover_extended_rules_path_not_installed():
-    import builtins
+def test_discover_extended_rules_path_offline_without_pack(monkeypatch, tmp_path):
+    """No rules_dir, no installed package, no cache and offline: no default pack."""
+    import metacrafter.rules.pack as pack
 
-    real_import = builtins.__import__
-
-    def selective_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if name == "metacrafterext.rules":
-            raise ImportError("no metacrafter-rules")
-        return real_import(name, globals, locals, fromlist, level)
-
-    with patch("builtins.__import__", side_effect=selective_import):
-        assert discover_extended_rules_path() is None
+    monkeypatch.delenv("METACRAFTER_RULES_DIR", raising=False)
+    monkeypatch.setenv("METACRAFTER_RULES_OFFLINE", "1")
+    monkeypatch.setattr(pack, "_installed_pack", lambda: None)
+    monkeypatch.setattr(ConfigLoader, "load_config", staticmethod(lambda: None))
+    assert discover_extended_rules_path() is None
 
 
 def test_build_rulepath_without_extended():

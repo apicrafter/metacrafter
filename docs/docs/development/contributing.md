@@ -15,10 +15,8 @@ git clone https://github.com/apicrafter/metacrafter.git
 cd metacrafter
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install pyyaml
-pip install "$(python scripts/ecosystem_ref.py metacrafter-rules)"
-pip install "$(python scripts/ecosystem_ref.py metacrafter-registry)"   # optional, enables checksums
 pip install -e '.[dev,llm,mongodb,duckdb,server,mcp,formats]'
+metacrafter rules fetch        # download the pinned rule pack once
 ```
 
 ## Tests
@@ -28,10 +26,12 @@ pytest tests/
 pytest --cov=metacrafter --cov-report=term-missing   # CI requires 60%
 ```
 
-Tests are hermetic: `tests/conftest.py` gives each test an empty home directory, blocks
-network connections, and points the registry to the offline snapshot in
-`tests/fixtures/registry_snapshot`. Tests for optional integrations skip when their extra is
-not installed. Measured on Python 3.11 with all extras: 393 passed, 10 skipped, about 71% line
+Tests are hermetic:
+- `tests/conftest.py` resolves the rule pack once, from `METACRAFTER_RULES_DIR` or the cache
+  filled by `metacrafter rules fetch`;
+- each test then gets an empty home directory and no network access;
+- the registry comes from the offline snapshot in `tests/fixtures/registry_snapshot`. Tests for optional integrations skip when their extra is
+not installed. Measured on Python 3.11 with all extras: 400 passed, 10 skipped, about 71% line
 coverage, about 20 seconds.
 
 CI jobs (`.github/workflows/ci.yml`):
@@ -41,7 +41,7 @@ CI jobs (`.github/workflows/ci.yml`):
 | `test` | pytest with coverage on Python 3.10–3.13 |
 | `quality` | ruff (syntax errors, undefined names), mypy on the report contracts |
 | `installation` | builds the wheel and scans data from a clean environment outside the checkout (core, llm, catalogs) |
-| `ecosystem` | rule keys and registry examples against the pinned registry ([Ecosystem contract](/development/ecosystem)) |
+| `ecosystem` | rule keys, registry examples and checksum names against the live registry ([Ecosystem contract](/development/ecosystem)) |
 
 ## Code style
 

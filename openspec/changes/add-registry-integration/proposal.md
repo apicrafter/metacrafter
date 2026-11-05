@@ -1,5 +1,7 @@
 # Change: Use metacrafter-registry as the source of truth for datatypes
 
+> **Status (2026-11-05):** the registry package (dependency, bundled snapshot, checkout `data/` directories) is superseded by `update-ecosystem-distribution`: metacrafter reads the registry only through its website.
+
 ## Why
 
 `metacrafter-registry` has grown from 630 to 1812 records. It now publishes:

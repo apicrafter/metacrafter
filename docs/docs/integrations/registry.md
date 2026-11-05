@@ -27,15 +27,14 @@ match against it:
 
 Metacrafter tries these sources in order:
 
-1. `registry_path`: a snapshot directory (`datatypes.jsonl`, `aliases.json`,
-   `index.json`, as published under `/api/v1/`) or a registry checkout `data/` directory
-   (needs the `metacrafter-registry` package);
+1. `registry_path`: a snapshot directory with the files the website publishes under
+   `/api/v1/` (`index.json`, `datatypes.jsonl`, `aliases.json`, `categories.json`).
+   `metacrafter registry fetch --to DIR` writes one;
 2. a local cache in `~/.cache/metacrafter/registry/` that is younger than
    `registry_cache_ttl` (default 24 hours) and matches its manifest hashes;
 3. a download of `/api/v1/` from the configured base URL. Every file is checked against
    the SHA-256 in `index.json` before use. Skipped when `registry_offline` is set;
-4. an older cache, if its hashes still match;
-5. the snapshot bundled with the `metacrafter-registry` package, when installed.
+4. an older cache, if its hashes still match.
 
 If nothing loads, the scan still runs: matches keep their rule keys,
 URLs are built from the base URL, and `registry.source` is `unavailable`.
@@ -57,11 +56,16 @@ Environment variables override the file: `METACRAFTER_REGISTRY_URL`,
 `METACRAFTER_REGISTRY_PATH`, `METACRAFTER_REGISTRY_OFFLINE` (`1`, `true`, `yes`).
 Scan commands also accept `--registry-path` and `--registry-offline`.
 
-The optional `metacrafter-registry` package adds value identification, checksums and
-crosswalks. It is not on PyPI yet:
+Metacrafter talks to the registry only through its website. It does not use the registry's
+Python package:
+- value identification, search and the qddate crosswalk run on the downloaded records;
+- the registry's checksum algorithms are vendored in `metacrafter/engine/checksum_algorithms.py`.
+
+For an offline or air-gapped machine:
 
 ```bash
-pip install "$(python scripts/ecosystem_ref.py metacrafter-registry)"
+metacrafter registry fetch --to /data/registry-snapshot
+# .metacrafter: registry_path: /data/registry-snapshot, registry_offline: true
 ```
 
 ## Filters
