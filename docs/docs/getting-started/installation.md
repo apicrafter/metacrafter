@@ -51,11 +51,13 @@ from metacrafter import CrafterCmd
 
 | Extra | Enables |
 |-------|---------|
-| `formats` | Parquet, ORC, Excel, XML and lz4/zstd/brotli files (via iterabledata) |
+| `formats` | Parquet, Avro, ORC, Excel, XML and lz4/zstd/brotli files (via iterabledata) |
 | `mongodb` | MongoDB scanning and BSON files (`pymongo`) |
 | `duckdb` | Native DuckDB scanning (`duckdb`, `duckdb-engine`) |
-| `server` | HTTP API server |
-| `llm` | LLM/RAG hybrid classification (OpenAI, ChromaDB) |
+| `server` | HTTP API server (FastAPI, uvicorn) |
+| `mcp` | MCP server for AI agents |
+| `llm` | LLM classification; adds the Anthropic SDK (OpenAI-compatible providers need nothing extra) |
+| `llm-chroma` | Deprecated vector-index pipeline (`llm_registry_path`): OpenAI SDK, ChromaDB |
 | `datahub` | Export scan results to DataHub (`acryl-datahub`) |
 | `openmetadata` | Export scan results to OpenMetadata |
 | `rules` | No-op, kept for compatibility: `metacrafter-rules` is a core dependency |

@@ -64,6 +64,7 @@ registry = ["metacrafter-registry>=1.3.0.dev0"]
 # Binary, compressed and XML file formats handled by iterabledata.
 formats = [
     "pyarrow>=10.0",
+    "avro>=1.11",
     "pyorc",
     "xlrd>=2.0",
     "openpyxl>=3.0",
@@ -107,6 +108,7 @@ dev = [
 # Everything except dev tooling.
 all = [
     "pyarrow>=10.0",
+    "avro>=1.11",
     "pyorc",
     "xlrd>=2.0",
     "openpyxl>=3.0",
