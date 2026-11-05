@@ -32,7 +32,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pytest pytest-cov pytest-mock
-      
+          # Install the package itself: tests/integration has no __init__.py, so
+          # pytest does not put the repository root on sys.path for it.
+          pip install -e .
+
       - name: Run tests
         run: |
           pytest --cov=metacrafter --cov-report=xml --cov-report=term-missing
