@@ -81,6 +81,19 @@ def build_rulepath(
     return ordered
 
 
+class McpSettings(BaseModel):
+    """Access scope and limits of the MCP server (``mcp`` section of ``.metacrafter``)."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    file_roots: List[str] = Field(default_factory=list, description="Directories scan_file may read")
+    connections: dict = Field(default_factory=dict, description="Named database URLs scan_sql may use")
+    max_columns: int = Field(default=200, ge=1)
+    max_values: int = Field(default=100, ge=1)
+    max_records: int = Field(default=10000, ge=1)
+    timeout: float = Field(default=60.0, gt=0)
+
+
 class MetacrafterConfig(BaseModel):
     """Pydantic model for Metacrafter configuration validation."""
 
@@ -97,6 +110,7 @@ class MetacrafterConfig(BaseModel):
     registry_path: Optional[str] = Field(default=None, description="Local registry snapshot or checkout data/ directory")
     registry_offline: bool = Field(default=False, description="Never fetch registry data over the network")
     registry_cache_ttl: float = Field(default=86400, ge=0, description="Seconds a cached registry snapshot is used without checking the network")
+    mcp: McpSettings = Field(default_factory=McpSettings)
     registry_detectors: str = Field(default="stable", pattern="^(off|stable|all)$", description="Detectors derived from registry regexps: off, stable or all")
 
     # LLM configuration fields
@@ -333,6 +347,17 @@ class ConfigLoader:
         if env_offline is not None:
             settings["offline"] = env_offline.strip().lower() in ("1", "true", "yes", "on")
         return settings
+
+    @staticmethod
+    def get_mcp_settings() -> "McpSettings":
+        """MCP server settings from ``.metacrafter`` (defaults deny file and SQL access)."""
+        config = ConfigLoader.load_config()
+        if config:
+            try:
+                return MetacrafterConfig(**config).mcp
+            except Exception as e:  # noqa: BLE001
+                logging.warning("Invalid mcp configuration (%s); using defaults", type(e).__name__)
+        return McpSettings()
 
     @staticmethod
     def get_llm_config() -> Optional[dict]:

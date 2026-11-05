@@ -88,6 +88,7 @@ const sidebars = {
       items: [
         'integrations/sdk',
         'integrations/api',
+        'integrations/mcp',
         'integrations/registry',
         'integrations/report',
         'integrations/llm',

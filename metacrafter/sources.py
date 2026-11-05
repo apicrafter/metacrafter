@@ -10,7 +10,7 @@ def scan_items(service, items, limit, options):
     return service.scan_data_client(service.remote, items, limit=limit, **options)
 
 
-def scan_sql(service, connectstr, schema, limit, options, batch_size=1000):
+def scan_sql(service, connectstr, schema, limit, options, batch_size=1000, tables=None):
     from sqlalchemy import MetaData, Table, create_engine, event, inspect, select
 
     validate_options(limit, options.get("confidence") or 0)
@@ -33,6 +33,8 @@ def scan_sql(service, connectstr, schema, limit, options, batch_size=1000):
             for namespace in ([schema] if schema else schemas):
                 for name in sorted(inspector.get_table_names(schema=namespace)):
                     source = "%s.%s" % (namespace, name) if namespace else name
+                    if tables and name not in tables and source not in tables:
+                        continue
                     try:
                         table = Table(
                             name, MetaData(), schema=namespace, autoload_with=connection

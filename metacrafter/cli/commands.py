@@ -24,6 +24,7 @@ from metacrafter.core import (
     DEFAULT_TABLE_FORMAT,
     _resolve_output_target,
     _split_option_list,
+    app,
     export_app,
     rules_app,
     scan_app,
@@ -46,6 +47,23 @@ def register_commands():
 # Server Commands
 # ============================================================================
 
+@app.command('mcp')
+def mcp_serve(
+    transport: str = typer.Option("stdio", "--transport", help="stdio or streamable-http"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Host for streamable-http"),
+    port: int = typer.Option(8765, "--port", help="Port for streamable-http"),
+):
+    """Run the MCP server for AI agents (classify_columns, scan_file, scan_sql, explain_match, list_rules)."""
+    from metacrafter.exceptions import require_extra
+
+    require_extra("mcp", "mcp", "The MCP server")
+    if transport not in ("stdio", "streamable-http"):
+        raise typer.BadParameter("--transport must be stdio or streamable-http")
+    from metacrafter.interfaces.mcp_server import serve
+
+    serve(transport=transport, host=host, port=port)
+
+
 @server_app.command('run')
 def server_run(
     host: str = typer.Option("127.0.0.1", "--host", help="IP or hostname to bind the API server to"),
@@ -56,8 +74,9 @@ def server_run(
     logging.info("Run server with classifier API")
     from metacrafter.exceptions import require_extra
 
-    require_extra("flask", "server", "The API server")
-    from metacrafter.server.manager import run_server
+    require_extra("fastapi", "server", "The API server")
+    require_extra("uvicorn", "server", "The API server")
+    from metacrafter.interfaces.http_api import run_server
 
     run_server(host, port, debug)
 

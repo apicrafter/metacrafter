@@ -37,6 +37,9 @@ jobs:
         working-directory: ./docs
         run: npm ci
 
+      - name: Generate llms.txt and Markdown page twins
+        run: python3 scripts/build_llms_txt.py
+
       - name: Build website
         working-directory: ./docs
         run: npm run build

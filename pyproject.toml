@@ -77,8 +77,10 @@ formats = [
 mongodb = ["pymongo>=4.6"]
 # Native DuckDB scanning and duckdb:// SQLAlchemy URLs.
 duckdb = ["duckdb>=0.9", "duckdb-engine>=0.9"]
-# HTTP API server (`metacrafter server run`).
-server = ["flask>=2.0"]
+# HTTP API server (`metacrafter server run`), FastAPI with OpenAPI.
+server = ["fastapi>=0.110", "uvicorn>=0.29"]
+# MCP server for AI agents (`metacrafter mcp`).
+mcp = ["mcp>=2.0,<3"]
 # LLM / RAG hybrid classification (OpenAI, local providers, vector store).
 llm = [
     "openai>=1.0.0",
@@ -95,6 +97,7 @@ dev = [
     "ruff",
     "mypy",
     "build",
+    "httpx",
 ]
 # Everything except dev tooling.
 all = [
@@ -110,7 +113,9 @@ all = [
     "pymongo>=4.6",
     "duckdb>=0.9",
     "duckdb-engine>=0.9",
-    "flask>=2.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "mcp>=2.0,<3",
     "openai>=1.0.0",
     "chromadb>=0.4.0",
     "acryl-datahub[datahub-rest]>=0.12.0",

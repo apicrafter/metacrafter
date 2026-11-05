@@ -1,59 +1,73 @@
 ---
 title: "API server"
-description: "HTTP classification API and remote CLI scans"
+description: "HTTP API v2 (FastAPI, OpenAPI) and the pre-1.0 scan_data endpoint"
 ---
 # API server
 
 ```bash
+pip install 'metacrafter[server]'
 metacrafter server run --host 127.0.0.1 --port 10399
 ```
 
-The server is a Flask app (`metacrafter/server/api.py`) with lazy initialization
-of the rules processor and date parser.
+The server is a FastAPI application (`metacrafter.interfaces.http_api`). It loads the
+rules and registry data once and serves every request from the same scan service as the
+CLI and the Python API. The OpenAPI description is at `/openapi.json` and interactive docs
+at `/docs`.
 
-## Endpoint
+Set `METACRAFTER_API_TOKEN` to require `Authorization: Bearer <token>` on scan routes.
 
-**POST `/api/v1/scan_data`**
+## Routes
 
-Body: JSON array of objects.
+| Route | Purpose |
+|---|---|
+| `POST /v2/scan` | Classify records; returns [report version 3](/integrations/report) |
+| `POST /v2/classify` | Classify columns given as samples; returns report version 3 |
+| `POST /api/v1/scan_data` | Pre-1.0 endpoint (JSON array body, options as query parameters) |
+| `GET /health` | Liveness |
+| `GET /ready` | 200 when rules and registry data are loaded, otherwise 503 |
 
-Query parameters:
-
-- `format` — `short` or `full`
-- `langs` — comma-separated language filters
-- `contexts` — comma-separated context filters
-- `limit` — maximum records per field (default 1000)
-
-Request:
+### `POST /v2/scan`
 
 ```json
-[
-  {"email": "user@example.com", "name": "John Doe"},
-  {"email": "admin@example.com", "name": "Jane Smith"}
-]
+{
+  "records": [{"name": "John", "email": "john@example.com"}],
+  "options": {"limit": 1000, "confidence": 20, "contexts": "pii", "parse_dates": true}
+}
 ```
 
-Response includes a compact `results` table and a detailed `data` array with
-matches, stats, and registry URLs.
+### `POST /v2/classify`
 
-## Remote CLI usage
+```json
+{
+  "columns": [
+    {"name": "contact_email", "values": ["a@example.com", "b@example.org"]},
+    {"name": "inn", "values": ["7707083893"]}
+  ]
+}
+```
+
+Options for both routes: `limit`, `confidence`, `contexts`, `langs`, `fields`,
+`parse_dates`, `stop_on_match`, `ignore_imprecise`, `except_empty`, `explain`,
+`include_samples` (default `false`: statistics in the response omit scanned values).
+
+### `POST /api/v1/scan_data`
+
+Body: a JSON array of objects. Query parameters: `limit`, `confidence`, `dict_share`,
+`contexts`, `langs`, `fields`, `stop_on_match`, `parse_dates`, `ignore_imprecise`,
+`except_empty`, `stats_only`, `explain`, `empty_values` (JSON array).
+
+## Limits
+
+Requests above 10 MB return 413. More than 10,000 records, nesting deeper than 32 levels
+or a malformed body return 400 with a message that names the problem.
+
+## Deployment
+
+The ASGI factory is `metacrafter.interfaces.http_api:create_app`:
 
 ```bash
-metacrafter scan file somefile.csv \
-  --format full \
-  --remote http://127.0.0.1:10399 \
-  --timeout 60 \
-  --retries 2 \
-  --output-format json \
-  --stdout
+uvicorn --factory metacrafter.interfaces.http_api:create_app --host 0.0.0.0 --port 10399
 ```
 
-The CLI serializes records, POSTs them to the server, and formats the response
-locally. Use this to share one rule set across many scanners.
-
-## Configuration
-
-- `METACRAFTER_SECRET_KEY` — optional Flask secret
-- `--debug` on `server run` enables verbose logging
-
-CLI flags: [server](/commands/server).
+`metacrafter.server.api.MetacrafterApp` remains as an alias of the FastAPI application
+class for code written against the Flask server.

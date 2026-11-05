@@ -1,43 +1,49 @@
-# metacrafter
+# Metacrafter
 
-Python CLI and library for labeling table fields and data files. Detects PII, person names, identifiers, dates, and semantic data types using YAML rules, optional LLM/RAG classification, and registry-linked metadata.
+> Python CLI and library that labels columns of files and databases with semantic
+> datatypes from the Metacrafter Registry (registry.apicrafter.io) and finds personal data.
 
-Site: https://apicrafter.github.io/metacrafter/
-CLI help: `metacrafter <command> --help`
+Agent entry points: the MCP server (`metacrafter mcp`), the HTTP API (`/v2/classify`),
+and the skills in the repository's skills/ directory. Report schema: https://apicrafter.github.io/metacrafter/schema/report-v3.schema.json
 
-## Getting started
+## Docs
 
-- [Installation](https://apicrafter.github.io/metacrafter/getting-started/installation) — extras, pip, Python 3.8–3.12
-- [Quick start](https://apicrafter.github.io/metacrafter/getting-started/quick-start)
-- [Cookbook](https://apicrafter.github.io/metacrafter/getting-started/cookbook)
-- [Basic usage](https://apicrafter.github.io/metacrafter/getting-started/basic-usage)
-- [Shared CLI options](https://apicrafter.github.io/metacrafter/commands/shared-options)
-- [Troubleshooting](https://apicrafter.github.io/metacrafter/getting-started/troubleshooting)
-
-## Commands
-
-- [Command index](https://apicrafter.github.io/metacrafter/commands/)
-- [scan file](https://apicrafter.github.io/metacrafter/commands/scan-file)
-- [scan sql](https://apicrafter.github.io/metacrafter/commands/scan-sql)
-- [scan mongodb](https://apicrafter.github.io/metacrafter/commands/scan-mongodb)
-- [scan bulk](https://apicrafter.github.io/metacrafter/commands/scan-bulk)
-- [rules](https://apicrafter.github.io/metacrafter/commands/rules)
-- [server](https://apicrafter.github.io/metacrafter/commands/server)
-- [export datahub](https://apicrafter.github.io/metacrafter/commands/export-datahub)
-- [export openmetadata](https://apicrafter.github.io/metacrafter/commands/export-openmetadata)
-- [export atlas](https://apicrafter.github.io/metacrafter/commands/export-atlas)
-
-## Integrations
-
-- [Python SDK](https://apicrafter.github.io/metacrafter/integrations/sdk)
-- [API server](https://apicrafter.github.io/metacrafter/integrations/api)
-- [Registry](https://apicrafter.github.io/metacrafter/integrations/registry)
-- [LLM classification](https://apicrafter.github.io/metacrafter/integrations/llm)
-- [Custom rules](https://apicrafter.github.io/metacrafter/integrations/rules)
-- [DataHub](https://apicrafter.github.io/metacrafter/integrations/datahub)
-- [OpenMetadata](https://apicrafter.github.io/metacrafter/integrations/openmetadata)
-- [Apache Atlas](https://apicrafter.github.io/metacrafter/integrations/atlas)
-
-## Formats
-
-- [Format support](https://apicrafter.github.io/metacrafter/formats/)
+- [export atlas](https://apicrafter.github.io/metacrafter/commands/export-atlas.md): Export a scan report to Apache Atlas
+- [export datahub](https://apicrafter.github.io/metacrafter/commands/export-datahub.md): Export a scan report to DataHub
+- [export openmetadata](https://apicrafter.github.io/metacrafter/commands/export-openmetadata.md): Export a scan report to OpenMetadata
+- [CLI Reference](https://apicrafter.github.io/metacrafter/commands.md): Index of Metacrafter CLI commands
+- [rules](https://apicrafter.github.io/metacrafter/commands/rules.md): List loaded rules and show aggregate statistics
+- [scan bulk](https://apicrafter.github.io/metacrafter/commands/scan-bulk.md): Scan every supported file in a directory tree
+- [scan file](https://apicrafter.github.io/metacrafter/commands/scan-file.md): Scan a data file and classify its fields
+- [scan mongodb](https://apicrafter.github.io/metacrafter/commands/scan-mongodb.md): Scan MongoDB collections
+- [scan sql](https://apicrafter.github.io/metacrafter/commands/scan-sql.md): Scan SQL database tables via SQLAlchemy
+- [server](https://apicrafter.github.io/metacrafter/commands/server.md): Run the Metacrafter HTTP classification API
+- [Shared CLI options](https://apicrafter.github.io/metacrafter/commands/shared-options.md): Flags shared by scan commands
+- [Comparison](https://apicrafter.github.io/metacrafter/comparison.md): Metacrafter compared with Presidio, YData Profiling, DataProfiler, and similar tools
+- [Architecture](https://apicrafter.github.io/metacrafter/development/architecture.md): Metacrafter components, data flow, rule system, and extension points
+- [Community](https://apicrafter.github.io/metacrafter/development/community.md): Support, commercial API, and related projects
+- [Contributing](https://apicrafter.github.io/metacrafter/development/contributing.md): Development setup, tests, and documentation
+- [Data File Formats](https://apicrafter.github.io/metacrafter/formats.md): Formats and compression codecs supported via iterabledata
+- [Basic usage](https://apicrafter.github.io/metacrafter/getting-started/basic-usage.md): Configuration, output formats, and everyday scan options
+- [Best practices](https://apicrafter.github.io/metacrafter/getting-started/best-practices.md): Recommended scan settings, rule hygiene, and production use
+- [Cookbook](https://apicrafter.github.io/metacrafter/getting-started/cookbook.md): Task-oriented index by role and goal
+- [Installation](https://apicrafter.github.io/metacrafter/getting-started/installation.md): Install Metacrafter with pip and optional extras
+- [Migrating to 1.0](https://apicrafter.github.io/metacrafter/getting-started/migration.md): Breaking changes from 0.0.x and how to adapt
+- [Quick Start](https://apicrafter.github.io/metacrafter/getting-started/quick-start.md): Task-oriented first success paths for Metacrafter
+- [Troubleshooting](https://apicrafter.github.io/metacrafter/getting-started/troubleshooting.md): Common errors, exit codes, and how to debug scans
+- [When to use Metacrafter](https://apicrafter.github.io/metacrafter/getting-started/when-to-use.md): Metacrafter vs Presidio, YData Profiling, DataProfiler, and similar tools
+- [API server](https://apicrafter.github.io/metacrafter/integrations/api.md): HTTP classification API and remote CLI scans
+- [Apache Atlas](https://apicrafter.github.io/metacrafter/integrations/atlas.md): Export scan results as Apache Atlas classifications and attributes
+- [DataHub](https://apicrafter.github.io/metacrafter/integrations/datahub.md): Export scan results to DataHub tags, glossary terms, and properties
+- [LLM classification](https://apicrafter.github.io/metacrafter/integrations/llm.md): RAG-based classification with OpenAI, Ollama, and other providers
+- [OpenMetadata](https://apicrafter.github.io/metacrafter/integrations/openmetadata.md): Export scan results to OpenMetadata tags and glossary terms
+- [Registry](https://apicrafter.github.io/metacrafter/integrations/registry.md): Resolve scan results against metacrafter-registry datatypes
+- [Report format](https://apicrafter.github.io/metacrafter/integrations/report.md): Scan report version 3, output formats and crosswalk exports
+- [Custom rules](https://apicrafter.github.io/metacrafter/integrations/rules.md): YAML rules, match engines, validators, registry detectors and scoring
+- [Python SDK](https://apicrafter.github.io/metacrafter/integrations/sdk.md): Use Metacrafter as a Python library
+- [License](https://apicrafter.github.io/metacrafter/license.md): Apache License 2.0 for Metacrafter
+- [Catalog export](https://apicrafter.github.io/metacrafter/use-cases/catalog-export.md): Push scan labels into DataHub, OpenMetadata, or Apache Atlas
+- [Database scanning](https://apicrafter.github.io/metacrafter/use-cases/database-scanning.md): Classify columns in SQL databases and MongoDB
+- [File scanning](https://apicrafter.github.io/metacrafter/use-cases/file-scanning.md): Classify columns in CSV, JSON, Parquet, Excel, and compressed files
+- [PII detection](https://apicrafter.github.io/metacrafter/use-cases/pii-detection.md): Scan files and databases for personal identifiable information
+- [Semantic labeling](https://apicrafter.github.io/metacrafter/use-cases/semantic-labeling.md): Identify emails, identifiers, dates, and other semantic types

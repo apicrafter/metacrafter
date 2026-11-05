@@ -235,8 +235,11 @@ def test_sql_quoted_identifiers_and_schema_identity(service, tmp_path):
 
 
 def test_api_parity_initialization_auth_and_bounds(service):
-    factory = MetacrafterApp(service.processor, service.dparser, auth_token="token")
-    client = factory.app.test_client()
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    factory = MetacrafterApp(service=service, auth_token="token")
+    client = TestClient(factory.app)
     payload = [{"x": 1, "email": "a@b.test"}]
     assert client.get("/health").status_code == 200
     assert client.post("/api/v1/scan_data", json=payload).status_code == 401
@@ -250,7 +253,7 @@ def test_api_parity_initialization_auth_and_bounds(service):
     expected = service.scan_data(
         payload, confidence=100, fields="email", parse_dates=False
     )
-    assert response.get_json()["data"] == expected["data"]
+    assert response.json()["data"] == json.loads(json.dumps(expected["data"], default=str))
     initialized = factory.service
     assert client.get("/ready").status_code == 200
     assert factory.service is initialized
@@ -263,10 +266,15 @@ def test_api_parity_initialization_auth_and_bounds(service):
         client.post("/api/v1/scan_data?limit=0", json=[], headers=headers).status_code
         == 400
     )
-    factory.app.config["MAX_RECORDS"] = 1
+    factory.max_records = 1
     assert (
         client.post("/api/v1/scan_data", json=[{}, {}], headers=headers).status_code
         == 400
+    )
+    factory.max_body = 10
+    assert (
+        client.post("/api/v1/scan_data", json=[{"x": "0123456789"}], headers=headers).status_code
+        == 413
     )
 
 

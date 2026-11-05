@@ -1748,8 +1748,12 @@ class CrafterCmd(object):
         dict_share: Optional[float] = None,
         empty_values: Optional[List[str]] = None,
         batch_size: int = DEFAULT_BATCH_SIZE,
+        tables: Optional[List[str]] = None,
     ) -> None:
-        """Scan bounded database samples with schema identity and cleanup."""
+        """Scan bounded database samples with schema identity and cleanup.
+
+        ``tables`` limits the scan to these table names (``name`` or ``schema.name``).
+        """
         from metacrafter.sources import scan_sql
         options = dict(contexts=contexts, langs=langs, confidence=confidence,
                        stop_on_match=stop_on_match, parse_dates=parse_dates,
@@ -1759,8 +1763,11 @@ class CrafterCmd(object):
         if connectstr.split(":", 1)[0].split("+", 1)[0] == "duckdb":
             from metacrafter.sources import scan_duckdb
             reports, errors = scan_duckdb(self, connectstr, schema, limit, options)
+            if tables:
+                wanted = set(tables)
+                reports = {k: v for k, v in reports.items() if k in wanted or k.rsplit(".", 1)[-1] in wanted}
         else:
-            reports, errors = scan_sql(self, connectstr, schema, limit, options, batch_size)
+            reports, errors = scan_sql(self, connectstr, schema, limit, options, batch_size, tables=tables)
         self._write_db_results(reports, dformat, output, output_format, stats_only, errors=errors)
         return aggregate_reports(list(reports.values()), errors)
 
