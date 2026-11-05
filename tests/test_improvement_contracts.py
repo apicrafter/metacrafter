@@ -438,7 +438,7 @@ def test_llm_selected_nested_fields_pii_and_threshold(service):
         [{"nested": {"id": "001"}, "ignored": "private"}],
         fields=["nested.id"],
         classification_mode="llm",
-        confidence=80,
+        confidence=70,
     )
     assert [f["field"] for f in report["data"]] == ["nested.id"]
     assert report["data"][0]["matches"][0]["is_pii"]

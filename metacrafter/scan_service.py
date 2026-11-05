@@ -63,6 +63,10 @@ DEFAULT_BATCH_SIZE = 1000  # Default batch size for database queries
 RESULT_HEADERS = ["key", "ftype", "tags", "matches", "datatype_url"]
 from metacrafter.reports import STATS_HEADERS
 
+LLM_CONFIDENCE_CAP = 80.0
+LLM_CONFIDENCE_WEIGHT = 0.8
+
+
 DEFAULT_JSON_INDENT = 4
 DEFAULT_TABLE_FORMAT = cli_output.DEFAULT_TABLE_FORMAT
 DEFAULT_REQUEST_TIMEOUT = 30
@@ -281,61 +285,80 @@ class CrafterCmd(object):
                         f"index_path={llm_index_path}")
             
             try:
-                from metacrafter.classify.llm import LLMClassifier
-                
-                # Determine embedding API key (always uses OpenAI for embeddings)
-                embedding_api_key = llm_api_key if llm_provider == "openai" else os.getenv("OPENAI_API_KEY")
-                if not embedding_api_key:
-                    logging.debug("No embedding API key found, checking OPENAI_API_KEY env var")
-                    embedding_api_key = os.getenv("OPENAI_API_KEY")
-                
-                # Resolve registry path if it's a relative path
-                resolved_registry_path = None
-                if llm_registry_path:
-                    registry_path_obj = Path(llm_registry_path)
-                    if not registry_path_obj.is_absolute():
-                        # Determine config file location to resolve relative paths correctly
-                        config_file_path_str = ConfigLoader.get_config_file_path()
-                        if config_file_path_str:
-                            config_file_path = Path(config_file_path_str).parent
-                            logging.debug(f"Found config file at: {config_file_path_str}, using parent dir: {config_file_path}")
-                            
-                            # Try resolving relative to config file location first
-                            resolved_registry_path = config_file_path / registry_path_obj
-                            logging.debug(f"Trying registry_path relative to config dir: {resolved_registry_path} (exists: {resolved_registry_path.exists()})")
-                            
-                            if not resolved_registry_path.exists():
-                                # Fall back to current directory
-                                resolved_registry_path = Path.cwd() / registry_path_obj
-                                logging.debug(f"Trying registry_path relative to CWD: {resolved_registry_path} (exists: {resolved_registry_path.exists()})")
-                        else:
-                            # No config file found, try current directory
-                            resolved_registry_path = Path.cwd() / registry_path_obj
-                            logging.debug(f"No config file found, trying registry_path relative to CWD: {resolved_registry_path} (exists: {resolved_registry_path.exists()})")
-                    else:
-                        resolved_registry_path = registry_path_obj
-                        logging.debug(f"Using absolute registry_path: {resolved_registry_path} (exists: {resolved_registry_path.exists()})")
+                if not llm_registry_path:
+                    self.llm_classifier = self._registry_llm_classifier(
+                        llm_provider=llm_provider,
+                        llm_model=llm_model,
+                        llm_api_key=llm_api_key,
+                        llm_base_url=llm_base_url,
+                        sample_policy=sample_policy,
+                        llm_max_requests=llm_max_requests,
+                        llm_config=llm_config or {},
+                    )
                 else:
-                    logging.debug("No registry_path provided, LLMClassifier will try to find default")
+                    import warnings
+
+                    warnings.warn(
+                        "llm_registry_path is deprecated: LLM classification now uses the registry "
+                        "adapter (registry_path / registry_url). The JSONL + vector index path will be removed.",
+                        DeprecationWarning,
+                        stacklevel=2,
+                    )
+                    from metacrafter.classify.llm import LLMClassifier
                 
-                self.llm_classifier = LLMClassifier(
-                    registry_path=str(resolved_registry_path) if resolved_registry_path else None,
-                    index_path=llm_index_path,
-                    embedding_api_key=embedding_api_key,
-                    llm_provider=llm_provider,
-                    llm_model=llm_model,
-                    llm_api_key=llm_api_key,
-                    llm_base_url=llm_base_url,
-                    sample_policy=sample_policy,
-                    embedding_provider=embedding_provider,
-                    embedding_model=embedding_model or "text-embedding-3-small",
-                    embedding_base_url=embedding_base_url,
-                    max_requests=llm_max_requests,
-                    timeout=self.request_timeout or 30.0,
-                )
-                if self.verbose:
-                    logging.info(f"LLM classifier initialized with provider: {llm_provider}")
-                logging.debug("LLM classifier initialized successfully")
+                    # Determine embedding API key (always uses OpenAI for embeddings)
+                    embedding_api_key = llm_api_key if llm_provider == "openai" else os.getenv("OPENAI_API_KEY")
+                    if not embedding_api_key:
+                        logging.debug("No embedding API key found, checking OPENAI_API_KEY env var")
+                        embedding_api_key = os.getenv("OPENAI_API_KEY")
+                
+                    # Resolve registry path if it's a relative path
+                    resolved_registry_path = None
+                    if llm_registry_path:
+                        registry_path_obj = Path(llm_registry_path)
+                        if not registry_path_obj.is_absolute():
+                            # Determine config file location to resolve relative paths correctly
+                            config_file_path_str = ConfigLoader.get_config_file_path()
+                            if config_file_path_str:
+                                config_file_path = Path(config_file_path_str).parent
+                                logging.debug(f"Found config file at: {config_file_path_str}, using parent dir: {config_file_path}")
+                            
+                                # Try resolving relative to config file location first
+                                resolved_registry_path = config_file_path / registry_path_obj
+                                logging.debug(f"Trying registry_path relative to config dir: {resolved_registry_path} (exists: {resolved_registry_path.exists()})")
+                            
+                                if not resolved_registry_path.exists():
+                                    # Fall back to current directory
+                                    resolved_registry_path = Path.cwd() / registry_path_obj
+                                    logging.debug(f"Trying registry_path relative to CWD: {resolved_registry_path} (exists: {resolved_registry_path.exists()})")
+                            else:
+                                # No config file found, try current directory
+                                resolved_registry_path = Path.cwd() / registry_path_obj
+                                logging.debug(f"No config file found, trying registry_path relative to CWD: {resolved_registry_path} (exists: {resolved_registry_path.exists()})")
+                        else:
+                            resolved_registry_path = registry_path_obj
+                            logging.debug(f"Using absolute registry_path: {resolved_registry_path} (exists: {resolved_registry_path.exists()})")
+                    else:
+                        logging.debug("No registry_path provided, LLMClassifier will try to find default")
+                
+                    self.llm_classifier = LLMClassifier(
+                        registry_path=str(resolved_registry_path) if resolved_registry_path else None,
+                        index_path=llm_index_path,
+                        embedding_api_key=embedding_api_key,
+                        llm_provider=llm_provider,
+                        llm_model=llm_model,
+                        llm_api_key=llm_api_key,
+                        llm_base_url=llm_base_url,
+                        sample_policy=sample_policy,
+                        embedding_provider=embedding_provider,
+                        embedding_model=embedding_model or "text-embedding-3-small",
+                        embedding_base_url=embedding_base_url,
+                        max_requests=llm_max_requests,
+                        timeout=self.request_timeout or 30.0,
+                    )
+                    if self.verbose:
+                        logging.info(f"LLM classifier initialized with provider: {llm_provider}")
+                    logging.debug("LLM classifier initialized successfully")
             except Exception as error:
                 if self.llm_fallback != "rules":
                     raise RuntimeError("Requested LLM mode could not initialize; configure llm_fallback='rules' to allow fallback") from error
@@ -1087,6 +1110,29 @@ class CrafterCmd(object):
                     time.sleep(self.retry_delay)
         raise last_exc
 
+    def _registry_llm_classifier(self, *, llm_provider, llm_model, llm_api_key, llm_base_url,
+                                 sample_policy, llm_max_requests, llm_config):
+        """Build the registry-driven LLM classifier (shortlist + constrained answer)."""
+        from metacrafter.classify.llm.providers import get_provider
+        from metacrafter.classify.llm.registry_classifier import RegistryLLMClassifier
+
+        kwargs = {"timeout": self.request_timeout or 30.0, "max_retries": 1}
+        if llm_api_key is not None:
+            kwargs["api_key"] = llm_api_key
+        if llm_base_url is not None:
+            kwargs["base_url"] = llm_base_url
+        if llm_model is not None:
+            kwargs["model"] = llm_model
+        provider = get_provider(llm_provider or "openai", **kwargs)
+        return RegistryLLMClassifier(
+            registry=self.registry,
+            provider=provider,
+            sample_policy=sample_policy,
+            send_pii_values=bool(llm_config.get("llm_send_pii_values", False)),
+            max_requests=llm_max_requests,
+            shortlist_size=int(llm_config.get("llm_shortlist_size") or 15),
+        )
+
     def _classify_with_llm_only(
         self,
         items: List[Dict[str, Any]],
@@ -1103,15 +1149,26 @@ class CrafterCmd(object):
             column = ColumnMatchResult(field=field)
             results.add(column)
             try:
+                raw = getattr(self.llm_classifier, "accepts_raw_values", False) is True
+                # The registry classifier needs raw values locally to build its shortlist and
+                # applies the disclosure policy itself before anything reaches the provider.
+                samples = columns.get(field, []) if raw else disclose_samples(columns.get(field, []), self.sample_policy)
                 llm = self.llm_classifier.classify_field(field_name=field,
-                    sample_values=disclose_samples(columns.get(field, []), self.sample_policy),
+                    sample_values=samples,
                     langs=langs, categories=contexts, country=self.country_codes)
                 confidence = llm.get("confidence", 0)
                 if isinstance(confidence, bool) or not isinstance(confidence, (float, int)) or not math.isfinite(confidence) or not 0 <= confidence <= 1:
                     raise ValueError("Invalid LLM confidence")
-                if llm.get("datatype_id") and confidence * 100 >= self._scan_llm_threshold:
-                    match = RuleResult(ruleid="llm_classifier", dataclass=llm["datatype_id"], confidence=confidence*100,
-                                       ruletype="llm", is_pii=bool(llm.get("is_pii")))
+                # LLM answers map onto the engine scale capped at 80, so strong value evidence
+                # from rules or registry patterns outranks an unverified model answer.
+                score = min(LLM_CONFIDENCE_CAP, 100.0 * confidence * LLM_CONFIDENCE_WEIGHT)
+                if llm.get("datatype_id") and score >= self._scan_llm_threshold:
+                    evidence = dict(llm.get("evidence") or {})
+                    evidence.update(scoring_model="v1-llm", model_confidence=confidence)
+                    match = RuleResult(ruleid="llm_classifier", dataclass=llm["datatype_id"], confidence=score,
+                                       ruletype="llm", is_pii=bool(llm.get("is_pii")),
+                                       pii_source="registry" if llm.get("is_pii") else None,
+                                       evidence=evidence)
                     match.reason = llm.get("reason", "")
                     column.add(match)
             except Exception as error:

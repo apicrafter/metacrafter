@@ -26,7 +26,7 @@ jobs:
           pip install "$(python scripts/ecosystem_ref.py metacrafter-rules)"
           pip install "$(python scripts/ecosystem_ref.py metacrafter-registry)"
       - name: Install package with test extras
-        run: pip install -e '.[dev,llm,mongodb,duckdb,server,mcp,formats]'
+        run: pip install -e '.[dev,llm,llm-chroma,mongodb,duckdb,server,mcp,formats]'
       - name: Run tests
         run: pytest tests/ --cov=metacrafter --cov-report=xml --cov-report=term --cov-fail-under=60
 

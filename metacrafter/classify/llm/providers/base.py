@@ -44,12 +44,16 @@ class BaseLLMProvider(ABC):
         """Whether this provider supports JSON mode."""
         pass
     
+    #: True when the provider runs on this machine (no data leaves it).
+    is_local: bool = False
+
     @abstractmethod
     def _call_api(
         self,
         prompt: str,
         temperature: float = 0.0,
-        max_tokens: int = 500
+        max_tokens: int = 500,
+        schema: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         Make API call to the provider.
@@ -68,7 +72,8 @@ class BaseLLMProvider(ABC):
         self,
         prompt: str,
         temperature: float = 0.0,
-        max_tokens: int = 500
+        max_tokens: int = 500,
+        schema: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Classify a field using the LLM.
@@ -83,7 +88,11 @@ class BaseLLMProvider(ABC):
         """
         for attempt in range(self.max_retries):
             try:
-                content = self._call_api(prompt, temperature, max_tokens)
+                content = (
+                    self._call_api(prompt, temperature, max_tokens, schema=schema)
+                    if schema is not None
+                    else self._call_api(prompt, temperature, max_tokens)
+                )
                 
                 # Parse JSON response
                 result = self._parse_response(content)

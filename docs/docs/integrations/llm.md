@@ -1,102 +1,96 @@
 ---
 title: "LLM classification"
-description: "RAG-based classification with OpenAI, Ollama, and other providers"
+description: "Registry-constrained LLM classification with OpenAI-compatible providers and Claude"
 ---
 # LLM classification
 
-Metacrafter can classify fields with Retrieval-Augmented Generation: embed the
-field name and sample values, retrieve similar [registry](/integrations/registry)
-entries, then ask an LLM. Three modes:
+Metacrafter can ask a language model to label fields that rules and registry patterns
+leave unresolved. The model never invents datatypes: it chooses from a shortlist of
+[registry](/integrations/registry) records, or answers "none".
 
-| Mode | Flag | Behavior |
+| Mode | Flag | Behaviour |
 |------|------|----------|
-| Rules | `--classification-mode rules` (default) | YAML rules only |
-| LLM | `--classification-mode llm` or `--llm-only` | Skip rules |
-| Hybrid | `--classification-mode hybrid` or `--use-llm` | Rules first; LLM for unmatched / low-confidence fields |
+| Rules | `--classification-mode rules` (default) | Rules and registry detectors only |
+| LLM | `--classification-mode llm` or `--llm-only` | LLM for every field |
+| Hybrid | `--classification-mode hybrid` or `--use-llm` | Rules first; the LLM only for fields without a match at or above `--llm-min-confidence` |
+
+## How it works
+
+1. **Shortlist.** For each field, the registry ranks candidates from the sample values
+   (regexp hit rate, checksum, field-name similarity) and from the field name. This runs
+   locally; raw values are used here only.
+2. **Disclosure.** The prompt gets the field name and, depending on the policy, nothing
+   else, masked value shapes (`Aaaa.Aaaa@aaaa.aaa`) or raw values (see below).
+3. **Prompt.** Each candidate is described with its name, description, examples and,
+   separately, its counter-examples (registry examples marked `valid: false`).
+4. **Constrained answer.** The answer schema allows only shortlist ids or `null`. The
+   answer is validated again; aliases resolve to canonical ids, and any other id is
+   rejected and recorded in `evidence.rejected`.
+5. **Score.** Model confidence maps to `100 × confidence × 0.8`, capped at 80, so strong
+   value evidence from rules outranks an unverified model answer. Matches have
+   `ruletype: llm` and `evidence` with the shortlist, disclosure mode, provider and model.
+6. **Cache.** Answers are cached per field name, values and registry version.
 
 ## Installation
 
 ```bash
-pip install 'metacrafter[llm]'
+pip install 'metacrafter[llm]'        # adds the Anthropic SDK; OpenAI-compatible APIs need nothing extra
+```
+
+## Providers
+
+All OpenAI-compatible servers go through one HTTP client; the presets only set defaults.
+`--llm-base-url`, `--llm-model` and `--llm-api-key` override them.
+
+| `--llm-provider` | Default model | API key | Default base URL | Local |
+|---|---|---|---|---|
+| `openai` | gpt-4o-mini | `OPENAI_API_KEY` | `https://api.openai.com/v1` | no |
+| `openrouter` | openai/gpt-4o-mini | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` | no |
+| `perplexity` | llama-3.1-sonar-small-128k-online | `PERPLEXITY_API_KEY` | `https://api.perplexity.ai` | no |
+| `ollama` | llama3 | none | `http://localhost:11434/v1` | yes |
+| `lmstudio` | local-model | none | `http://localhost:1234/v1` | yes |
+| `openai-compatible` | gpt-4o-mini | `OPENAI_API_KEY` | set `--llm-base-url` | by host |
+| `anthropic` | claude-opus-5-5 | `ANTHROPIC_API_KEY` (or `ant auth login`) | Anthropic API | no |
+
+A provider counts as local when its base URL points to `localhost` or a loopback address.
+OpenAI-compatible providers request JSON-schema output and fall back to JSON mode when a
+server does not support it. The Anthropic provider uses structured outputs and enables
+server-side refusal fallbacks; a refusal is reported as an LLM error, never as a label.
+
+## Privacy
+
+`sample_policy` decides what may leave the machine:
+
+| `sample_policy` | Prompt contains |
+|---|---|
+| `names-only` (default) | Field name and registry candidates; no values |
+| `redacted` | Masked value shapes |
+| `raw` | Up to 10 raw values, **except** that values of fields whose shortlist contains a PII datatype are masked when the provider is not local |
+
+Set `llm_send_pii_values: true` in `.metacrafter` to allow raw PII values to a remote
+provider. Each match records the mode used in `evidence.disclosure`.
+
+## Configuration
+
+```yaml
+# .metacrafter
+classification_mode: hybrid
+llm_provider: anthropic          # or openai, ollama, ...
+llm_model: claude-opus-5-5
+llm_min_confidence: 60
+llm_shortlist_size: 15
+llm_send_pii_values: false
 ```
 
 ## CLI examples
 
 ```bash
-metacrafter scan file data.csv \
-  --classification-mode llm \
-  --llm-provider openai \
-  --llm-model gpt-4o-mini \
-  --llm-api-key "sk-..." \
-  --format full
-
-metacrafter scan file data.csv \
-  --classification-mode hybrid \
-  --llm-provider openai \
-  --llm-min-confidence 60.0 \
-  --format full
-
-metacrafter scan file data.csv \
-  --llm-only \
-  --llm-provider ollama \
-  --llm-base-url "http://localhost:11434" \
-  --llm-model llama3 \
-  --format full
+metacrafter scan file data.csv --classification-mode hybrid --llm-provider anthropic
+metacrafter scan file data.csv --llm-only --llm-provider ollama --llm-model llama3
 ```
 
-OpenRouter and LM Studio use the same flags (`openrouter` / `lmstudio` and a
-`--llm-base-url` for LM Studio, default `http://localhost:1234/v1`).
+## Deprecated: vector index
 
-## Providers
-
-| Provider | Model examples | API key | Base URL |
-|----------|----------------|---------|----------|
-| OpenAI | gpt-4o-mini, gpt-4 | `OPENAI_API_KEY` | `https://api.openai.com/v1` |
-| OpenRouter | openai/gpt-4o-mini | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` |
-| Ollama | llama3, mistral | none | `http://localhost:11434` |
-| LM Studio | any local model | none | `http://localhost:1234/v1` |
-| Perplexity | llama-3.1-sonar-small-128k-online | `PERPLEXITY_API_KEY` | `https://api.perplexity.ai` |
-
-Embeddings currently use OpenAI even when the chat model is local.
-
-## Configuration
-
-```yaml
-classification_mode: hybrid
-llm_provider: openai
-llm_model: gpt-4o-mini
-llm_registry_path: ../metacrafter-registry/data/datatypes_latest.jsonl
-llm_index_path: ./llm_index
-llm_min_confidence: 50.0
-```
-
-Do not commit API keys; use environment variables.
-
-## How it works
-
-1. On first use, registry datatypes are embedded into a ChromaDB index
-2. Each field name + samples is embedded and similar types are retrieved
-3. The LLM classifies with that context
-4. Results are converted to the same match structure as rules
-
-Index build is a one-time cost. Each field is typically one LLM call. Rebuild
-the index when the registry changes.
-
-## Python
-
-```python
-from metacrafter.core import CrafterCmd
-
-cmd = CrafterCmd(
-    llm_only=True,
-    llm_provider="ollama",
-    llm_base_url="http://localhost:11434",
-    llm_model="llama3",
-)
-report = cmd.scan_data(
-    items=[{"email": "test@example.com"}],
-    classification_mode="llm",
-)
-```
-
-CLI flags are listed under [Shared CLI options](/commands/shared-options).
+`llm_registry_path` / `--llm-registry` select the older pipeline that embeds a registry
+JSONL file into ChromaDB (`pip install 'metacrafter[llm-chroma]'`). It still works but logs
+a deprecation warning; the registry adapter replaces it.

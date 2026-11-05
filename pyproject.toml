@@ -81,8 +81,13 @@ duckdb = ["duckdb>=0.9", "duckdb-engine>=0.9"]
 server = ["fastapi>=0.110", "uvicorn>=0.29"]
 # MCP server for AI agents (`metacrafter mcp`).
 mcp = ["mcp>=2.0,<3"]
-# LLM / RAG hybrid classification (OpenAI, local providers, vector store).
+# LLM classification. OpenAI-compatible providers (OpenAI, OpenRouter, Perplexity,
+# Ollama, LM Studio) need no extra package; the Anthropic provider uses the SDK.
 llm = [
+    "anthropic>=2.0",
+]
+# Optional vector-search retrieval (deprecated llm_registry_path / embeddings path).
+llm-chroma = [
     "openai>=1.0.0",
     "chromadb>=0.4.0",
 ]
@@ -116,8 +121,7 @@ all = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "mcp>=2.0,<3",
-    "openai>=1.0.0",
-    "chromadb>=0.4.0",
+    "anthropic>=2.0",
     "acryl-datahub[datahub-rest]>=0.12.0",
 ]
 

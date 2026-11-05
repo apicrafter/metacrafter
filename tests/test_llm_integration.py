@@ -4,6 +4,7 @@ import pytest
 import json
 import tempfile
 from pathlib import Path
+from tests.llm_helpers import OPENAI_COMPATIBLE_POST, mock_chat
 from unittest.mock import Mock, patch, MagicMock
 
 # Mock dependencies
@@ -46,7 +47,7 @@ class TestLLMIntegration:
         return registry_file
     
     @patch('metacrafter.classify.llm.embedder.OpenAI')
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
+    @patch(OPENAI_COMPATIBLE_POST)
     def test_crafter_cmd_with_llm_init(self, mock_provider_openai, mock_embedder_openai, tmp_path):
         """Test CrafterCmd initialization with LLM."""
         from metacrafter.core import CrafterCmd
@@ -61,12 +62,7 @@ class TestLLMIntegration:
         )
         mock_embedder_openai.return_value = mock_embedder_client
         
-        mock_provider_client = Mock()
-        mock_provider_response = Mock()
-        mock_provider_response.choices = [Mock()]
-        mock_provider_response.choices[0].message.content = '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}'
-        mock_provider_client.chat.completions.create.return_value = mock_provider_response
-        mock_provider_openai.return_value = mock_provider_client
+        mock_chat(mock_provider_openai, '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}')
         
         cmd = CrafterCmd(
             remote=None,
@@ -83,7 +79,7 @@ class TestLLMIntegration:
         assert cmd.classification_mode == "hybrid"
     
     @patch('metacrafter.classify.llm.embedder.OpenAI')
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
+    @patch(OPENAI_COMPATIBLE_POST)
     def test_crafter_cmd_llm_only_mode(self, mock_provider_openai, mock_embedder_openai, tmp_path):
         """Test CrafterCmd with LLM-only mode."""
         from metacrafter.core import CrafterCmd
@@ -96,12 +92,7 @@ class TestLLMIntegration:
         mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
-        mock_provider_client = Mock()
-        mock_provider_response = Mock()
-        mock_provider_response.choices = [Mock()]
-        mock_provider_response.choices[0].message.content = '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}'
-        mock_provider_client.chat.completions.create.return_value = mock_provider_response
-        mock_provider_openai.return_value = mock_provider_client
+        mock_chat(mock_provider_openai, '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}')
         
         cmd = CrafterCmd(
             remote=None,
@@ -118,7 +109,7 @@ class TestLLMIntegration:
         assert cmd.llm_classifier is not None
     
     @patch('metacrafter.classify.llm.embedder.OpenAI')
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
+    @patch(OPENAI_COMPATIBLE_POST)
     def test_scan_data_llm_only_mode(self, mock_provider_openai, mock_embedder_openai, tmp_path):
         """Test scan_data with LLM-only mode."""
         from metacrafter.core import CrafterCmd
@@ -132,12 +123,7 @@ class TestLLMIntegration:
         mock_embedder_openai.return_value = mock_embedder_client
         
         # Mock LLM response
-        mock_provider_client = Mock()
-        mock_provider_response = Mock()
-        mock_provider_response.choices = [Mock()]
-        mock_provider_response.choices[0].message.content = '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}'
-        mock_provider_client.chat.completions.create.return_value = mock_provider_response
-        mock_provider_openai.return_value = mock_provider_client
+        mock_chat(mock_provider_openai, '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}')
         
         cmd = CrafterCmd(
             remote=None,
@@ -166,7 +152,7 @@ class TestLLMIntegration:
         assert "data" in report
     
     @patch('metacrafter.classify.llm.embedder.OpenAI')
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
+    @patch(OPENAI_COMPATIBLE_POST)
     def test_scan_data_hybrid_mode(self, mock_provider_openai, mock_embedder_openai, tmp_path):
         """Test scan_data with hybrid mode."""
         from metacrafter.core import CrafterCmd
@@ -180,12 +166,7 @@ class TestLLMIntegration:
         mock_embedder_openai.return_value = mock_embedder_client
         
         # Mock LLM response
-        mock_provider_client = Mock()
-        mock_provider_response = Mock()
-        mock_provider_response.choices = [Mock()]
-        mock_provider_response.choices[0].message.content = '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}'
-        mock_provider_client.chat.completions.create.return_value = mock_provider_response
-        mock_provider_openai.return_value = mock_provider_client
+        mock_chat(mock_provider_openai, '{"datatype_id": "email", "confidence": 0.9, "reason": "test"}')
         
         cmd = CrafterCmd(
             remote=None,
@@ -215,7 +196,7 @@ class TestLLMIntegration:
         assert "data" in report
     
     @patch('metacrafter.classify.llm.embedder.OpenAI')
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
+    @patch(OPENAI_COMPATIBLE_POST)
     def test_scan_data_rules_mode_default(self, mock_provider_openai, mock_embedder_openai, tmp_path):
         """Test scan_data with rules-only mode (default)."""
         from metacrafter.core import CrafterCmd
@@ -239,7 +220,7 @@ class TestLLMIntegration:
         assert cmd.llm_classifier is None
     
     @patch('metacrafter.classify.llm.embedder.OpenAI')
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
+    @patch(OPENAI_COMPATIBLE_POST)
     def test_llm_fallback_on_error(self, mock_provider_openai, mock_embedder_openai, tmp_path):
         """Test that LLM errors don't crash the scan in hybrid mode."""
         from metacrafter.core import CrafterCmd
@@ -253,9 +234,7 @@ class TestLLMIntegration:
         mock_embedder_openai.return_value = mock_embedder_client
         
         # Mock LLM to raise error
-        mock_provider_client = Mock()
-        mock_provider_client.chat.completions.create.side_effect = Exception("API Error")
-        mock_provider_openai.return_value = mock_provider_client
+        mock_provider_openai.side_effect = Exception("API Error")
         
         cmd = CrafterCmd(
             remote=None,
@@ -283,7 +262,7 @@ class TestLLMIntegration:
         assert "results" in report
     
     @patch('metacrafter.classify.llm.embedder.OpenAI')
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
+    @patch(OPENAI_COMPATIBLE_POST)
     def test_llm_only_mode_without_classifier(self, mock_provider_openai, mock_embedder_openai, tmp_path):
         """Test LLM-only mode falls back to rules if classifier not available."""
         from metacrafter.core import CrafterCmd
@@ -310,7 +289,7 @@ class TestLLMResultFormat:
     """Tests for LLM result format conversion."""
     
     @patch('metacrafter.classify.llm.embedder.OpenAI')
-    @patch('metacrafter.classify.llm.providers.openai.OpenAI')
+    @patch(OPENAI_COMPATIBLE_POST)
     def test_llm_result_to_rule_result(self, mock_provider_openai, mock_embedder_openai, tmp_path):
         """Test conversion of LLM results to RuleResult format."""
         from metacrafter.core import CrafterCmd
@@ -330,12 +309,7 @@ class TestLLMResultFormat:
         mock_embedder_openai.return_value = mock_embedder_client
         
         # Mock LLM response
-        mock_provider_client = Mock()
-        mock_provider_response = Mock()
-        mock_provider_response.choices = [Mock()]
-        mock_provider_response.choices[0].message.content = '{"datatype_id": "email", "confidence": 0.85, "reason": "test"}'
-        mock_provider_client.chat.completions.create.return_value = mock_provider_response
-        mock_provider_openai.return_value = mock_provider_client
+        mock_chat(mock_provider_openai, '{"datatype_id": "email", "confidence": 0.85, "reason": "test"}')
         
         cmd = CrafterCmd(
             remote=None,

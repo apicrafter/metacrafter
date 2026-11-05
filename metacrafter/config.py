@@ -122,6 +122,8 @@ class MetacrafterConfig(BaseModel):
     llm_api_key: Optional[str] = None
     llm_base_url: Optional[str] = None
     llm_min_confidence: Optional[float] = Field(default=50.0, description="Minimum confidence for LLM results (0-100)")
+    llm_send_pii_values: bool = Field(default=False, description="Allow raw values of possible PII fields to reach a non-local LLM provider")
+    llm_shortlist_size: int = Field(default=15, ge=1, le=50, description="Registry candidates offered to the LLM per field")
     
     @field_validator('rulepath')
     @classmethod
@@ -159,8 +161,9 @@ class MetacrafterConfig(BaseModel):
     @classmethod
     def validate_llm_provider(cls, v):
         """Validate LLM provider."""
-        if v is not None and v.lower() not in ("openai", "openrouter", "ollama", "lmstudio", "perplexity"):
-            raise ValueError(f"llm_provider must be one of: openai, openrouter, ollama, lmstudio, perplexity. Got: {v}")
+        allowed = ("openai", "openrouter", "ollama", "lmstudio", "perplexity", "openai-compatible", "anthropic")
+        if v is not None and v.lower() not in allowed:
+            raise ValueError(f"llm_provider must be one of: {', '.join(allowed)}. Got: {v}")
         return v.lower() if v else "openai"
     
     @field_validator('llm_min_confidence')
@@ -379,6 +382,8 @@ class ConfigLoader:
                     "llm_api_key": validated_config.llm_api_key,
                     "llm_base_url": validated_config.llm_base_url,
                     "llm_min_confidence": validated_config.llm_min_confidence,
+                    "llm_send_pii_values": validated_config.llm_send_pii_values,
+                    "llm_shortlist_size": validated_config.llm_shortlist_size,
                 }
                 # Check if any LLM-specific setting is configured (excluding defaults)
                 # Consider it configured if:
