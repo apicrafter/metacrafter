@@ -10,6 +10,7 @@ from urllib.parse import quote
 import requests
 from metacrafter.reports import normalize_report, validate_options
 from metacrafter.integrations.outcomes import perform
+from metacrafter.integrations.labels import match_datatype, registry_properties
 
 OPENMETADATA_AVAILABLE = True
 
@@ -151,14 +152,6 @@ class OpenMetadataExporter:
         if "pii" in [t.lower() for t in field_tags]:
             tags.append("PII")
         
-        # Check matches for PII indicators
-        matches = field_info.get("matches", [])
-        for match in matches:
-            # Some datatypes are inherently PII
-            dataclass = match.get("dataclass", "").lower()
-            if dataclass in ["email", "phone", "ssn", "passport", "creditcard"]:
-                tags.append("PII")
-                break
         
         return list(set(tags))  # Remove duplicates
 
@@ -174,7 +167,7 @@ class OpenMetadataExporter:
         """
         tags = []
         for match in matches:
-            dataclass = match.get("dataclass")
+            dataclass = match_datatype(match)
             if dataclass:
                 # Capitalize first letter for tag name
                 tag_name = dataclass[0].upper() + dataclass[1:] if len(dataclass) > 1 else dataclass.upper()
@@ -193,7 +186,7 @@ class OpenMetadataExporter:
         """
         terms = []
         for match in matches:
-            dataclass = match.get("dataclass")
+            dataclass = match_datatype(match)
             if dataclass:
                 # Generate glossary term FQN
                 # OpenMetadata uses FQN format: GlossaryTerm.{term_name}
@@ -227,9 +220,10 @@ class OpenMetadataExporter:
         datatype_url = field_info.get("datatype_url") or best_match.get("classurl")
         if datatype_url:
             properties["metacrafter_datatype_url"] = datatype_url
+        properties.update(registry_properties(best_match))
         
         # Add datatype name
-        dataclass = best_match.get("dataclass")
+        dataclass = match_datatype(best_match)
         if dataclass:
             properties["metacrafter_datatype"] = dataclass
         

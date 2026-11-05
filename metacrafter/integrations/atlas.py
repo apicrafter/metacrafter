@@ -6,6 +6,7 @@ import logging
 import os
 import base64
 from typing import Dict, Any, List, Optional
+from metacrafter.integrations.labels import match_datatype, registry_properties
 
 logger = logging.getLogger(__name__)
 
@@ -276,14 +277,6 @@ class AtlasExporter:
         if "pii" in [t.lower() for t in field_tags]:
             classifications.append("PII")
         
-        # Check matches for PII indicators
-        matches = field_info.get("matches", [])
-        for match in matches:
-            # Some datatypes are inherently PII
-            dataclass = match.get("dataclass", "").lower()
-            if dataclass in ["email", "phone", "ssn", "passport", "creditcard"]:
-                classifications.append("PII")
-                break
         
         return list(set(classifications))  # Remove duplicates
     
@@ -298,7 +291,7 @@ class AtlasExporter:
         """
         classifications = []
         for match in matches:
-            dataclass = match.get("dataclass")
+            dataclass = match_datatype(match)
             if dataclass:
                 # Capitalize first letter for classification name
                 classification_name = dataclass[0].upper() + dataclass[1:] if len(dataclass) > 1 else dataclass.upper()
@@ -330,9 +323,10 @@ class AtlasExporter:
         datatype_url = field_info.get("datatype_url") or best_match.get("classurl")
         if datatype_url:
             attributes["metacrafter_datatype_url"] = datatype_url
+        attributes.update(registry_properties(best_match))
         
         # Add datatype name
-        dataclass = best_match.get("dataclass")
+        dataclass = match_datatype(best_match)
         if dataclass:
             attributes["metacrafter_datatype"] = dataclass
         

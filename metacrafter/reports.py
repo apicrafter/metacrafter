@@ -5,7 +5,7 @@ import json
 import math
 from typing import Any, Dict, List
 
-REPORT_VERSION = 2
+REPORT_VERSION = 3  # see metacrafter.report.models
 STATS_HEADERS = [
     "key",
     "ftype",
@@ -55,7 +55,7 @@ def normalize_report(report):
     if not isinstance(report, dict):
         raise ValueError("A report must be an object")
     version = report.get("report_version", 1)
-    if version not in (1, REPORT_VERSION):
+    if version not in (1, 2, REPORT_VERSION):
         raise ValueError("Unsupported report version: %s" % version)
     fields = report.get("data", report.get("fields"))
     if fields is None or not isinstance(fields, list):

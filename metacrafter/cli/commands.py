@@ -158,7 +158,7 @@ def rules_list(
     debug: bool = typer.Option(False, help="Enable debug logging"),
     rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Custom rule path(s), comma-separated for multiple paths"),
     country_codes: Optional[str] = typer.Option(None, "--country-codes", help="Comma-separated ISO country codes to include"),
-    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
+    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, csv, md (Markdown) or legacy (pre-1.0 JSON)"),
     output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file path"),
     table_format: str = typer.Option(DEFAULT_TABLE_FORMAT, "--table-format", help="Table style: 'auto' (rich on terminals), 'rich', 'plain', or any tabulate format (simple, grid, github, ...)"),
 ):
@@ -223,7 +223,8 @@ def scan_file(
     registry_detectors: Optional[str] = typer.Option(None, "--registry-detectors", help="Detectors derived from registry regexps: off, stable (default) or all"),
     legacy_scoring: bool = typer.Option(False, "--legacy-scoring", help="Use pre-1.0 confidence scores (share of matching values; 100 for field names)"),
     include_deprecated: bool = typer.Option(False, "--include-deprecated", help="Also run rules marked deprecated"),
-    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
+    include_samples: bool = typer.Option(False, "--include-samples", help="Keep raw values (dictionary values, string min/max) in json, yaml and md output"),
+    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, csv, md (Markdown) or legacy (pre-1.0 JSON)"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
@@ -286,7 +287,7 @@ def scan_file(
         raise typer.BadParameter("--retry-delay must be >= 0")
     if timeout is not None and timeout < 0:
         raise typer.BadParameter("--timeout must be >= 0")
-    if llm_min_confidence < 0 or llm_min_confidence > 100:
+    if llm_min_confidence is not None and (llm_min_confidence < 0 or llm_min_confidence > 100):
         raise typer.BadParameter("--llm-min-confidence must be between 0 and 100")
     
     # Determine classification mode from flags
@@ -305,7 +306,7 @@ def scan_file(
     use_llm_flag = final_classification_mode in ("llm", "hybrid") if final_classification_mode else False
     llm_only_flag = final_classification_mode == "llm" if final_classification_mode else False
     
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
+    allowed_output_formats = {"table", "json", "yaml", "csv", "md", "legacy"}
     output_format_value = output_format.lower()
     if output_format_value not in allowed_output_formats:
         raise typer.BadParameter(
@@ -334,6 +335,7 @@ def scan_file(
         registry_detectors=registry_detectors,
         legacy_scoring=legacy_scoring,
         include_deprecated=include_deprecated,
+        include_samples=include_samples,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
@@ -408,7 +410,8 @@ def scan_db(
     registry_detectors: Optional[str] = typer.Option(None, "--registry-detectors", help="Detectors derived from registry regexps: off, stable (default) or all"),
     legacy_scoring: bool = typer.Option(False, "--legacy-scoring", help="Use pre-1.0 confidence scores (share of matching values; 100 for field names)"),
     include_deprecated: bool = typer.Option(False, "--include-deprecated", help="Also run rules marked deprecated"),
-    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
+    include_samples: bool = typer.Option(False, "--include-samples", help="Keep raw values (dictionary values, string min/max) in json, yaml and md output"),
+    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, csv, md (Markdown) or legacy (pre-1.0 JSON)"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
@@ -437,7 +440,7 @@ def scan_db(
     
     if verbose and quiet:
         raise typer.BadParameter("Cannot use --verbose and --quiet together")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
+    allowed_output_formats = {"table", "json", "yaml", "csv", "md", "legacy"}
     output_format_value = output_format.lower()
     if output_format_value not in allowed_output_formats:
         raise typer.BadParameter(
@@ -456,7 +459,7 @@ def scan_db(
         raise typer.BadParameter("--retry-delay must be >= 0")
     if timeout is not None and timeout < 0:
         raise typer.BadParameter("--timeout must be >= 0")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
+    allowed_output_formats = {"table", "json", "yaml", "csv", "md", "legacy"}
     output_format_value = output_format.lower()
     if output_format_value not in allowed_output_formats:
         raise typer.BadParameter(
@@ -484,6 +487,7 @@ def scan_db(
         registry_detectors=registry_detectors,
         legacy_scoring=legacy_scoring,
         include_deprecated=include_deprecated,
+        include_samples=include_samples,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
@@ -545,7 +549,8 @@ def scan_mongodb(
     registry_detectors: Optional[str] = typer.Option(None, "--registry-detectors", help="Detectors derived from registry regexps: off, stable (default) or all"),
     legacy_scoring: bool = typer.Option(False, "--legacy-scoring", help="Use pre-1.0 confidence scores (share of matching values; 100 for field names)"),
     include_deprecated: bool = typer.Option(False, "--include-deprecated", help="Also run rules marked deprecated"),
-    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
+    include_samples: bool = typer.Option(False, "--include-samples", help="Keep raw values (dictionary values, string min/max) in json, yaml and md output"),
+    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, csv, md (Markdown) or legacy (pre-1.0 JSON)"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
@@ -574,7 +579,7 @@ def scan_mongodb(
     
     if verbose and quiet:
         raise typer.BadParameter("Cannot use --verbose and --quiet together")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
+    allowed_output_formats = {"table", "json", "yaml", "csv", "md", "legacy"}
     output_format_value = output_format.lower()
     if output_format_value not in allowed_output_formats:
         raise typer.BadParameter(
@@ -593,7 +598,7 @@ def scan_mongodb(
         raise typer.BadParameter("--retry-delay must be >= 0")
     if timeout is not None and timeout < 0:
         raise typer.BadParameter("--timeout must be >= 0")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
+    allowed_output_formats = {"table", "json", "yaml", "csv", "md", "legacy"}
     output_format_value = output_format.lower()
     if output_format_value not in allowed_output_formats:
         raise typer.BadParameter(
@@ -621,6 +626,7 @@ def scan_mongodb(
         registry_detectors=registry_detectors,
         legacy_scoring=legacy_scoring,
         include_deprecated=include_deprecated,
+        include_samples=include_samples,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
@@ -684,7 +690,8 @@ def scan_bulk(
     registry_detectors: Optional[str] = typer.Option(None, "--registry-detectors", help="Detectors derived from registry regexps: off, stable (default) or all"),
     legacy_scoring: bool = typer.Option(False, "--legacy-scoring", help="Use pre-1.0 confidence scores (share of matching values; 100 for field names)"),
     include_deprecated: bool = typer.Option(False, "--include-deprecated", help="Also run rules marked deprecated"),
-    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
+    include_samples: bool = typer.Option(False, "--include-samples", help="Keep raw values (dictionary values, string min/max) in json, yaml and md output"),
+    output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, csv, md (Markdown) or legacy (pre-1.0 JSON)"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
@@ -713,7 +720,7 @@ def scan_bulk(
     
     if verbose and quiet:
         raise typer.BadParameter("Cannot use --verbose and --quiet together")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
+    allowed_output_formats = {"table", "json", "yaml", "csv", "md", "legacy"}
     output_format_value = output_format.lower()
     if output_format_value not in allowed_output_formats:
         raise typer.BadParameter(
@@ -730,7 +737,7 @@ def scan_bulk(
         raise typer.BadParameter("--retry-delay must be >= 0")
     if timeout is not None and timeout < 0:
         raise typer.BadParameter("--timeout must be >= 0")
-    allowed_output_formats = {"table", "json", "yaml", "csv"}
+    allowed_output_formats = {"table", "json", "yaml", "csv", "md", "legacy"}
     output_format_value = output_format.lower()
     if output_format_value not in allowed_output_formats:
         raise typer.BadParameter(
@@ -758,6 +765,7 @@ def scan_bulk(
         registry_detectors=registry_detectors,
         legacy_scoring=legacy_scoring,
         include_deprecated=include_deprecated,
+        include_samples=include_samples,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
@@ -793,6 +801,38 @@ def scan_bulk(
 # ============================================================================
 # Export Commands
 # ============================================================================
+
+@export_app.command('labels')
+def export_labels_cmd(
+    report: str = typer.Argument(..., help="Saved scan report (JSON or YAML)"),
+    system: str = typer.Option(..., "--system", help="Target system: presidio, google_dlp, dpv, purview, schema_org or wikidata"),
+    min_confidence: float = typer.Option(0.0, "--min-confidence", help="Skip matches below this confidence"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file (default: stdout)"),
+):
+    """Map report matches to labels of another classification system via registry mappings."""
+    from metacrafter.integrations.crosswalk import export_labels
+    from metacrafter.product_tools import emit, load_document
+
+    try:
+        result = export_labels(load_document(report), system, min_confidence)
+    except ValueError as error:
+        typer.echo(f"Error: {error}", err=True)
+        raise typer.Exit(2)
+    emit(result, output)
+
+
+@export_app.command('frictionless')
+def export_frictionless_cmd(
+    report: str = typer.Argument(..., help="Saved scan report (JSON or YAML)"),
+    min_confidence: float = typer.Option(0.0, "--min-confidence", help="Ignore matches below this confidence"),
+    output: Optional[str] = typer.Option(None, "--output", "-o", help="Output file (default: stdout)"),
+):
+    """Write a Frictionless Data Package with semantic field annotations (rdfType, registry URL)."""
+    from metacrafter.integrations.frictionless import export_frictionless
+    from metacrafter.product_tools import emit, load_document
+
+    emit(export_frictionless(load_document(report), min_confidence), output)
+
 
 @export_app.command('datahub')
 def export_datahub(

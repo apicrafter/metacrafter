@@ -1,4 +1,8 @@
-# Change: Registry-enriched scan report v2 and crosswalk exports
+# Change: Registry-enriched scan report (version 3) and crosswalk exports
+
+> Note (2026-11-05): the Codex review already uses `report_version: 2` for the
+> interchange format, so the typed, registry-enriched report defined here is
+> `report_version: 3`, a superset of version 2. The change id keeps its original name.
 
 ## Why
 

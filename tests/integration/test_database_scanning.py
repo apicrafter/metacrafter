@@ -148,7 +148,7 @@ class TestSQLiteDatabaseScanning:
         )
         
         # scan_db returns None when output is written, but we can verify no exceptions
-        assert isinstance(result, dict) and result["report_version"] == 2
+        assert isinstance(result, dict) and result["report_version"] == 3
     
     def test_scan_sqlite_with_output(self, sqlite_db, tmp_path):
         """Test SQLite scanning with JSON output file."""
@@ -245,7 +245,7 @@ class TestSQLiteDatabaseScanning:
             dformat="short"
         )
         
-        assert isinstance(result, dict) and result["report_version"] == 2
+        assert isinstance(result, dict) and result["report_version"] == 3
 
 
 class TestDuckDBDatabaseScanning:
@@ -271,7 +271,7 @@ class TestDuckDBDatabaseScanning:
         )
         
         # scan_db returns None when output is written
-        assert isinstance(result, dict) and result["report_version"] == 2
+        assert isinstance(result, dict) and result["report_version"] == 3
     
     def test_scan_duckdb_with_output(self, duckdb_db, tmp_path):
         """Test DuckDB scanning with output file."""
@@ -359,7 +359,7 @@ class TestDatabaseErrorHandling:
             dformat="short"
         )
         
-        assert isinstance(result, dict) and result["report_version"] == 2
+        assert isinstance(result, dict) and result["report_version"] == 3
         
         # Cleanup
         if db_path.exists():

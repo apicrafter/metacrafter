@@ -45,7 +45,7 @@ def test_scan_data_endpoint_success(client):
     response = client.post("/api/v1/scan_data", json=[{"name": "John", "email": "john@example.com"}], query_string={"limit": 100})
     assert response.status_code == 200
     report = response.get_json()
-    assert report["report_version"] == 2
+    assert report["report_version"] == 3
     assert {field["field"] for field in report["data"]} == {"name", "email"}
 
 

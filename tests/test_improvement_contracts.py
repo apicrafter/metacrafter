@@ -15,6 +15,7 @@ from metacrafter import CrafterCmd
 from metacrafter.classify.processor import RulesProcessor, _safe_eval_pyparsing_rule
 from metacrafter.classify.utils import dict_to_columns, _seek_xml_lists
 from metacrafter.config import ConfigLoader, DEFAULT_RULEPATH
+from metacrafter.report import redact_samples
 from metacrafter.product_tools import (
     check_policy,
     dbt_plan,
@@ -198,14 +199,16 @@ def test_file_roundtrip_and_bulk_machine_output(service, tmp_path, capsys):
         str(source), limit=2, output=out, output_format="json", parse_dates=False
     )
     saved = json.loads(out.getvalue())
-    assert saved["data"] == saved["fields"] == report["data"]
+    # Serialized output omits raw values unless --include-samples (privacy default).
+    assert saved["data"] == saved["fields"] == redact_samples(report)["data"]
+    assert saved["samples_included"] is False
     assert saved["sampling"]["retained_count"] == 2
     (tmp_path / "two.jsonl").write_text('{"email":"a@b.test"}\n')
     output = io.StringIO()
     aggregate = service.scan_bulk(
         str(tmp_path), output=output, output_format="json", parse_dates=False
     )
-    assert json.loads(output.getvalue()) == aggregate
+    assert json.loads(output.getvalue()) == redact_samples(aggregate)
     assert len(aggregate["sources"]) == 2
     assert capsys.readouterr().out == ""
 
@@ -224,7 +227,7 @@ def test_sql_quoted_identifiers_and_schema_identity(service, tmp_path):
         parse_dates=False,
     )
     assert report["complete"] and report["sources"][0]["source"] == "main.order detail"
-    assert json.loads(output.getvalue()) == report
+    assert json.loads(output.getvalue()) == redact_samples(report)
     with pytest.raises(ValueError, match="Schema"):
         service.scan_db(
             "sqlite:///" + str(path), schema="missing", output=io.StringIO()

@@ -1,0 +1,41 @@
+---
+title: "Migrating to 1.0"
+description: "Breaking changes from 0.0.x and how to adapt"
+---
+# Migrating to 1.0
+
+## Installation
+
+- **Python 3.10 or newer.** Python 3.8 and 3.9 users can stay on 0.0.x.
+- **`metacrafter-rules` is required.** It provides the default rule pack. Install it
+  from GitHub until it is on PyPI. See [Installation](/getting-started/installation).
+- **The in-repository `rules/` directory is gone.** Rules no longer load from a `rules/`
+  folder in the current directory. List your own directories in `rulepath`.
+- **Optional dependencies moved to extras.** MongoDB, DuckDB, the HTTP server and binary
+  file formats now need `mongodb`, `duckdb`, `server` and `formats`. A command that
+  needs a missing extra names it in the error.
+
+## Results
+
+- **Canonical ids.** Matches carry `datatype` (the canonical registry id) and `rule_key`.
+  `dataclass` keeps the rule key, so alias keys such as `ssn` now also report
+  `datatype: usssn`. URLs point to the canonical record.
+- **PII.** PII also comes from the registry. `pii_source` says whether the rule, the
+  registry or the rule context set it.
+- **Confidence.** Data matches keep their values. Field-name-only matches now score at most
+  60 (60 × priority weight) instead of 100. Use `--legacy-scoring` for the old values.
+- **Registry detectors.** Registry datatypes without a rule are detected by default
+  (`--registry-detectors stable`). Use `--registry-detectors off` for rule-only results.
+- **Report version 3.** Saved reports have `report_version: 3` and new fields. Use
+  `--output-format legacy` for the pre-1.0 JSON shape.
+- **No raw values by default.** JSON, YAML and Markdown output omit dictionary values and
+  string min/max values. Use `--include-samples` to keep them.
+- **Rule order.** A rule from a later rulepath entry replaces an earlier rule with the
+  same id. Before 1.0 the later rule was skipped.
+
+## Rules
+
+- Rule files are validated against the [rule format schema](/integrations/rules). Invalid
+  rules are skipped with a diagnostic. Check them with `metacrafter rules validate`.
+- `priority: 1` is the strongest priority. Rules are sorted by priority, ascending.
+- Check rule keys against the registry with `metacrafter rules check --registry`.

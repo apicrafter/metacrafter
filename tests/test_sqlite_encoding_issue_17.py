@@ -216,7 +216,7 @@ class TestSQLiteEncodingIssue17:
             )
             
             # scan_db returns None when output is written
-            assert isinstance(result, dict) and result["report_version"] == 2
+            assert isinstance(result, dict) and result["report_version"] == 3
             
             # Verify output file was created (even if some data had issues)
             assert output_file.exists()
@@ -254,7 +254,7 @@ class TestSQLiteEncodingIssue17:
             output_format="json"
         )
         
-        assert isinstance(result, dict) and result["report_version"] == 2
+        assert isinstance(result, dict) and result["report_version"] == 3
         assert output_file.exists()
         
         # Verify output contains valid JSON
@@ -285,7 +285,7 @@ class TestSQLiteEncodingIssue17:
                 output_format="json"
             )
             
-            assert isinstance(result, dict) and result["report_version"] == 2
+            assert isinstance(result, dict) and result["report_version"] == 3
             assert output_file.exists()
             
         except Exception as e:
@@ -355,7 +355,7 @@ class TestSQLiteEncodingIssue17:
                 output_format="json"
             )
             
-            assert isinstance(result, dict) and result["report_version"] == 2
+            assert isinstance(result, dict) and result["report_version"] == 3
             assert output_file.exists()
             
         except Exception as e:
@@ -408,7 +408,7 @@ class TestSQLiteEncodingIssue17:
                 limit=10,
                 dformat="short"
             )
-            assert isinstance(result, dict) and result["report_version"] == 2
+            assert isinstance(result, dict) and result["report_version"] == 3
         except Exception as e:
             error_msg = str(e)
             if "Could not decode to UTF-8" in error_msg:
@@ -471,7 +471,7 @@ class TestSQLiteEncodingIssue17:
             output_format="json"
         )
         
-        assert isinstance(result, dict) and result["report_version"] == 2
+        assert isinstance(result, dict) and result["report_version"] == 3
         assert output_file.exists()
         
         # Verify output is valid JSON

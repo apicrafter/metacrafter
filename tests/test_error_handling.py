@@ -38,7 +38,7 @@ def test_scan_file_empty_file():
     try:
         result = cmd.scan_file(temp_path)
         # Should handle empty file gracefully
-        assert result["report_version"] == 2 and result["data"] == []
+        assert result["report_version"] == 3 and result["data"] == []
     finally:
         if os.path.exists(temp_path):
             os.unlink(temp_path)

@@ -7,6 +7,7 @@ import os
 import time
 import copy
 from typing import Dict, Any, List, Optional
+from metacrafter.integrations.labels import match_datatype, registry_properties
 
 logger = logging.getLogger(__name__)
 
@@ -245,14 +246,6 @@ class DataHubExporter:
         if "pii" in [t.lower() for t in field_tags]:
             tags.append("PII")
         
-        # Check matches for PII indicators
-        matches = field_info.get("matches", [])
-        for match in matches:
-            # Some datatypes are inherently PII
-            dataclass = match.get("dataclass", "").lower()
-            if dataclass in ["email", "phone", "ssn", "passport", "creditcard"]:
-                tags.append("PII")
-                break
         
         return list(set(tags))  # Remove duplicates
     
@@ -267,7 +260,7 @@ class DataHubExporter:
         """
         tags = []
         for match in matches:
-            dataclass = match.get("dataclass")
+            dataclass = match_datatype(match)
             if dataclass:
                 # Capitalize first letter for tag name
                 tag_name = dataclass[0].upper() + dataclass[1:] if len(dataclass) > 1 else dataclass.upper()
@@ -285,7 +278,7 @@ class DataHubExporter:
         """
         terms = []
         for match in matches:
-            dataclass = match.get("dataclass")
+            dataclass = match_datatype(match)
             if dataclass:
                 # Generate glossary term URN
                 # Assuming terms follow pattern: urn:li:glossaryTerm:datatype_name
@@ -318,9 +311,10 @@ class DataHubExporter:
         datatype_url = field_info.get("datatype_url") or best_match.get("classurl")
         if datatype_url:
             properties["metacrafter_datatype_url"] = datatype_url
+        properties.update(registry_properties(best_match))
         
         # Add datatype name
-        dataclass = best_match.get("dataclass")
+        dataclass = match_datatype(best_match)
         if dataclass:
             properties["metacrafter_datatype"] = dataclass
         

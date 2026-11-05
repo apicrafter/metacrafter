@@ -23,6 +23,7 @@ from metacrafter.classify.processor import RulesProcessor, BASE_URL
 from metacrafter.classify.stats import Analyzer, DEFAULT_DICT_SHARE, DEFAULT_EMPTY_VALUES
 
 from metacrafter.config import ConfigLoader, DEFAULT_RULEPATH
+from metacrafter.report import finalize_report, redact_samples, render_markdown, to_legacy
 from metacrafter.reports import statistics_dict, validate_options, normalize_report, aggregate_reports, rules_fingerprint
 from metacrafter.classify.utils import dict_to_columns
 from metacrafter import output as cli_output
@@ -134,6 +135,7 @@ class CrafterCmd(object):
         registry_detectors: Optional[str] = None,
         legacy_scoring: bool = False,
         include_deprecated: bool = False,
+        include_samples: bool = False,
     ):
         """Initialize CrafterCmd instance.
         
@@ -195,6 +197,7 @@ class CrafterCmd(object):
         else:
             self.retry_delay = retry_delay
 
+        self.include_samples = bool(include_samples)
         self.legacy_scoring = bool(legacy_scoring)
         self.include_deprecated = bool(include_deprecated)
         self.registry_detectors = registry_detectors or self._registry_settings.get("detectors") or "stable"
@@ -745,6 +748,18 @@ class CrafterCmd(object):
         else:
             print(data_str)
 
+    def _write_text_output(self, text, output):
+        if output is None:
+            print(text, end="")
+            return
+        if isinstance(output, str):
+            with open(output, "w", encoding="utf-8") as handle:
+                handle.write(text)
+            if not self.quiet:
+                print(f"Output written to {output}", file=sys.stderr)
+            return
+        output.write(text)
+
     def _write_csv_output(self, rows, headers, output):
         safe_rows = [self._stringify_row(row) for row in rows]
         should_close = False
@@ -873,10 +888,17 @@ class CrafterCmd(object):
                     print("No results")
             return
 
-        if output_format in ("json", "yaml"):
+        if output_format in ("json", "yaml", "legacy", "md"):
             payload = normalize_report(dict(report, table=filename, source=filename, data=detailed, results=prepared))
-            fmt = output_format
-            self._write_serialized_output(payload, output, fmt)
+            if output_format == "legacy":
+                self._write_serialized_output(to_legacy(payload), output, "json")
+            else:
+                if not self.include_samples:
+                    payload = redact_samples(payload)
+                if output_format == "md":
+                    self._write_text_output(render_markdown(payload, self.include_samples), output)
+                else:
+                    self._write_serialized_output(payload, output, output_format)
         elif output_format == "csv":
             filtered = self._filter_results_for_display(prepared, dformat)
             self._write_csv_output(filtered, RESULT_HEADERS, output)
@@ -890,9 +912,18 @@ class CrafterCmd(object):
     def _write_db_results(
         self, db_results, dformat, output, output_format="table", stats_only=False, errors=None
     ):
-        if output_format in ("json", "yaml"):
+        if output_format in ("json", "yaml", "legacy", "md"):
             reports = [dict(report, source=table, table=table) for table, report in db_results.items()]
-            self._write_serialized_output(aggregate_reports(reports, errors), output, output_format)
+            payload = aggregate_reports(reports, errors)
+            if output_format == "legacy":
+                self._write_serialized_output(to_legacy(payload), output, "json")
+                return
+            if not self.include_samples:
+                payload = redact_samples(payload)
+            if output_format == "md":
+                self._write_text_output(render_markdown(payload, self.include_samples), output)
+            else:
+                self._write_serialized_output(payload, output, output_format)
             return
         if not db_results and output_format == "table":
             print("No tables processed")
@@ -1390,7 +1421,6 @@ class CrafterCmd(object):
             'data': outdata,
             'stats': datastats_dict,
             'stats_table': datastats,
-            'report_version': 2,
             'source': 'memory',
             'complete': not self.llm_errors,
             'errors': list(self.llm_errors),
@@ -1403,7 +1433,7 @@ class CrafterCmd(object):
             'scoring_model': 'legacy' if self.legacy_scoring else 'v1',
             'registry_detectors': {'mode': self.registry_detectors, 'count': self.registry_detector_count},
         }
-        return report
+        return finalize_report(report)
 
 
     def scan_file(

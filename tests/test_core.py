@@ -77,7 +77,7 @@ class TestCrafterCmd:
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
             # scan_file returns None when output is written to stdout
             # or returns empty list on error, so we just verify it doesn't raise
-            assert isinstance(result, dict) and result["report_version"] == 2
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_scan_file_jsonl(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -88,7 +88,7 @@ class TestCrafterCmd:
             result = cmd.scan_file(fixture_path, limit=10, dformat="short")
             # scan_file returns None when output is written to stdout
             # or returns empty list on error
-            assert isinstance(result, dict) and result["report_version"] == 2
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_scan_file_with_delimiter(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -99,7 +99,7 @@ class TestCrafterCmd:
             result = cmd.scan_file(
                 fixture_path, delimiter=";", limit=10, dformat="short"
             )
-            assert isinstance(result, dict) and result["report_version"] == 2
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_scan_file_with_encoding(self):
         cmd = CrafterCmd(remote=None, debug=False)
@@ -110,7 +110,7 @@ class TestCrafterCmd:
             result = cmd.scan_file(
                 fixture_path, encoding="cp1251", limit=10, dformat="short"
             )
-            assert isinstance(result, dict) and result["report_version"] == 2
+            assert isinstance(result, dict) and result["report_version"] == 3
 
     def test_scan_file_invalid_file(self):
         cmd = CrafterCmd(remote=None, debug=False)

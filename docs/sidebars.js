@@ -20,6 +20,7 @@ const sidebars = {
       label: 'Getting Started',
       items: [
         'getting-started/installation',
+        'getting-started/migration',
         'getting-started/quick-start',
         'getting-started/when-to-use',
         'getting-started/cookbook',
@@ -88,6 +89,7 @@ const sidebars = {
         'integrations/sdk',
         'integrations/api',
         'integrations/registry',
+        'integrations/report',
         'integrations/llm',
         'integrations/rules',
         'integrations/datahub',
