@@ -308,20 +308,16 @@ OpenSpec change: `add-ecosystem-contract-tests` (заменяет `add-ecosystem
 - закоммитить `.github/workflows/ci.yml` (сейчас не отслеживается git);
 - переиспользовать алгоритмы контрольных сумм registry вместо дублей в `metacrafterext`.
 
-## 6. Решения, требующие выбора
+## 6. Принятые решения
 
-1. **Registry — обязательная или опциональная зависимость?**
-   Рекомендация: обязательная, после публикации на PyPI и выноса `Jinja2` в extra. Альтернатива: extra `registry` плюс HTTP-fallback на `/api/v1/`.
-2. **Что делать со встроенными `rules/`?**
-   Рекомендация: удалить, metacrafter-rules сделать обязательной зависимостью. Альтернатива: минимальный core-набор внутри пакета как package data, загружаемый *после* расширенного.
-3. **Детекторы из registry по умолчанию?**
-   Рекомендация: `stable`. Альтернативы: `off` или `all`.
-4. **Python ≥3.10 и breaking-релиз 1.0.0 с отчётом v2?**
-   Рекомендация: да, legacy-формат остаётся на переходный период.
-5. **Flask → FastAPI для HTTP API?**
-   Рекомендация: да, ради OpenAPI и единой валидации на pydantic.
-6. **Архивировать metacrafter-llm?**
-   Рекомендация: да.
+Все рекомендации приняты 2026-11-05.
+
+1. **Registry — обязательная зависимость** после публикации на PyPI и выноса `Jinja2` в extra. До публикации работает HTTP-fallback на `/api/v1/`.
+2. **Встроенные `rules/` удаляются.** metacrafter-rules становится обязательной зависимостью.
+3. **Детекторы из registry по умолчанию — `stable`.** Режимы `off` и `all` доступны флагом.
+4. **Python ≥3.10 и breaking-релиз 1.0.0 с отчётом v2.** Legacy-формат остаётся на переходный период.
+5. **HTTP API переходит с Flask на FastAPI.**
+6. **metacrafter-llm архивируется.**
 
 ## 7. Релизы
 
@@ -354,9 +350,46 @@ OpenSpec change: `add-ecosystem-contract-tests` (заменяет `add-ecosystem
 | PII-типы, известные экспорту | 5 (хардкод) | 325 (из registry) |
 | Тесты | 22 падают локально | зелёные на 3.10–3.13 |
 
-## 10. Следующие шаги
+## 10. OpenSpec-предложения
 
-1. Принять решения из раздела 6.
-2. Оформить OpenSpec-предложения по этапам 0–5 в `openspec/changes/` с `openspec validate --strict`.
-3. Завести задачи в `bd`.
-4. Параллельно запросить у владельца registry публикацию на PyPI. Это критический путь этапа 1.
+Предложения лежат в `openspec/changes/`. Все проходят `openspec validate --strict`. Сводная таблица со статусами — в `openspec/ROADMAP.md`.
+
+| Этап | Change ID |
+|---|---|
+| 0 | `refactor-metacrafter-foundation` |
+| 1 | `add-registry-integration` |
+| 2 | `update-detection-engine` |
+| 3 | `add-report-v2` |
+| 4 | `add-agent-interfaces`, `update-llm-classification` |
+| 5 | `add-ecosystem-contract-tests` |
+
+## 11. Связь с ранее подготовленными планами
+
+**Июльский план 2026 года.** Это `openspec/ROADMAP.md` и 7 changes. Они лежат незакоммиченными в основном checkout. Новые предложения заменяют их; таблица соответствия — в ROADMAP.
+
+**Обзор Codex от 2026-10-01.** Это ветка `codex/repository-review-2026-10-01` и задачи `metacrafter-2` … `metacrafter-13` в bd. Обзор нашёл надёжностные дефекты, которые этот план не дублирует:
+- маппинг статистики;
+- SQL-кавычки и схемы;
+- сериализация отчётов;
+- ограничение памяти;
+- утечка секретов в логи;
+- герметичные тесты.
+
+Его changes входят в этап 0 как предпосылки:
+- `improve-scan-result-integrity`;
+- `update-hermetic-quality-gates`;
+- `update-rule-loading-and-packaging`;
+- `refactor-scan-service-and-api`;
+- `update-source-scanning-and-sampling`.
+
+`update-llm-trust-and-offline-index` — предпосылка этапа 4. `add-report-and-rule-product-tools` потребляет отчёт v2.
+
+Два места обзора Codex изменены решениями выше:
+- `update-registry-resolution` заменён на `add-registry-integration`;
+- требование «Packaged defaults» (вшить YAML в wheel) заменено обязательной зависимостью от metacrafter-rules.
+
+## 12. Следующие шаги
+
+1. Закоммитить черновики Codex (7 из 8 changes не в git) или перенести их в эту ветку. Без этого ROADMAP ссылается на файлы, которых нет в репозитории.
+2. Запросить у владельца registry публикацию на PyPI. Это критический путь этапа 1.
+3. Начать этап 0 с `update-hermetic-quality-gates`: без него остальные изменения нечем проверять.

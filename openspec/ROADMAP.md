@@ -1,122 +1,109 @@
-# Metacrafter Ecosystem Roadmap
+# Metacrafter Roadmap
 
-Phased improvement plan derived from the comprehensive ecosystem review (July 2026). Each item maps to an OpenSpec change proposal in one of the three repositories.
+Updated 2026-11-05. Source plan: [`devdocs/MODERNIZATION_PLAN.md`](../devdocs/MODERNIZATION_PLAN.md)
+(registry-driven modernization, target release 1.0.0). Decisions in section 6 of that plan
+were accepted on 2026-11-05.
 
-## Phase 1: Stabilize (1–2 weeks)
+This roadmap reconciles three planning rounds:
 
-Fix critical bugs, data integrity issues, and repository hygiene before adding features.
+| Round | Where | State |
+|---|---|---|
+| July 2026 ecosystem review | 7 changes, untracked in the main checkout (`openspec/changes/`) | Superseded; see the table at the end |
+| 2026-10-01 Codex repository review | branch `codex/repository-review-2026-10-01`. Only `improve-scan-result-integrity` is committed; 7 more drafts are untracked in the Codex worktree. Beads `metacrafter-2` … `metacrafter-13`. | Reliability fixes; kept as prerequisites |
+| 2026-11-05 modernization plan | this branch, 7 changes | Registry, engine, report, agents, contract |
 
-| # | Action | Change ID | Repository |
-|---|--------|-----------|------------|
-| 1 | Fix corrupted Spanish NIF rule | `stabilize-rules-critical-fixes` | metacrafter-rules |
-| 2 | Resolve duplicate registry IDs | `stabilize-registry-data-integrity` | metacrafter-registry |
-| 3 | Add Flask deps, sync requirements, commit Rich output | `stabilize-metacrafter-reliability` | metacrafter |
-| 4 | Commit/revert pending rule changes, delete backups | `stabilize-rules-critical-fixes` | metacrafter-rules |
-| 5 | Fix exit codes and API delimiter bug | `stabilize-metacrafter-reliability` | metacrafter |
-| 6 | Extend countries.yaml / langs.yaml | `stabilize-registry-data-integrity` | metacrafter-registry |
+Beads epic: `metacrafter-76s`.
 
-## Phase 2: Automate (2–4 weeks)
+**Approval gate:** Do not implement a change until its proposal is approved.
 
-Add CI, cross-repo alignment checks, and quality gates.
+## Phase 0 — Foundation and reliability
 
-| # | Action | Change ID | Repository |
-|---|--------|-----------|------------|
-| 7 | Add CI to rules and registry repos | `automate-rules-ci`, `automate-registry-ci` | rules, registry |
-| 8 | Cross-repo ID alignment check | `add-ecosystem-alignment-workflow` | metacrafter |
-| 9 | Fix 127 rulekey collisions | `fix-rules-key-collisions` | metacrafter-rules |
-| 10 | Enforce lint/coverage in metacrafter CI | `improve-metacrafter-ci` | metacrafter |
-| 11 | Mock registry in metacrafter tests | `improve-metacrafter-ci` | metacrafter |
+| Change | Origin | Beads | Notes |
+|---|---|---|---|
+| `update-hermetic-quality-gates` | Codex | `metacrafter-10` | Start here: deterministic tests gate everything else |
+| `improve-scan-result-integrity` | Codex | `metacrafter-2`, `metacrafter-5` | Versioned report container used by `add-report-v2` |
+| `update-rule-loading-and-packaging` | Codex | `metacrafter-3`, `metacrafter-7` | Its `Packaged defaults` requirement is superseded by `refactor-metacrafter-foundation` |
+| `refactor-scan-service-and-api` | Codex | `metacrafter-6`, `metacrafter-11` | Shared scan service; HTTP is re-hosted on FastAPI in `add-agent-interfaces` |
+| `update-source-scanning-and-sampling` | Codex | `metacrafter-4`, `metacrafter-8` | SQL correctness and bounded sampling |
+| `refactor-metacrafter-foundation` | Nov plan | `metacrafter-76s.1` | Python ≥3.10, pydantic v2, extras, `metacrafter-rules` required, `rules/` removed |
 
-## Phase 3: Refactor (1–2 months)
+## Phase 1 — Registry as source of truth
 
-Structural improvements, test coverage, and alignment gap closure.
+| Change | Origin | Beads | Notes |
+|---|---|---|---|
+| `add-registry-integration` | Nov plan | `metacrafter-76s.2` (covers `metacrafter-13`) | Supersedes Codex `update-registry-resolution`; needs the registry on PyPI |
 
-| # | Action | Change ID | Repository |
-|---|--------|-----------|------------|
-| 12 | Split CrafterCmd god object | `refactor-metacrafter-core` | metacrafter |
-| 13 | Resolve core.py / core/ naming | `refactor-metacrafter-core` | metacrafter |
-| 14 | Migrate to pyproject.toml with extras | `modernize-metacrafter-packaging` | metacrafter |
-| 14b | Optional `metacrafter[rules]` extra + auto rulepath | `add-rules-optional-extra` | metacrafter, metacrafter-rules |
-| 15 | Add validator tests for RU/US | `improve-rules-test-coverage` | metacrafter-rules |
-| 16 | Fix enrichment placeholder strategy | `improve-registry-data-quality` | metacrafter-registry |
-| 17 | Close 107+43 alignment gaps | `close-registry-rules-gaps` | metacrafter-registry |
+## Phase 2 — Detection engine v2
 
-## Phase 4: Expand (ongoing)
+| Change | Origin | Beads | Notes |
+|---|---|---|---|
+| `update-detection-engine` | Nov plan | `metacrafter-76s.3` | Rule format v2, `regex`/`registry` match, checksum validators, derived detectors, scoring with evidence |
 
-New platform features and content expansion.
+## Phase 3 — Report v2 and exports
 
-| # | Action | Change ID | Repository |
-|---|--------|-----------|------------|
-| 18 | LLM support in API server | `expand-metacrafter-llm-platform` | metacrafter |
-| 19 | Local embedding backend | `expand-metacrafter-llm-platform` | metacrafter |
-| 20 | Wire RegistryClient into scan output | `expand-metacrafter-llm-platform` | metacrafter |
-| 21 | PII packs for DE, CA, IT | `expand-rules-content` | metacrafter-rules |
-| 22 | Registry search API + web UI filters | `expand-registry-platform` | metacrafter-registry |
-| 23 | Typed scan result models | `modernize-metacrafter-packaging` | metacrafter |
-| 24 | Rule performance metrics | `expand-metacrafter-llm-platform` | metacrafter |
+| Change | Origin | Beads | Notes |
+|---|---|---|---|
+| `add-report-v2` | Nov plan | `metacrafter-76s.4` | Typed report v2, schema, legacy format, crosswalk and Frictionless export |
+| `add-report-and-rule-product-tools` | Codex | `metacrafter-12` | Report diff, PII inventory, policy checks, rule tooling; consumes report v2 |
 
-## Feature Opportunities (Section 6)
+## Phase 4 — Agents and LLM
 
-| Feature | Change ID | Repository |
-|---------|-----------|------------|
-| Scan report diff, batch PII report, plugins | `add-ecosystem-product-features` | metacrafter |
-| Rule suggestion from samples | `add-ecosystem-product-features` | metacrafter |
-| Registry-driven rule generation | `add-ecosystem-product-features` | metacrafter |
+| Change | Origin | Beads | Notes |
+|---|---|---|---|
+| `update-llm-trust-and-offline-index` | Codex | `metacrafter-9` | Result validation, secret redaction, local embeddings; prerequisite |
+| `update-llm-classification` | Nov plan | `metacrafter-76s.6` | Registry shortlist, corpus fingerprint, constrained output, PII-aware disclosure |
+| `add-agent-interfaces` | Nov plan | `metacrafter-76s.5` | MCP server, skills, FastAPI HTTP v2, llms.txt |
 
----
+## Phase 5 — Ecosystem contract (parallel to phases 1–4)
 
-## All OpenSpec Changes by Repository
+| Change | Origin | Beads | Notes |
+|---|---|---|---|
+| `add-ecosystem-contract-tests` | Nov plan | `metacrafter-76s.7` | Key resolution gate, registry-example rule tests, `ecosystem.lock`, weekly check, benchmark |
 
-### metacrafter (`openspec/changes/`)
+## Releases
 
-| Change ID | Phase | Summary |
-|-----------|-------|---------|
-| `stabilize-metacrafter-reliability` | 1 | Flask deps, exit codes, API fix, Rich output |
-| `improve-metacrafter-ci` | 2 | Lint enforcement, coverage, mock registry |
-| `add-ecosystem-alignment-workflow` | 2 | Cross-repo ID validation CI |
-| `refactor-metacrafter-core` | 3 | Split god object, fix core naming |
-| `modernize-metacrafter-packaging` | 3–4 | pyproject.toml, typed API, public exports |
-| `add-rules-optional-extra` | 3 | `metacrafter[rules]` extra, auto rulepath discovery |
-| `expand-metacrafter-llm-platform` | 4 | Server LLM, local embeddings, registry enrichment |
-| `add-ecosystem-product-features` | 4+ | Scan diff, PII batch, plugins |
+| Version | Content |
+|---|---|
+| 0.1.0 | Phase 0 |
+| 0.2.0 | Phase 1 + key resolution gate |
+| 0.3.0 | Phase 2 + example-based rule tests |
+| 1.0.0 | Phases 3–4; report v2 by default |
 
-### metacrafter-rules (`openspec/changes/`)
+## Cross-repository prerequisites
 
-| Change ID | Phase | Summary |
-|-----------|-------|---------|
-| `stabilize-rules-critical-fixes` | 1 | es_tax fix, backup cleanup, commit pending |
-| `fix-rules-key-collisions` | 1–2 | 127 rulekey collisions |
-| `automate-rules-ci` | 2 | pytest, YAML lint, compile check |
-| `improve-rules-test-coverage` | 3 | RU/US validator tests |
-| `expand-rules-content` | 3–4 | DE/CA/IT PII, README, registry sync |
+- **metacrafter-registry:**
+  - publish the package on PyPI (owner action);
+  - move site-build dependencies to a `build` extra;
+  - release v2.0.0;
+  - implement `add-datatype-packs`;
+  - expose regexp specificity in the API.
+- **metacrafter-rules:**
+  - fix 32 unresolved keys;
+  - adopt rule format v2;
+  - move to `pyproject.toml`;
+  - fix 10 failing validator tests;
+  - commit the untracked CI workflow.
 
-### metacrafter-registry (`openspec/changes/`)
+## Superseded and closing changes
 
-| Change ID | Phase | Summary |
-|-----------|-------|---------|
-| `stabilize-registry-data-integrity` | 1 | Duplicates, reference data, category fixes |
-| `automate-registry-ci` | 2 | validate + build + diff CI |
-| `improve-registry-data-quality` | 3 | Honest metrics, schema hardening |
-| `close-registry-rules-gaps` | 3 | 107+43 alignment gaps |
-| `expand-registry-platform` | 4 | Search API, health endpoint, UI |
+| Change | Origin | Replaced by / action |
+|---|---|---|
+| `add-rules-optional-extra` | July (tracked) | 19/20 done; archive after the `metacrafter-rules` release. Built-in-first ordering superseded by `refactor-metacrafter-foundation`. |
+| `stabilize-metacrafter-reliability` | July (untracked) | 9/10 done; commit `metacrafter/output.py` (task 4.1), then archive |
+| `improve-metacrafter-ci` | July (untracked) | `update-hermetic-quality-gates` |
+| `add-ecosystem-alignment-workflow` | July (untracked) | `add-ecosystem-contract-tests`; `scripts/ecosystem_check.py` folded into `rules check` |
+| `refactor-metacrafter-core` | July (untracked) | `refactor-scan-service-and-api` |
+| `modernize-metacrafter-packaging` | July (untracked) | `refactor-metacrafter-foundation` (extras, Python); `add-report-v2` (typed models) |
+| `expand-metacrafter-llm-platform` | July (untracked) | `add-registry-integration`, `add-agent-interfaces`, `update-llm-classification` |
+| `add-ecosystem-product-features` | July (untracked) | `add-report-and-rule-product-tools`, `add-ecosystem-contract-tests`, `update-detection-engine` |
+| `update-registry-resolution` | Codex (untracked) | `add-registry-integration` |
 
----
-
-## Working with OpenSpecs
+## Working with OpenSpec
 
 ```bash
-# List all active changes in a repo
-cd metacrafter && openspec list
-
-# View a specific change
-openspec show stabilize-metacrafter-reliability
-
-# Validate before requesting approval
-openspec validate stabilize-metacrafter-reliability --strict
-
-# Implement (after approval): follow tasks.md in each change directory
+openspec list
+openspec show add-registry-integration
+openspec validate add-registry-integration --strict
 ```
 
-**Approval gate:** Do not implement until the relevant change proposal is reviewed and approved.
-
-**Implementation order:** Complete Phase 1 changes across all repos before starting Phase 2.
+After a change is deployed, archive it in a separate PR with `openspec archive <id>`.
