@@ -51,6 +51,7 @@ dependencies = [
     "tqdm",
     "requests>=2.28.0",
     "chardet",
+    "jsonschema>=4.18",
 ]
 
 [project.optional-dependencies]
@@ -130,6 +131,9 @@ exclude = ["tests", "tests.*"]
 [tool.setuptools]
 include-package-data = true
 zip-safe = false
+
+[tool.setuptools.package-data]
+metacrafter = ["rules/schema/*.json"]
 
 [tool.ruff]
 line-length = 127

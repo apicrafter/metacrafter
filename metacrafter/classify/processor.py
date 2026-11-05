@@ -1,7 +1,9 @@
 """Rules processor module for classifying and matching data types."""
 import glob
+import os
 import importlib
 import ast
+import re
 import logging
 import warnings
 from functools import lru_cache
@@ -9,6 +11,8 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional, Union, Set, Callable
 
 import yaml
+
+from metacrafter.engine.scoring import data_score, field_score, priority_weight
 from pyparsing import (
     LineEnd,
     LineStart,
@@ -140,6 +144,23 @@ def _compile_rule_with_warning_capture(
         )
     return compiled_rule
 
+_YAML_LOADER = getattr(yaml, "CSafeLoader", yaml.SafeLoader)
+
+
+@lru_cache(maxsize=1024)
+def _parse_rule_file(filename: str, mtime_ns: int, size: int) -> Any:
+    """Parse a rule file once per (path, mtime, size); callers get a deep copy."""
+    with open(filename, "r", encoding="utf8") as f:
+        return yaml.load(f, Loader=_YAML_LOADER)  # noqa: S506 - safe loader
+
+
+def _load_rule_document(filename: str) -> Any:
+    import copy
+
+    stat = os.stat(filename)
+    return copy.deepcopy(_parse_rule_file(str(filename), stat.st_mtime_ns, stat.st_size))
+
+
 _MAX_REPETITION = 1000
 
 
@@ -242,6 +263,9 @@ def _safe_eval_pyparsing_rule(
 
 DEFAULT_MAX_LEN = 100
 DEFAULT_MIN_LEN = 3
+DEFAULT_PRIORITY = 3
+REGEX_MAX_LEN = 256
+MATCH_TYPES = ("text", "ppr", "func", "regex", "registry")
 
 RULE_TYPE_FIELD = 1
 RULE_TYPE_DATA = 2
@@ -383,6 +407,7 @@ class RuleResult:
         self.format: Optional[str] = format
         self.evidence = evidence
         self.pii_source: Optional[str] = pii_source if is_pii else None
+        self.pattern: Optional[str] = None
 
     def class_url(self) -> str:
         """Get URL to data class registry entry.
@@ -410,6 +435,7 @@ class RuleResult:
             "classurl": self.class_url(),
             "is_pii": self.is_pii,
             "pii_source": self.pii_source,
+            "pattern": self.pattern,
         }
 
 
@@ -438,6 +464,7 @@ class RulesProcessor:
         self.preset_countries: Optional[List[str]] = (
             [c.lower() for c in countries] if countries else None
         )
+        self.registry = None
         self.reset_rules()
 
     def reset_rules(self) -> None:
@@ -469,14 +496,20 @@ class RulesProcessor:
             ValueError: If rule compilation fails
         """
         logging.debug("Loading rules file %s", filename)
-        with open(filename, "r", encoding="utf8") as f:
-            ruledata = yaml.safe_load(f)
+        ruledata = _load_rule_document(filename)
 
-        if not isinstance(ruledata, dict) or not isinstance(ruledata.get("rules"), dict):
-            raise ValueError("Rule file must contain a rules mapping: " + filename)
-        for key in ("lang", "context", "name", "description"):
-            if not isinstance(ruledata.get(key), str):
-                raise ValueError("Rule group requires string " + key)
+        from metacrafter.rules.validation import validate_rule_file
+
+        if not isinstance(ruledata, dict):
+            self.diagnostics.append({"ruleid": None, "source": filename, "error": "Rule file must be a mapping"})
+            logging.error("Skipping rule file %s: not a mapping", filename)
+            return
+        file_errors, rule_errors = validate_rule_file(ruledata)
+        if file_errors:
+            for message in file_errors:
+                self.diagnostics.append({"ruleid": None, "source": filename, "error": "Schema: " + message})
+            logging.error("Skipping invalid rule file %s: %s", filename, "; ".join(file_errors))
+            return
 
         # If group of rules context or lang not in allowed list, skip it
         if self.preset_langs and ruledata["lang"] not in self.preset_langs:
@@ -494,11 +527,19 @@ class RulesProcessor:
             rule = ruledata["rules"][rulekey]
             if isinstance(rule, dict) and rule.get("disabled") is True:
                 continue
-            if not isinstance(rule, dict) or rule.get("match") not in ("text", "ppr", "func") or rule.get("type") not in ("field", "data") or not isinstance(rule.get("key"), str) or not isinstance(rule.get("rule"), str) or not rule.get("rule"):
+            if rulekey in rule_errors:
+                for message in rule_errors[rulekey]:
+                    self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Schema: " + message})
+                logging.warning("Skipping rule '%s' in %s: %s", rulekey, filename, "; ".join(rule_errors[rulekey]))
+                continue
+            if not isinstance(rule, dict) or rule.get("match") not in MATCH_TYPES or rule.get("type") not in ("field", "data") or not isinstance(rule.get("key"), str) or not isinstance(rule.get("rule"), str) or not rule.get("rule"):
                 self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Invalid rule structure"})
                 continue
+            rule["deprecated"] = rule.get("deprecated") is True
+            declared_minlen = "minlen" in rule
+            declared_maxlen = "maxlen" in rule
             try:
-                rule["priority"] = int(rule.get("priority", 0))
+                rule["priority"] = int(rule.get("priority", DEFAULT_PRIORITY))
                 rule["minlen"] = int(rule.get("minlen", DEFAULT_MIN_LEN))
                 rule["maxlen"] = int(rule.get("maxlen", DEFAULT_MAX_LEN))
                 if not 0 <= rule["minlen"] <= rule["maxlen"] <= 100000:
@@ -544,16 +585,31 @@ class RulesProcessor:
                     )
                     self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Function import failed"})
                     continue
+            elif rule["match"] == "regex":
+                try:
+                    rule["compiled"] = re.compile(rule["rule"])
+                except re.error as e:
+                    logging.error(f"Failed to compile regex rule '{rulekey}': {e}. Skipping this rule.")
+                    self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Pattern compilation failed"})
+                    continue
+            elif rule["match"] == "registry":
+                # Bound to the registry record's regexp and checksum in bind_registry().
+                rule["registry_id"] = rule["rule"].strip()
+                rule["compiled"] = None
             elif rule["match"] == "text":
                 keywords = rule["rule"].split(",")
-                ruledata["rules"][rulekey]["compiled"] = (
-                    lineStart + oneOf(keywords, caseless=True) + lineEnd
-                )
-                # Convert to set for O(1) membership testing instead of O(n) list lookup
-                ruledata["rules"][rulekey]["keywords"] = set(map(str.lower, keywords))
+                # Text rules match by set membership; no parser is built (building
+                # pyparsing oneOf expressions dominated rule loading time).
+                rule["compiled"] = None
+                rule["keywords"] = set(map(str.lower, keywords))
             if rule["match"] == "text":
-                rule["maxlen"] = len(max(keywords, key=len))
-                rule["minlen"] = len(min(keywords, key=len))
+                if not declared_maxlen:
+                    rule["maxlen"] = len(max(keywords, key=len))
+                if not declared_minlen:
+                    rule["minlen"] = len(min(keywords, key=len))
+            elif rule["match"] in ("regex", "registry"):
+                rule["maxlen"] = int(rule["maxlen"]) if declared_maxlen else REGEX_MAX_LEN
+                rule["minlen"] = int(rule["minlen"]) if declared_minlen else 1
             else:
                 rule["maxlen"] = (
                     int(rule["maxlen"]) if "maxlen" in rule.keys() else DEFAULT_MAX_LEN
@@ -561,7 +617,20 @@ class RulesProcessor:
                 rule["minlen"] = (
                     int(rule["minlen"]) if "minlen" in rule.keys() else DEFAULT_MIN_LEN
                 )
-            if "validator" in rule.keys():
+            if "validator" in rule.keys() and str(rule["validator"]).startswith("checksum:"):
+                from metacrafter.engine.checksums import checksum_validator
+
+                vfunc = checksum_validator(rule["validator"])
+                if vfunc is None:
+                    logging.warning(
+                        "Checksum validator '%s' for rule '%s' is unavailable "
+                        "(unknown algorithm or metacrafter-registry not installed). Skipping this rule.",
+                        rule["validator"], rulekey,
+                    )
+                    self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Required validator unavailable"})
+                    continue
+                rule["vfunc"] = vfunc
+            elif "validator" in rule.keys():
                 try:
                     module, funcname = rule["validator"].rsplit(".", 1)
                     match_func = getattr(importlib.import_module(module), funcname)
@@ -593,12 +662,8 @@ class RulesProcessor:
                 elif rule["fieldrulematch"] == "text":
                     keywords = rule["fieldrule"].split(",")
                     # Convert to set for O(1) membership testing instead of O(n) list lookup
-                    ruledata["rules"][rulekey]["fieldkeywords"] = set(
-                        map(str.lower, keywords)
-                    )
-                    ruledata["rules"][rulekey]["f_compiled"] = (
-                        lineStart + oneOf(keywords, caseless=True) + lineEnd
-                    )
+                    rule["fieldkeywords"] = set(map(str.lower, keywords))
+                    rule["f_compiled"] = None  # text guards match by set membership
             if rulekey in self.__rule_keys:
                 # Later rulepath entries override earlier ones for the same rule id
                 # (default pack first, then .metacrafter rulepath, then --rulepath).
@@ -646,9 +711,32 @@ class RulesProcessor:
                 v = self.countries.get(None, 0)
                 self.countries[None] = v + 1
 
-        self.field_rules.sort(key=lambda r: -r["priority"])
-        self.data_rules.sort(key=lambda r: -r["priority"])
+        # priority 1 is the strongest (metacrafter-rules convention); stable sort keeps file order
+        self.field_rules.sort(key=lambda r: r["priority"])
+        self.data_rules.sort(key=lambda r: r["priority"])
         logging.debug("Loaded rules from %s", filename)
+
+    def register_rule(self, rule: Dict[str, Any]) -> None:
+        """Add a pre-built rule (for example a registry-derived detector)."""
+        if rule["id"] in self.__rule_keys:
+            self._unregister_rule(rule["id"])
+        self.__rule_keys.append(rule["id"])
+        (self.field_rules if rule["type"] == "field" else self.data_rules).append(rule)
+        self.langs[rule["lang"]] = self.langs.get(rule["lang"], 0) + 1
+        for context in rule.get("context", []):
+            self.contexts[context] = self.contexts.get(context, 0) + 1
+        self.countries[None] = self.countries.get(None, 0) + 1
+
+    def bind_registry(self, adapter, detectors: str = "stable") -> int:
+        """Attach registry data: compile ``match: registry`` rules and add derived detectors.
+
+        Returns the number of registry-derived detectors added.
+        """
+        from metacrafter.engine.registry_detectors import add_registry_detectors, bind_registry_rules
+
+        self.registry = adapter
+        bind_registry_rules(self, adapter)
+        return add_registry_detectors(self, adapter, detectors)
 
     def _unregister_rule(self, rulekey: str) -> Optional[Dict[str, Any]]:
         """Remove a loaded rule by id and roll back its statistics counters."""
@@ -728,8 +816,9 @@ class RulesProcessor:
         contexts: Optional[List[str]] = None,
         langs: Optional[List[str]] = None,
         ignore_imprecise: bool = False,
+        include_deprecated: bool = False,
     ) -> List[Dict[str, Any]]:
-        """Filter rules by type, context, language, and precision.
+        """Filter rules by type, context, language, precision and deprecation.
         
         Filters the loaded rules based on the specified criteria. This helps
         reduce the number of rules to evaluate during data matching.
@@ -744,6 +833,8 @@ class RulesProcessor:
             List of filtered rule dictionaries matching the criteria
         """
         rules = self.field_rules if ruletype == RULE_TYPE_FIELD else self.data_rules
+        if not include_deprecated:
+            rules = [rule for rule in rules if not rule.get("deprecated")]
         filtered = []
         if not contexts and not langs and not ignore_imprecise:
             return rules
@@ -787,6 +878,8 @@ class RulesProcessor:
         ignore_imprecise: bool = True,
         empty_values=None,
         explain=False,
+        legacy_scoring: bool = False,
+        include_deprecated: bool = False,
     ) -> TableScanResult:
         """Match classification rules against a list of dictionaries.
         
@@ -830,10 +923,10 @@ class RulesProcessor:
         if not fields:
             fields = headers(data)
         field_rules = self.get_filtered_rules(
-            RULE_TYPE_FIELD, filter_contexts, filter_langs, ignore_imprecise
+            RULE_TYPE_FIELD, filter_contexts, filter_langs, ignore_imprecise, include_deprecated
         )
         data_rules = self.get_filtered_rules(
-            RULE_TYPE_DATA, filter_contexts, filter_langs, ignore_imprecise
+            RULE_TYPE_DATA, filter_contexts, filter_langs, ignore_imprecise, include_deprecated
         )
 
         data_columns = dict_to_columns(data)
@@ -851,65 +944,30 @@ class RulesProcessor:
                 m_result.rejected = []
             shortfield = field.rsplit(".", 1)[-1].strip()
             # Match field name first
+            field_hits: Dict[str, float] = {}
             for rule in field_rules:
-                if rule["match"] == "func":
-                    res = rule["compiled"](shortfield)
-                    if not res:
-                        res = rule["compiled"](field)
-                    if res:
-                        m_result.add(
-                            RuleResult(
-                                ruleid=rule["id"],
-                                confidence=100,
-                                dataclass=rule["key"],
-                                ruletype="field",
-                                is_pii=rule_is_pii(rule),
-                                pii_source=rule_pii_source(rule),
-                            )
-                        )
-                        if stop_on_match:
-                            break
-                elif rule["match"] == "ppr":
-                    res = None
-                    try:
-                        res = rule["compiled"].parseString(shortfield)
-                    except ParseException:
-                        try:
-                            res = rule["compiled"].parseString(field)
-                        except ParseException:
-                            pass
-                    if res:
-                        m_result.add(
-                            RuleResult(
-                                ruleid=rule["id"],
-                                confidence=100,
-                                dataclass=rule["key"],
-                                ruletype="field",
-                                is_pii=rule_is_pii(rule),
-                                pii_source=rule_pii_source(rule),
-                            )
-                        )
-                        if stop_on_match:
-                            break
-                elif rule["match"] == "text":
-                    # Cache lowercase conversions to avoid repeated calls
-                    shortfield_lower = shortfield.lower()
-                    field_lower = field.lower()
-                    res = (shortfield_lower in rule["keywords"] or
-                           field_lower in rule["keywords"])
-                    if res:
-                        m_result.add(
-                            RuleResult(
-                                ruleid=rule["id"],
-                                confidence=100,
-                                dataclass=rule["key"],
-                                ruletype="field",
-                                is_pii=rule_is_pii(rule),
-                                pii_source=rule_pii_source(rule),
-                            )
-                        )
-                        if stop_on_match:
-                            break
+                if not self._field_rule_matches(rule, shortfield, field):
+                    continue
+                field_hits[rule["key"]] = max(
+                    field_hits.get(rule["key"], 0.0), priority_weight(rule.get("priority"))
+                )
+                m_result.add(
+                    RuleResult(
+                        ruleid=rule["id"],
+                        confidence=field_score(rule.get("priority"), legacy=legacy_scoring),
+                        dataclass=rule["key"],
+                        ruletype="field",
+                        is_pii=rule_is_pii(rule),
+                        pii_source=rule_pii_source(rule),
+                        evidence={
+                            "scoring_model": "legacy" if legacy_scoring else "v1",
+                            "name_score": priority_weight(rule.get("priority")),
+                            "rule_source": rule.get("source"),
+                        },
+                    )
+                )
+                if stop_on_match:
+                    break
             data = data_columns[field]
             slice = data[0:limit]
             min_len = 0
@@ -993,8 +1051,8 @@ class RulesProcessor:
                 #                for rule in rules:
                 #                    print('- %s' %(rule['key']))
                 for rule in rules:
-#                    print(rule)
                     success = 0
+                    pattern_hits = 0
                     empty = 0
                     total = len(slice)
                     for value in slice:
@@ -1002,52 +1060,44 @@ class RulesProcessor:
                             if except_empty:
                                 empty += 1
                             continue
-                        #                        if not isinstance(value, str): continue
-                        slen = len(str(value))
+                        text = str(value)
+                        slen = len(text)
                         if slen == 0:
                             if except_empty:
                                 empty += 1
                             continue
-
                         if slen < rule["minlen"] or slen > rule["maxlen"]:
                             continue
-                        if rule["match"] == "func":
-                            try:
-                                res = rule["compiled"](str(value))
-                                if res:
-                                    success += 1
-                            except KeyboardInterrupt:
-                                pass
-                        elif rule["match"] == "ppr":
-                            try:
-                                res = rule["compiled"].parseString(str(value))
-                                if "vfunc" in rule.keys():
-                                    isvalid = rule["vfunc"](str(value))
-                                    if isvalid:
-                                        success += 1
-                                else:
-                                    success += 1
-                            except ParseException as e:
-                                pass
-                        elif rule["match"] == "text":
-                            if str(value).lower() in rule["keywords"]:
-                                success += 1
-                    if except_empty:
-                        subtotal = total - empty
-                        if subtotal == 0:
-                            result = 0
-                        else:
-                            result = success * 100.0 / (total - empty)
-                    else:
-                        result = success * 100.0 / total if total else 0
+                        hit, valid = self._value_check(rule, text)
+                        if hit:
+                            pattern_hits += 1
+                        if valid:
+                            success += 1
+                    considered = total - empty if except_empty else total
+                    scored = data_score(
+                        matched=success,
+                        pattern_hits=pattern_hits,
+                        considered=considered,
+                        specificity=rule.get("specificity", 1.0),
+                        name_weight=field_hits.get(rule["key"], 0.0),
+                        country_match=self._country_match(rule),
+                        draft=rule.get("registry_status") == "draft",
+                        legacy=legacy_scoring,
+                        has_validator="vfunc" in rule,
+                        empty=empty,
+                        sampled=total,
+                    )
+                    result = scored["confidence"]
+                    evidence = scored["evidence"]
+                    evidence["rule_source"] = rule.get("source")
                     if success and result >= confidence:
                         m_result.add(
                             RuleResult(
                                 ruleid=rule["id"],
                                 confidence=result,
                                 dataclass=rule["key"],
-                                ruletype="data",
-                                evidence={"matched_count": success, "considered_count": total-empty if except_empty else total, "empty_count": empty, "rule_source": rule.get("source")},
+                                ruletype=rule.get("ruletype", "data"),
+                                evidence=evidence,
                                 is_pii=rule_is_pii(rule),
                                 pii_source=rule_pii_source(rule),
                             )
@@ -1056,7 +1106,7 @@ class RulesProcessor:
                             break
 
                     elif explain:
-                        m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": result, "matched_count": success, "considered_count": total-empty if except_empty else total, "reason": "No matching values" if not success else "Below confidence threshold"})
+                        m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": result, "matched_count": success, "considered_count": considered, "reason": "No matching values" if not success else "Below confidence threshold"})
 
             if m_result.is_empty() and parse_dates and field not in nonstr and dateparser is not None:
                 total = len(slice)
@@ -1090,14 +1140,101 @@ class RulesProcessor:
                 else:
                     result = success * 100.0 / total if total else 0
                 if success and result >= confidence:
-                    m_result.add(
-                        RuleResult(
-                            ruleid="qddate",
-                            confidence=result,
-                            dataclass="datetime",
-                            ruletype="data",
-                            format=date_format,
-                        )
+                    date_match = RuleResult(
+                        ruleid="qddate",
+                        confidence=result,
+                        dataclass="datetime",
+                        ruletype="data",
+                        format=date_format,
+                        evidence={
+                            "scoring_model": "legacy" if legacy_scoring else "v1",
+                            "matched_count": success,
+                            "considered_count": total - empty if except_empty else total,
+                            "empty_count": empty,
+                        },
                     )
+                    date_match.pattern = self.qddate_pattern(date_format)
+                    m_result.add(date_match)
             results.add(m_result)
         return results
+
+    # --- matching helpers ---------------------------------------------------
+
+    @staticmethod
+    def _field_rule_matches(rule: Dict[str, Any], shortfield: str, field: str) -> bool:
+        """Return True when a field rule matches the field name (and its field guard)."""
+        match = rule["match"]
+        names = (shortfield, field)
+        hit = False
+        if match == "func":
+            hit = any(bool(rule["compiled"](name)) for name in names)
+        elif match == "ppr":
+            for name in names:
+                try:
+                    rule["compiled"].parseString(name)
+                    hit = True
+                    break
+                except ParseException:
+                    continue
+        elif match == "text":
+            hit = shortfield.lower() in rule["keywords"] or field.lower() in rule["keywords"]
+        elif match in ("regex", "registry"):
+            pattern = rule.get("compiled")
+            hit = pattern is not None and any(
+                pattern.fullmatch(name) or pattern.fullmatch(name.lower()) for name in names
+            )
+        if not hit:
+            return False
+        if "f_compiled" in rule:
+            if rule.get("fieldrulematch") == "text":
+                return shortfield.lower() in rule.get("fieldkeywords", set())
+            try:
+                rule["f_compiled"].parseString(shortfield)
+            except ParseException:
+                return False
+        return True
+
+    @staticmethod
+    def _value_check(rule: Dict[str, Any], text: str):
+        """Return ``(pattern_hit, valid)`` for one value: valid = hit and validator passes."""
+        match = rule["match"]
+        hit = False
+        if match == "func":
+            try:
+                hit = bool(rule["compiled"](text))
+            except Exception:  # noqa: BLE001 - a failing plugin does not count as a hit
+                hit = False
+        elif match == "ppr":
+            try:
+                rule["compiled"].parseString(text)
+                hit = True
+            except ParseException:
+                hit = False
+        elif match in ("regex", "registry"):
+            pattern = rule.get("compiled")
+            hit = pattern is not None and pattern.fullmatch(text) is not None
+        elif match == "text":
+            hit = text.lower() in rule["keywords"]
+        if not hit:
+            return False, False
+        vfunc = rule.get("vfunc")
+        if vfunc is None:
+            return True, True
+        try:
+            return True, bool(vfunc(text))
+        except Exception:  # noqa: BLE001 - validator errors fail the value
+            return True, False
+
+    def _country_match(self, rule: Dict[str, Any]) -> Optional[bool]:
+        """Country evidence for registry-derived detectors: True, False or None (unknown)."""
+        countries = rule.get("registry_country")
+        if not countries or not self.preset_countries:
+            return None
+        wanted = {c.upper() for c in self.preset_countries}
+        return bool(wanted & {c.upper() for c in countries})
+
+    def qddate_pattern(self, date_format: Optional[str]) -> Optional[str]:
+        """Registry pattern record id for a qddate format key, via the registry crosswalk."""
+        if not date_format or self.registry is None:
+            return None
+        return self.registry.qddate_pattern(date_format)

@@ -25,6 +25,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import threading
 import time
 import urllib.request
@@ -409,6 +410,63 @@ class RegistryAdapter:
             return True
 
         return (r for r in self.registry if keep(r))
+
+    # --- detection support -------------------------------------------------
+
+    def qddate_pattern(self, date_format: str) -> Optional[str]:
+        """Registry pattern record id for a qddate format key (e.g. ``dt:date:date_9``)."""
+        if self.registry is None or not date_format:
+            return None
+        crosswalk = getattr(self.registry, "crosswalk", None)
+        if crosswalk is not None:
+            try:
+                found = crosswalk("qddate", date_format)
+            except Exception:  # noqa: BLE001 - fall back to a plain scan
+                found = []
+            if found:
+                first = found[0]
+                return first.get("id") if isinstance(first, dict) else str(first)
+        wanted = {date_format, date_format.split(":t_", 1)[0]}
+        parts = date_format.split(":")
+        if len(parts) > 3:
+            wanted.add(":".join(parts[:3]))
+        for record in self.registry:
+            values = (record.get("mappings") or {}).get("qddate")
+            values = values if isinstance(values, list) else [values]
+            if any(v in wanted for v in values if v):
+                return record["id"]
+        return None
+
+    def specificities(self, ids: Iterable[str]) -> Dict[str, float]:
+        """``1 - broadness`` for the regexps of ``ids``.
+
+        Broadness is the share of other records' positive examples that a regexp also
+        fully matches (the same measure ``metacrafter_registry`` uses), computed only
+        for the requested records.
+        """
+        if self.registry is None:
+            return {}
+        corpus = [
+            (record["id"], str(example.get("value")))
+            for record in self.registry
+            for example in record.get("examples") or []
+            if isinstance(example, dict) and example.get("valid", True) and example.get("value") is not None
+        ]
+        result: Dict[str, float] = {}
+        for rid in ids:
+            record = self.record(rid) or {}
+            regexp = record.get("regexp")
+            if not regexp:
+                continue
+            try:
+                pattern = re.compile(regexp)
+            except re.error:
+                continue
+            others = [value for owner, value in corpus if owner != rid]
+            matched = sum(1 for value in others if pattern.fullmatch(value))
+            broadness = round(matched / len(others), 3) if others else 0.0
+            result[rid] = round(1.0 - broadness, 3)
+        return result
 
     # --- match enrichment --------------------------------------------------
 

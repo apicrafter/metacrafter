@@ -86,6 +86,42 @@ def rules_stats(
     acmd.rules_dumpstats()
 
 
+@rules_app.command('validate')
+def rules_validate(
+    path: str = typer.Argument(..., help="Rule file or directory to validate"),
+    output_format: str = typer.Option("table", "--output-format", help="Output format: table or json"),
+):
+    """Validate rule files against the rule format JSON Schema (version 2)."""
+    from pathlib import Path as _Path
+
+    import yaml as _yaml
+
+    from metacrafter.rules.validation import validate_rule_file
+
+    target = _Path(path)
+    files = sorted(target.rglob("*.yaml")) if target.is_dir() else [target]
+    problems = []
+    for filename in files:
+        try:
+            document = _yaml.safe_load(filename.read_text(encoding="utf-8"))
+        except (OSError, _yaml.YAMLError) as error:
+            problems.append({"file": str(filename), "rule": None, "error": str(error)})
+            continue
+        file_errors, rule_errors = validate_rule_file(document)
+        problems.extend({"file": str(filename), "rule": None, "error": e} for e in file_errors)
+        for rule_id, errors in rule_errors.items():
+            problems.extend({"file": str(filename), "rule": rule_id, "error": e} for e in errors)
+    if output_format == "json":
+        typer.echo(json.dumps({"files": len(files), "problems": problems}, indent=2, ensure_ascii=False))
+    else:
+        for problem in problems:
+            where = problem["file"] + (f" [{problem['rule']}]" if problem["rule"] else "")
+            typer.echo(f"{where}: {problem['error']}")
+        typer.echo(f"{len(files)} file(s) checked, {len(problems)} problem(s)")
+    if problems:
+        raise typer.Exit(1)
+
+
 @rules_app.command('check')
 def rules_check(
     registry: bool = typer.Option(True, "--registry/--no-registry", help="Check rule keys against metacrafter-registry"),
@@ -184,6 +220,9 @@ def scan_file(
     categories: Optional[str] = typer.Option(None, "--categories", help="Report only matches in these registry categories (comma-separated)"),
     pii_only: bool = typer.Option(False, "--pii-only", help="Report only matches whose datatype is PII"),
     status: Optional[str] = typer.Option(None, "--status", help="Report only matches with these registry statuses, e.g. stable"),
+    registry_detectors: Optional[str] = typer.Option(None, "--registry-detectors", help="Detectors derived from registry regexps: off, stable (default) or all"),
+    legacy_scoring: bool = typer.Option(False, "--legacy-scoring", help="Use pre-1.0 confidence scores (share of matching values; 100 for field names)"),
+    include_deprecated: bool = typer.Option(False, "--include-deprecated", help="Also run rules marked deprecated"),
     output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
@@ -292,6 +331,9 @@ def scan_file(
         categories=categories,
         pii_only=pii_only,
         status=status,
+        registry_detectors=registry_detectors,
+        legacy_scoring=legacy_scoring,
+        include_deprecated=include_deprecated,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
@@ -363,6 +405,9 @@ def scan_db(
     categories: Optional[str] = typer.Option(None, "--categories", help="Report only matches in these registry categories (comma-separated)"),
     pii_only: bool = typer.Option(False, "--pii-only", help="Report only matches whose datatype is PII"),
     status: Optional[str] = typer.Option(None, "--status", help="Report only matches with these registry statuses, e.g. stable"),
+    registry_detectors: Optional[str] = typer.Option(None, "--registry-detectors", help="Detectors derived from registry regexps: off, stable (default) or all"),
+    legacy_scoring: bool = typer.Option(False, "--legacy-scoring", help="Use pre-1.0 confidence scores (share of matching values; 100 for field names)"),
+    include_deprecated: bool = typer.Option(False, "--include-deprecated", help="Also run rules marked deprecated"),
     output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
@@ -436,6 +481,9 @@ def scan_db(
         categories=categories,
         pii_only=pii_only,
         status=status,
+        registry_detectors=registry_detectors,
+        legacy_scoring=legacy_scoring,
+        include_deprecated=include_deprecated,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
@@ -494,6 +542,9 @@ def scan_mongodb(
     categories: Optional[str] = typer.Option(None, "--categories", help="Report only matches in these registry categories (comma-separated)"),
     pii_only: bool = typer.Option(False, "--pii-only", help="Report only matches whose datatype is PII"),
     status: Optional[str] = typer.Option(None, "--status", help="Report only matches with these registry statuses, e.g. stable"),
+    registry_detectors: Optional[str] = typer.Option(None, "--registry-detectors", help="Detectors derived from registry regexps: off, stable (default) or all"),
+    legacy_scoring: bool = typer.Option(False, "--legacy-scoring", help="Use pre-1.0 confidence scores (share of matching values; 100 for field names)"),
+    include_deprecated: bool = typer.Option(False, "--include-deprecated", help="Also run rules marked deprecated"),
     output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
@@ -567,6 +618,9 @@ def scan_mongodb(
         categories=categories,
         pii_only=pii_only,
         status=status,
+        registry_detectors=registry_detectors,
+        legacy_scoring=legacy_scoring,
+        include_deprecated=include_deprecated,
         verbose=verbose,
         quiet=quiet,
         progress=progress,
@@ -627,6 +681,9 @@ def scan_bulk(
     categories: Optional[str] = typer.Option(None, "--categories", help="Report only matches in these registry categories (comma-separated)"),
     pii_only: bool = typer.Option(False, "--pii-only", help="Report only matches whose datatype is PII"),
     status: Optional[str] = typer.Option(None, "--status", help="Report only matches with these registry statuses, e.g. stable"),
+    registry_detectors: Optional[str] = typer.Option(None, "--registry-detectors", help="Detectors derived from registry regexps: off, stable (default) or all"),
+    legacy_scoring: bool = typer.Option(False, "--legacy-scoring", help="Use pre-1.0 confidence scores (share of matching values; 100 for field names)"),
+    include_deprecated: bool = typer.Option(False, "--include-deprecated", help="Also run rules marked deprecated"),
     output_format: str = typer.Option("table", "--output-format", help="Output format: table, json, yaml, or csv"),
     stats_only: bool = typer.Option(False, "--stats-only", help="Output only statistics without classification"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
@@ -698,6 +755,9 @@ def scan_bulk(
         categories=categories,
         pii_only=pii_only,
         status=status,
+        registry_detectors=registry_detectors,
+        legacy_scoring=legacy_scoring,
+        include_deprecated=include_deprecated,
         verbose=verbose,
         quiet=quiet,
         progress=progress,

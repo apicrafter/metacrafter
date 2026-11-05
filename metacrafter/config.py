@@ -97,6 +97,7 @@ class MetacrafterConfig(BaseModel):
     registry_path: Optional[str] = Field(default=None, description="Local registry snapshot or checkout data/ directory")
     registry_offline: bool = Field(default=False, description="Never fetch registry data over the network")
     registry_cache_ttl: float = Field(default=86400, ge=0, description="Seconds a cached registry snapshot is used without checking the network")
+    registry_detectors: str = Field(default="stable", pattern="^(off|stable|all)$", description="Detectors derived from registry regexps: off, stable or all")
 
     # LLM configuration fields
     classification_mode: Optional[str] = Field(default="rules", description="Classification mode: rules, llm, or hybrid")
@@ -322,6 +323,7 @@ class ConfigLoader:
                 settings["registry_path"] = validated.registry_path
                 settings["offline"] = validated.registry_offline
                 settings["cache_ttl"] = validated.registry_cache_ttl
+                settings["detectors"] = validated.registry_detectors
             except Exception as e:  # noqa: BLE001 - invalid config falls back to defaults
                 logging.debug("Registry configuration validation failed (%s)", type(e).__name__)
         env_path = os.environ.get("METACRAFTER_REGISTRY_PATH")

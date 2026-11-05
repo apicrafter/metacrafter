@@ -8,6 +8,7 @@ from typing import Optional
 import typer
 import yaml
 
+from metacrafter.classify.processor import RulesProcessor
 from metacrafter.reports import report_sources
 
 
@@ -309,13 +310,7 @@ def test_rule_examples(path, examples):
                 tested += 1
                 text = str(value)
                 try:
-                    if rule["match"] == "func":
-                        matched = bool(rule["compiled"](text))
-                    elif rule["match"] == "text":
-                        matched = text.lower() in rule["keywords"]
-                    else:
-                        rule["compiled"].parse_string(text, parse_all=True)
-                        matched = bool(rule.get("vfunc", lambda value: True)(text))
+                    matched = RulesProcessor._value_check(rule, text)[1]
                 except Exception:
                     matched = False
                 if matched != expected:

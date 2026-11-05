@@ -131,6 +131,9 @@ class CrafterCmd(object):
         categories: Optional[Union[str, List[str]]] = None,
         pii_only: bool = False,
         status: Optional[Union[str, List[str]]] = None,
+        registry_detectors: Optional[str] = None,
+        legacy_scoring: bool = False,
+        include_deprecated: bool = False,
     ):
         """Initialize CrafterCmd instance.
         
@@ -192,10 +195,17 @@ class CrafterCmd(object):
         else:
             self.retry_delay = retry_delay
 
+        self.legacy_scoring = bool(legacy_scoring)
+        self.include_deprecated = bool(include_deprecated)
+        self.registry_detectors = registry_detectors or self._registry_settings.get("detectors") or "stable"
+        self.registry_detector_count = 0
         self.processor = None
         if remote is None:
             self.processor = RulesProcessor(countries=self.country_codes)
             self.prepare()
+            self.registry_detector_count = self.processor.bind_registry(
+                self.registry, detectors=self.registry_detectors
+            )
         
         if llm_fallback not in ("error", "rules"):
             raise ValueError("llm_fallback must be error or rules")
@@ -1246,7 +1256,8 @@ class CrafterCmd(object):
         self._scan_rule_options = dict(confidence=confidence, stop_on_match=stop_on_match,
             dateparser=self.dparser, parse_dates=parse_dates, limit=limit,
             filter_langs=langs, filter_contexts=contexts, except_empty=except_empty,
-            ignore_imprecise=ignore_imprecise, empty_values=empty_values, explain=explain)
+            ignore_imprecise=ignore_imprecise, empty_values=empty_values, explain=explain,
+            legacy_scoring=self.legacy_scoring, include_deprecated=self.include_deprecated)
         self.llm_errors = [] if self.llm_classifier else list(self.llm_errors)
         if self.llm_classifier is not None:
             self.llm_classifier.request_count = 0
@@ -1281,6 +1292,8 @@ class CrafterCmd(object):
                     empty_values=empty_values,
                     explain=explain,
                     ignore_imprecise=ignore_imprecise,
+                    legacy_scoring=self.legacy_scoring,
+                    include_deprecated=self.include_deprecated,
                 )
             else:
                 results = self._classify_with_llm_only(
@@ -1306,6 +1319,8 @@ class CrafterCmd(object):
                 empty_values=empty_values,
                 explain=explain,
                 ignore_imprecise=ignore_imprecise,
+                legacy_scoring=self.legacy_scoring,
+                include_deprecated=self.include_deprecated,
             )
             
             # Merge LLM results if in hybrid mode
@@ -1385,6 +1400,8 @@ class CrafterCmd(object):
             'effective_mode': ('hybrid' if any(m.ruletype == 'llm' for r in results.results for m in r.matches) else 'rules') if mode != 'rules' and (self.llm_classifier is None or self.llm_errors) else mode,
             'sample_policy': self.sample_policy,
             'registry': self.registry.provenance.asdict(),
+            'scoring_model': 'legacy' if self.legacy_scoring else 'v1',
+            'registry_detectors': {'mode': self.registry_detectors, 'count': self.registry_detector_count},
         }
         return report
 

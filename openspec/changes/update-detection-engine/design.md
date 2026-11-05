@@ -70,25 +70,28 @@ computed locally the same way as `Registry._broadness()`. Derived detectors get 
 For a candidate datatype on one field:
 
 ```
-value_score  = hit_rate × specificity                  (0..1)
-checksum     = checksum_pass_rate if checksum else n/a  (0..1)
-name_score   = max(field-rule hit by priority, registry name similarity)   (0..1)
-score = 60·value_score + 25·checksum + 25·name_score + country_bonus − draft_penalty
-clamped to 0..100
+validated_rate = values that match the pattern and pass the validator / considered values
+value          = validated_rate x specificity          (specificity = 1 for curated rules)
+confidence     = 100 x value + 10 x name_weight + country_bonus - draft_penalty
+                 clamped to 0..100
+field-only     = 60 x priority_weight                  (1 -> 1.0, 2 -> 0.8, 3 -> 0.6)
 ```
 
-- Field-rule hits map by priority: 1 → 1.0, 2 → 0.8, 3 → 0.6.
-- A field-only match (no data evidence) is capped at 60.
-- The threshold comparison is inclusive.
+- `name_weight` is the priority weight of a field rule for the same datatype that matched
+  this field (0 when none did); it is a bonus, never a penalty, because most column names
+  are arbitrary.
+- `country_bonus` is +5 / -10 for registry-derived detectors when the scan country is known.
+- `draft_penalty` is 5 for draft registry records.
+- Validators and checksums filter value evidence (as in pre-1.0 releases); `checksum_rate`
+  in `evidence` reports the share of pattern hits that passed.
+- For curated data rules without a field bonus this equals the pre-1.0 share of matching
+  values, so existing thresholds keep working. The visible change is that field-name-only
+  matches score at most 60 instead of 100.
+- Threshold comparisons are inclusive.
 
-`evidence` records:
-- `hit_rate`, `checksum_rate`, `specificity`, `name_score`, `country_bonus`,
-  `draft_penalty`;
-- `sampled`, `matched`, `empty`;
-- `scoring_model: "v1"`.
-
-If `metacrafter_registry` exposes the scoring as a function, call it instead of duplicating
-the formula.
+`evidence` records `hit_rate`, `checksum_rate`, `specificity`, `name_score`,
+`country_bonus`, `draft_penalty`, `sampled_count`, `considered_count`, `matched_count`,
+`empty_count` and `scoring_model: "v1"`.
 
 ### Decision: Regex safety
 
@@ -97,11 +100,14 @@ Registry CI already rejects possessive quantifiers and empty matches. In additio
 - patterns are compiled once;
 - if the optional `regex` package is installed, matching uses its timeout (100 ms per value).
 
-### Decision: Compiled ruleset cache
+### Decision: Rule loading cache
 
-The cache key is a SHA-256 over the sorted rule file paths and contents, the registry
-version and the detector mode. Cached data excludes Python callables: `func` rules and
-validators are re-imported. The cache lives in `~/.cache/metacrafter/rules/`.
+Profiling showed that building unused pyparsing `oneOf` parsers for text rules and parsing
+YAML dominated load time (4.6 s for the default pack). Text rules now match by set
+membership without a parser, YAML uses the libyaml loader when available, parsed files are
+cached in-process by (path, mtime, size), and compiled pattern expressions are cached by
+source text. Loading the default pack with registry detectors takes about 0.4 s, so a
+cross-process disk cache is not needed.
 
 ## Risks / Trade-offs
 

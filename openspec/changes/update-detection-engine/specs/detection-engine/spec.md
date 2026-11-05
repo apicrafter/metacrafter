@@ -2,8 +2,8 @@
 
 ### Requirement: Registry-Derived Detectors
 
-The engine SHALL build data detectors from registry records that have a regexp and no rule
-targeting them. The `--registry-detectors` option SHALL accept `off`, `stable` and `all`,
+The engine SHALL build data detectors from registry datatype records that have a regexp and no
+data rule targeting their canonical id. The `--registry-detectors` option SHALL accept `off`, `stable` and `all`,
 with `stable` as the default:
 - `stable` SHALL include only records with `status: stable` that have a checksum or a
   regexp specificity of at least 0.8;
@@ -31,22 +31,20 @@ with `stable` as the default:
 
 The engine SHALL compute a confidence score from 0 to 100 for every candidate datatype. The
 score SHALL combine:
-- value hit rate weighted by pattern specificity;
-- checksum pass rate;
-- field-name evidence;
-- rule priority;
-- country context;
-- a penalty for draft records.
+- the share of values that match the pattern and pass the rule validator or checksum,
+  weighted by pattern specificity (1 for curated rules);
+- a field-name bonus when a field rule for the same datatype matched, weighted by rule priority;
+- a country bonus or penalty for registry-derived detectors when the scan country is known;
+- a penalty for draft registry records.
 
 Each match SHALL include an `evidence` object with these components, the sampled and matched
 counts, and the scoring model version. Threshold comparisons SHALL be inclusive.
 
-#### Scenario: Checksum raises confidence
+#### Scenario: Checksum filters value evidence
 
-- **WHEN** two fields both match an IBAN regexp in all values
-- **AND** only the first field's values pass the checksum
-- **THEN** the first field's IBAN score is higher than the second's
-- **AND** both matches show `checksum_rate` in `evidence`
+- **WHEN** a field's values all match an IBAN regexp and half of them pass the checksum
+- **THEN** the IBAN match reports a confidence based on the validated values only
+- **AND** its `evidence` shows `hit_rate` 1.0 and `checksum_rate` 0.5
 
 #### Scenario: Field-name-only match is capped
 
@@ -71,13 +69,13 @@ record id together with the format key.
 - **THEN** the match reports the datetime datatype, the qddate format key and the
   registry pattern record that maps to that key
 
-### Requirement: Compiled Ruleset Cache
+### Requirement: Rule Loading Cache
 
-The engine SHALL cache compiled rulesets keyed by a hash of rule file contents, the
-registry version and the detector mode. A changed rule file or registry version SHALL
-invalidate the cache.
+The engine SHALL cache parsed rule files and compiled pattern expressions within a process,
+keyed by file path, modification time and size (for files) and by expression text (for
+patterns). A changed rule file SHALL invalidate its cached entry.
 
 #### Scenario: Cache invalidation
 
 - **WHEN** a rule file in the rulepath changes
-- **THEN** the next scan recompiles the ruleset instead of using the cached one
+- **THEN** the next load parses the file again instead of using the cached document
