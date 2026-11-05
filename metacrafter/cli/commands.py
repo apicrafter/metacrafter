@@ -149,6 +149,7 @@ def rules_check(
     registry_path: Optional[str] = typer.Option(None, "--registry-path", help="Local registry snapshot or checkout data/ directory"),
     registry_offline: Optional[bool] = typer.Option(None, "--registry-offline/--registry-online", help="Never fetch registry data over the network"),
     output_format: str = typer.Option("table", "--output-format", help="Output format: table or json"),
+    allow_unknown: Optional[str] = typer.Option(None, "--allow-unknown", help="File listing known unresolved keys (YAML mapping or list) that --strict tolerates"),
 ):
     """Check loaded rule keys against the registry: unknown, alias-only and deprecated keys."""
     from metacrafter.registry.checks import check_rule_keys, format_rule_check
@@ -168,8 +169,22 @@ def rules_check(
     if not acmd.registry.available:
         typer.echo("Registry data is not available; keys could not be checked", err=True)
         raise typer.Exit(2)
-    if strict and result["unknown"]:
-        raise typer.Exit(1)
+    if strict:
+        allowed = set()
+        if allow_unknown:
+            import yaml as _yaml
+
+            with open(allow_unknown, encoding="utf-8") as handle:
+                listed = _yaml.safe_load(handle) or []
+            allowed = set(listed.keys() if isinstance(listed, dict) else listed)
+        new_unknown = sorted({e["key"] for e in result["unknown"]} - allowed)
+        compile_errors = [d for d in result.get("diagnostics", []) if d.get("error") == "Pattern compilation failed"]
+        if new_unknown or compile_errors:
+            if new_unknown:
+                typer.echo("Unresolved rule keys not in the allow list: " + ", ".join(new_unknown), err=True)
+            if compile_errors:
+                typer.echo(f"{len(compile_errors)} rule pattern(s) failed to compile", err=True)
+            raise typer.Exit(1)
 
 
 @rules_app.command('list')

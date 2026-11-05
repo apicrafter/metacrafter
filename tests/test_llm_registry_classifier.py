@@ -120,3 +120,15 @@ def test_crafter_cmd_maps_llm_confidence_and_enriches():
     assert match["datatype"] == "email"
     assert match["pii_source"] == "registry"
     assert match["evidence"]["scoring_model"] == "v1-llm"
+
+
+def test_cache_key_changes_with_registry_version(registry):
+    from dataclasses import replace
+
+    from metacrafter.registry.adapter import RegistryAdapter
+
+    provider = FakeProvider({"datatype_id": "email", "confidence": 0.9, "reason": "x"})
+    clf = RegistryLLMClassifier(registry, provider)
+    key_before = clf._cache_key("f", ["v"])
+    other = RegistryAdapter(registry.registry, replace(registry.provenance, version="2.0.0"))
+    assert RegistryLLMClassifier(other, provider)._cache_key("f", ["v"]) != key_before

@@ -2,8 +2,9 @@
 
 ### Requirement: Rule Key Resolution Gate
 
-CI SHALL fail when any loaded rule key resolves to neither a registry id nor a registry
-alias in the pinned registry snapshot.
+CI SHALL fail when a loaded rule key resolves to neither a registry id nor a registry alias
+in the pinned registry snapshot, unless the key is listed in the repository's file of known
+unresolved keys. That file SHALL give a note for each key; entries are removed when fixed.
 
 #### Scenario: New rule with an unknown key
 
@@ -21,6 +22,7 @@ examples it accepted. CI SHALL enforce the thresholds stored in the repository.
 
 - **WHEN** a rule for a datatype with a checksum accepts a registry example marked
   `valid: false`
+- **AND** the rule is not listed as an exception
 - **THEN** the rule test reports the example
 - **AND** the CI gate fails
 
@@ -54,9 +56,9 @@ open or update a single tracking issue.
 
 ### Requirement: Detection Benchmark
 
-The repository SHALL contain synthetic labelled datasets and a benchmark command. The
-command SHALL report per-datatype precision, recall and scan time. CI SHALL fail on a
-regression beyond the stored tolerance.
+The repository SHALL contain synthetic labelled datasets. `metacrafter evaluate` SHALL report
+per-datatype precision, recall and scan time, and SHALL compare them with a stored baseline
+(`--baseline`). CI SHALL fail on a regression beyond the stored tolerance.
 
 #### Scenario: Precision regression
 

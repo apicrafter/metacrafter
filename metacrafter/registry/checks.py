@@ -28,9 +28,14 @@ def check_rule_keys(processor, registry) -> Dict[str, List[Dict[str, Any]]]:
             result["alias"].append({**entry, "canonical": resolution.canonical_id})
         if resolution.status == "deprecated":
             result["deprecated"].append({**entry, "replaced_by": resolution.replaced_by})
+    result["diagnostics"] = [
+        {"ruleid": d.get("ruleid"), "file": "/".join(str(d.get("source") or "").replace("\\", "/").split("/")[-3:]), "error": d.get("error")}
+        for d in getattr(processor, "diagnostics", [])
+    ]
     result["summary"] = [
         {
             "rules": len(rules),
+            "diagnostics": len(result["diagnostics"]),
             "unknown": len(result["unknown"]),
             "alias": len(result["alias"]),
             "deprecated": len(result["deprecated"]),
@@ -46,10 +51,11 @@ def format_rule_check(result: Dict[str, Any], output_format: str = "table") -> s
     summary = result["summary"][0]
     lines = [
         f"Rules: {summary['rules']}, unknown keys: {summary['unknown']}, "
-        f"alias keys: {summary['alias']}, deprecated targets: {summary['deprecated']}",
+        f"alias keys: {summary['alias']}, deprecated targets: {summary['deprecated']}, "
+        f"load diagnostics: {summary['diagnostics']}",
         f"Registry: {summary['registry'].get('source')} (version {summary['registry'].get('version')})",
     ]
-    for name in ("unknown", "alias", "deprecated"):
+    for name in ("unknown", "alias", "deprecated", "diagnostics"):
         rows = result[name]
         if rows:
             lines.append("")

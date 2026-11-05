@@ -104,6 +104,7 @@ const sidebars = {
       items: [
         'development/contributing',
         'development/architecture',
+        'development/ecosystem',
         'development/community',
       ],
     },

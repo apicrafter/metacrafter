@@ -80,3 +80,45 @@ jobs:
           cp scripts/check_installation.py /tmp/check_installation.py
           cd /tmp
           /tmp/install-check/bin/python check_installation.py
+
+  ecosystem:
+    # Contract with the pinned metacrafter-rules and metacrafter-registry (ecosystem.lock).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Read pinned registry ref
+        id: lock
+        run: |
+          python -m pip install --upgrade pip pyyaml
+          echo "registry_ref=$(python -c "import yaml;print(yaml.safe_load(open('ecosystem.lock'))['metacrafter-registry']['ref'])")" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: apicrafter/metacrafter-registry
+          ref: ${{ steps.lock.outputs.registry_ref }}
+          path: metacrafter-registry
+      - name: Install
+        run: |
+          pip install "$(python scripts/ecosystem_ref.py metacrafter-rules)"
+          pip install ./metacrafter-registry
+          pip install -e '.[dev]'
+      - name: Rule keys resolve to registry ids (known exceptions listed in tests/ecosystem)
+        run: |
+          metacrafter rules check --registry --strict \
+            --registry-path metacrafter-registry/data --registry-offline \
+            --allow-unknown tests/ecosystem/known_unresolved_rule_keys.yaml
+      - name: Rules on registry examples (thresholds in tests/ecosystem)
+        run: |
+          metacrafter rules test --registry-examples \
+            --registry-path metacrafter-registry/data \
+            --thresholds tests/ecosystem/rule_thresholds.yaml \
+            -o ecosystem-results.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ecosystem-results
+          path: ecosystem-results.json
+          if-no-files-found: ignore

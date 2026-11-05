@@ -3,7 +3,7 @@
 import json
 import time
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import typer
 import yaml
@@ -378,7 +378,7 @@ def evaluate_fixture(service, fixture):
         )
         rule_version = report.get("rules_version")
         predicted = {
-            field["field"]: {match["dataclass"] for match in field.get("matches", [])}
+            field["field"]: {match.get("datatype") or match["dataclass"] for match in field.get("matches", [])}
             for field in report["data"]
         }
         expected = case["labels"]
@@ -539,10 +539,53 @@ def register_product_commands(app, rules_app, scan_app, export_app):
             raise typer.Exit(1)
 
     @rules_app.command("test")
-    def rules_test(path: Path, examples: Path = typer.Option(...)):
-        result = test_rule_examples(path, load_document(examples))
-        emit(result)
-        if not result["passed"]:
+    def rules_test(
+        path: Optional[Path] = typer.Argument(None, help="Rule file or directory"),
+        examples: Optional[Path] = typer.Option(None, "--examples", help="Examples file (rule-local tests)"),
+        registry_examples: bool = typer.Option(False, "--registry-examples", help="Test rules on registry positive and negative examples"),
+        rule: Optional[List[str]] = typer.Option(None, "--rule", help="Only these rule ids (repeatable)"),
+        rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Extra rule paths, comma-separated"),
+        registry_path: Optional[str] = typer.Option(None, "--registry-path", help="Registry snapshot or checkout data/ directory"),
+        registry_detectors: str = typer.Option("stable", "--registry-detectors", help="off, stable or all"),
+        thresholds: Optional[Path] = typer.Option(None, "--thresholds", help="Fail on regressions against this thresholds file"),
+        write_thresholds: Optional[Path] = typer.Option(None, "--write-thresholds", help="Write current results as the thresholds baseline"),
+        output: Optional[Path] = typer.Option(None, "--output", "-o"),
+    ):
+        """Test rules on examples: a local examples file, or the registry's examples (--registry-examples)."""
+        if not registry_examples:
+            if path is None or examples is None:
+                raise typer.BadParameter("PATH and --examples are required unless --registry-examples is set")
+            result = test_rule_examples(path, load_document(examples))
+            emit(result, output)
+            if not result["passed"]:
+                raise typer.Exit(1)
+            return
+        from metacrafter.core import CrafterCmd
+        from metacrafter.ecosystem import check_thresholds, registry_example_tests, thresholds_from_results
+
+        paths = rulepath.split(",") if rulepath else []
+        if path is not None:
+            paths.append(str(path))
+        service = CrafterCmd(
+            rulepath=paths or None,
+            quiet=True,
+            registry_path=registry_path,
+            registry_detectors=registry_detectors,
+        )
+        if not service.registry.available:
+            typer.echo("Registry data is not available; pass --registry-path", err=True)
+            raise typer.Exit(2)
+        result = registry_example_tests(service.processor, service.registry, rule)
+        if write_thresholds:
+            write_thresholds.write_text(
+                yaml.safe_dump(thresholds_from_results(result), sort_keys=False, allow_unicode=True),
+                encoding="utf8",
+            )
+        failures = check_thresholds(result, load_document(thresholds)) if thresholds else []
+        result["failures"] = failures
+        emit(result, output)
+        if failures:
+            typer.echo(f"{len(failures)} rule example check(s) failed", err=True)
             raise typer.Exit(1)
 
     @rules_app.command("draft")
@@ -600,14 +643,31 @@ def register_product_commands(app, rules_app, scan_app, export_app):
 
     @app.command("evaluate")
     def evaluate(
-        fixture: Path, rulepath: Optional[str] = None, output: Optional[Path] = None
+        fixture: Path,
+        rulepath: Optional[str] = None,
+        output: Optional[Path] = None,
+        baseline: Optional[Path] = typer.Option(None, "--baseline", help="Fail when precision or recall drops below this baseline"),
+        write_baseline: Optional[Path] = typer.Option(None, "--write-baseline", help="Write the current precision and recall as the baseline"),
+        tolerance: float = typer.Option(0.02, "--tolerance", help="Allowed drop before --baseline fails"),
     ):
+        """Evaluate detection on a labelled fixture (per-datatype precision, recall, time)."""
         from metacrafter.core import CrafterCmd
+        from metacrafter.ecosystem import benchmark_baseline, compare_benchmark
 
         service = CrafterCmd(
             rulepath=rulepath.split(",") if rulepath else None, quiet=True
         )
-        emit(evaluate_fixture(service, load_document(fixture)), output)
+        result = evaluate_fixture(service, load_document(fixture))
+        if write_baseline:
+            write_baseline.write_text(
+                json.dumps(benchmark_baseline(result), indent=2, sort_keys=True) + "\n", encoding="utf8"
+            )
+        regressions = compare_benchmark(result, load_document(baseline), tolerance) if baseline else []
+        result["regressions"] = regressions
+        emit(result, output)
+        if regressions:
+            typer.echo(f"{len(regressions)} benchmark regression(s)", err=True)
+            raise typer.Exit(1)
 
     @export_app.command("dbt")
     def export_dbt(
