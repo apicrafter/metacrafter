@@ -10,8 +10,13 @@ jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      # Report every Python version instead of cancelling the rest on the first failure.
+      fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+        # Python 3.8 is not tested: pyorc (via iterabledata) has no 3.8 wheel and its sdist
+        # fails to build with current setuptools. The 3.10 floor is planned in
+        # openspec/changes/refactor-metacrafter-foundation.
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
     
     steps:
       - uses: actions/checkout@v4
