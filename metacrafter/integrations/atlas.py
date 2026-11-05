@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """Apache Atlas integration module for exporting Metacrafter scan results."""
+from metacrafter.reports import normalize_report, validate_options
+from metacrafter.integrations.outcomes import perform
 import logging
 import os
 import base64
@@ -90,6 +92,7 @@ class AtlasExporter:
         add_datatype_classifications: bool = True,
         add_attributes: bool = True,
         min_confidence: float = 0.0,
+        dry_run: bool = False,
     ) -> Dict[str, Any]:
         """Export Metacrafter scan results to Apache Atlas.
         
@@ -121,6 +124,9 @@ class AtlasExporter:
             "errors": [],
         }
         
+        stats.update(attempted=0, succeeded=0, skipped=0, failed=0, planned=[])
+        validate_options(1, min_confidence)
+        scan_report = normalize_report(scan_report)
         # Extract field data from scan report
         field_data = scan_report.get("data", [])
         if not field_data:
@@ -168,7 +174,7 @@ class AtlasExporter:
                 # Collect classifications to add
                 classifications_to_add = []
                 if add_pii_classifications:
-                    pii_classifications = self._extract_pii_classifications(field_info)
+                    pii_classifications = self._extract_pii_classifications(dict(field_info, matches=filtered_matches, tags=[]))
                     classifications_to_add.extend(pii_classifications)
                 
                 if add_datatype_classifications:
@@ -178,15 +184,15 @@ class AtlasExporter:
                 # Add classifications
                 if classifications_to_add:
                     for classification in classifications_to_add:
-                        self._add_classification(column_guid, classification)
-                        stats["classifications_added"] += 1
+                        if perform(stats, dry_run, self._add_classification, column_guid, classification):
+                            stats["classifications_added"] += 1
                 
                 # Add custom attributes
                 if add_attributes:
                     attributes = self._build_attributes(field_info, best_match)
                     if attributes:
-                        self._add_attributes(column_guid, attributes)
-                        stats["attributes_added"] += len(attributes)
+                        if perform(stats, dry_run, self._add_attributes, column_guid, attributes):
+                            stats["attributes_added"] += len(attributes)
                 
                 stats["fields_processed"] += 1
                 
@@ -260,7 +266,7 @@ class AtlasExporter:
         Returns:
             List of PII classification names
         """
-        classifications = []
+        classifications = ["PII"] if any(m.get("is_pii") for m in field_info.get("matches", [])) else []
         
         # Check tags field
         field_tags = field_info.get("tags", [])
@@ -356,8 +362,8 @@ class AtlasExporter:
             # Check if classification already exists
             existing_classifications = self._get_entity_classifications(entity_guid)
             if classification_name in existing_classifications:
-                logger.debug(f"Classification {classification_name} already exists on entity {entity_guid}")
-                return
+                logger.debug("Classification already exists")
+                return False
             
             # Add classification
             url = f"{self.api_base}/entity/guid/{entity_guid}/classifications"
@@ -380,12 +386,12 @@ class AtlasExporter:
             else:
                 logger.warning(
                     f"Error adding classification {classification_name} to entity {entity_guid}: "
-                    f"HTTP {response.status_code}: {response.text}"
+                    f"HTTP {response.status_code}"
                 )
+                raise RuntimeError("Atlas classification write failed: HTTP %s" % response.status_code)
         except Exception as e:
             logger.error(f"Error adding classification {classification_name} to entity {entity_guid}: {e}")
-            # Don't raise - classifications are optional
-            pass
+            raise
     
     def _get_entity_classifications(self, entity_guid: str) -> List[str]:
         """Get list of classification names for an entity.
@@ -409,10 +415,10 @@ class AtlasExporter:
                 return [c.get("typeName") for c in classifications.get("list", [])]
             else:
                 logger.debug(f"Error getting classifications for entity {entity_guid}: HTTP {response.status_code}")
-                return []
+                raise RuntimeError("Atlas classifications read failed")
         except Exception as e:
             logger.debug(f"Error getting classifications for entity {entity_guid}: {e}")
-            return []
+            raise
     
     def _add_attributes(self, entity_guid: str, attributes: Dict[str, Any]) -> None:
         """Add custom attributes to an Atlas entity.
@@ -434,8 +440,7 @@ class AtlasExporter:
             )
             
             if response.status_code != 200:
-                logger.warning(f"Error getting entity {entity_guid}: HTTP {response.status_code}")
-                return
+                raise RuntimeError("Atlas entity read failed: HTTP %s" % response.status_code)
             
             entity = response.json().get("entity", {})
             entity_attributes = entity.get("attributes", {})
@@ -469,10 +474,10 @@ class AtlasExporter:
             else:
                 logger.warning(
                     f"Error updating attributes for entity {entity_guid}: "
-                    f"HTTP {update_response.status_code}: {update_response.text}"
+                    f"HTTP {update_response.status_code}"
                 )
+                raise RuntimeError("Atlas attribute write failed: HTTP %s" % update_response.status_code)
         except Exception as e:
             logger.error(f"Error adding attributes to entity {entity_guid}: {e}")
-            # Don't raise - attributes are optional
-            pass
+            raise
 

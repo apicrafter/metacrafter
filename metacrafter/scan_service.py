@@ -23,6 +23,8 @@ from metacrafter.classify.processor import RulesProcessor, BASE_URL
 from metacrafter.classify.stats import Analyzer, DEFAULT_DICT_SHARE, DEFAULT_EMPTY_VALUES
 
 from metacrafter.config import ConfigLoader, DEFAULT_RULEPATH
+from metacrafter.reports import statistics_dict, validate_options, normalize_report, aggregate_reports, rules_fingerprint
+from metacrafter.classify.utils import dict_to_columns
 from metacrafter import output as cli_output
 
 try:  # pragma: no cover - tqdm is optional at import time
@@ -58,27 +60,7 @@ MIN_CONFIDENCE_FOR_MATCH = 5.0  # Minimum confidence percentage for a match
 DEFAULT_BATCH_SIZE = 1000  # Default batch size for database queries
 
 RESULT_HEADERS = ["key", "ftype", "tags", "matches", "datatype_url"]
-STATS_HEADERS = [
-    "key",
-    "ftype",
-    "is_dictkey",
-    "is_uniq",
-    "n_uniq",
-    "share_uniq",
-    "minlen",
-    "maxlen",
-    "avglen",
-    "tags",
-    "has_digit",
-    "has_alphas",
-    "has_special",
-    "minval",
-    "maxval",
-    "has_any_digit",
-    "has_any_alphas",
-    "has_any_special",
-    "dictvalues",
-]
+from metacrafter.reports import STATS_HEADERS
 
 DEFAULT_JSON_INDENT = 4
 DEFAULT_TABLE_FORMAT = cli_output.DEFAULT_TABLE_FORMAT
@@ -132,12 +114,18 @@ class CrafterCmd(object):
         retry_delay: float = DEFAULT_RETRY_DELAY,
         use_llm: bool = False,
         llm_only: bool = False,
-        llm_provider: str = "openai",
+        llm_provider: Optional[str] = None,
         llm_registry_path: Optional[str] = None,
         llm_index_path: Optional[str] = None,
         llm_model: Optional[str] = None,
         llm_api_key: Optional[str] = None,
         llm_base_url: Optional[str] = None,
+        sample_policy: str = "names-only",
+        llm_fallback: str = "error",
+        embedding_provider: Optional[str] = None,
+        embedding_model: Optional[str] = None,
+        embedding_base_url: Optional[str] = None,
+        llm_max_requests: int = 100,
     ):
         """Initialize CrafterCmd instance.
         
@@ -155,12 +143,8 @@ class CrafterCmd(object):
             log_level = logging.ERROR
 
         if log_level is not None:
-            logging.basicConfig(
-                format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-                level=log_level,
-                force=True,
-            )
-            logging.captureWarnings(True)
+            logging.getLogger("metacrafter").setLevel(log_level)
+        self.registry_url = ConfigLoader.get_registry_url().rstrip("/")
         self.remote = remote
         self.custom_rulepath = rulepath
         self.country_codes = (
@@ -197,6 +181,14 @@ class CrafterCmd(object):
             self.processor = RulesProcessor(countries=self.country_codes)
             self.prepare()
         
+        if llm_fallback not in ("error", "rules"):
+            raise ValueError("llm_fallback must be error or rules")
+        from metacrafter.privacy import disclose_samples
+        disclose_samples([], sample_policy)
+        self.sample_policy = sample_policy
+        self.llm_fallback = llm_fallback
+        self.llm_errors = []
+        self.llm_min_confidence = 50.0
         # Load LLM config from file if not provided
         llm_config = ConfigLoader.get_llm_config()
         if llm_config:
@@ -213,7 +205,7 @@ class CrafterCmd(object):
                 llm_index_path = llm_config.get("llm_index_path")
                 if llm_index_path:
                     logging.debug(f"Using llm_index_path from config: {llm_index_path}")
-            if llm_provider == "openai" and llm_config.get("llm_provider"):
+            if llm_provider is None and llm_config.get("llm_provider"):
                 llm_provider = llm_config.get("llm_provider")
                 logging.debug(f"Using llm_provider from config: {llm_provider}")
             if llm_model is None:
@@ -227,7 +219,7 @@ class CrafterCmd(object):
             if llm_base_url is None:
                 llm_base_url = llm_config.get("llm_base_url")
                 if llm_base_url:
-                    logging.debug(f"Using llm_base_url from config: {llm_base_url}")
+                    logging.debug("Using configured LLM endpoint")
             
             # Check if config enables LLM (if not explicitly set via parameters)
             if not use_llm and not llm_only:
@@ -241,6 +233,10 @@ class CrafterCmd(object):
         else:
             logging.debug("No LLM config found in .metacrafter file")
         
+        llm_provider = llm_provider or "openai"
+        self.llm_min_confidence = (llm_config or {}).get("llm_min_confidence", 50.0)
+        if self.llm_min_confidence is None:
+            self.llm_min_confidence = 50.0
         # Initialize LLM classifier if requested
         self.llm_classifier = None
         self.classification_mode = "rules"  # Default: rules-only
@@ -301,20 +297,22 @@ class CrafterCmd(object):
                     llm_model=llm_model,
                     llm_api_key=llm_api_key,
                     llm_base_url=llm_base_url,
+                    sample_policy=sample_policy,
+                    embedding_provider=embedding_provider,
+                    embedding_model=embedding_model or "text-embedding-3-small",
+                    embedding_base_url=embedding_base_url,
+                    max_requests=llm_max_requests,
+                    timeout=self.request_timeout or 30.0,
                 )
                 if self.verbose:
                     logging.info(f"LLM classifier initialized with provider: {llm_provider}")
                 logging.debug("LLM classifier initialized successfully")
-            except ImportError as e:
-                logging.warning(f"Failed to import LLM classifier: {e}. LLM functionality disabled.")
-                logging.debug("Import error details:", exc_info=True)
+            except Exception as error:
+                if self.llm_fallback != "rules":
+                    raise RuntimeError("Requested LLM mode could not initialize; configure llm_fallback='rules' to allow fallback") from error
                 self.llm_classifier = None
-                self.classification_mode = "rules"
-            except Exception as e:
-                logging.warning(f"Failed to initialize LLM classifier: {e}. LLM functionality disabled.")
-                logging.debug("Initialization error details:", exc_info=True)
-                self.llm_classifier = None
-                self.classification_mode = "rules"
+                self.llm_errors.append({"code": "llm_initialization", "message": "Requested LLM unavailable; using rules"})
+
 
     def prepare(self) -> None:
         """Prepare the processor by loading rules and initializing date parser.
@@ -667,7 +665,7 @@ class CrafterCmd(object):
             print("- %s %d" % (key, self.processor.langs[key]))
         if self.processor.countries:
             print("Country code:")
-            for key in sorted(self.processor.countries.keys()):
+            for key in sorted(self.processor.countries.keys(), key=lambda value: value or ""):
                 print("- %s %d" % (key or "unknown", self.processor.countries[key]))
         print("Data/time patterns (qddate): %d" % (len(self.dparser.patterns)))
 
@@ -758,7 +756,7 @@ class CrafterCmd(object):
                         line_delimited=not isinstance(output, str),
                     )
                 if isinstance(output, str) and not self.quiet:
-                    print(f"Output written to {output}")
+                    print(f"Output written to {output}", file=sys.stderr)
             else:
                 if cli_output.should_use_rich(self.table_format) and stats_table:
                     console = cli_output.get_console()
@@ -792,7 +790,7 @@ class CrafterCmd(object):
             return
 
         if isinstance(output, str) and not self.quiet:
-            print(f"Output written to {output}")
+            print(f"Output written to {output}", file=sys.stderr)
 
     def _write_results(
         self,
@@ -808,6 +806,9 @@ class CrafterCmd(object):
         stats_table = report.get("stats_table") or []
         stats_dict = report.get("stats") or {}
 
+        if stats_only and output_format in ("json", "yaml"):
+            self._write_serialized_output(normalize_report(dict(report, source=filename, table=filename)), output, output_format)
+            return
         if stats_only:
             self._write_stats_output(
                 filename, stats_table, stats_dict, output, output_format
@@ -821,12 +822,7 @@ class CrafterCmd(object):
                 if isinstance(output, str) and output.lower().endswith(".csv"):
                     self._write_csv_output(filtered, RESULT_HEADERS, output)
                 else:
-                    payload = {
-                        "table": filename,
-                        "fields": detailed,
-                        "results": filtered,
-                        "stats": stats_dict,
-                    }
+                    payload = normalize_report(dict(report, table=filename, source=filename, data=detailed, results=filtered))
                     self._write_serialized_output(
                         payload,
                         output,
@@ -834,7 +830,7 @@ class CrafterCmd(object):
                         line_delimited=not isinstance(output, str),
                     )
                 if isinstance(output, str) and not self.quiet:
-                    print(f"Output written to {output}")
+                    print(f"Output written to {output}", file=sys.stderr)
             else:
                 if cli_output.should_use_rich(self.table_format) and detailed:
                     console = cli_output.get_console()
@@ -852,12 +848,7 @@ class CrafterCmd(object):
             return
 
         if output_format in ("json", "yaml"):
-            payload = {
-                "table": filename,
-                "fields": detailed,
-                "results": prepared,
-                "stats": stats_dict,
-            }
+            payload = normalize_report(dict(report, table=filename, source=filename, data=detailed, results=prepared))
             fmt = output_format
             self._write_serialized_output(payload, output, fmt)
         elif output_format == "csv":
@@ -868,16 +859,20 @@ class CrafterCmd(object):
             return
 
         if isinstance(output, str) and not self.quiet:
-            print(f"Output written to {output}")
+            print(f"Output written to {output}", file=sys.stderr)
 
     def _write_db_results(
-        self, db_results, dformat, output, output_format="table", stats_only=False
+        self, db_results, dformat, output, output_format="table", stats_only=False, errors=None
     ):
-        if not db_results:
+        if output_format in ("json", "yaml"):
+            reports = [dict(report, source=table, table=table) for table, report in db_results.items()]
+            self._write_serialized_output(aggregate_reports(reports, errors), output, output_format)
+            return
+        if not db_results and output_format == "table":
             print("No tables processed")
             return
 
-        if not output:
+        if not output and output_format == "table":
             use_rich_heading = cli_output.should_use_rich(self.table_format)
             for table, report in db_results.items():
                 if use_rich_heading:
@@ -913,7 +908,7 @@ class CrafterCmd(object):
                 headers = ["table"] + RESULT_HEADERS
             self._write_csv_output(rows, headers, output)
             if isinstance(output, str) and not self.quiet:
-                print(f"Output written to {output}")
+                print(f"Output written to {output}", file=sys.stderr)
             return
 
         # aggregated structured output
@@ -934,7 +929,7 @@ class CrafterCmd(object):
             fmt = "yaml"
         self._write_serialized_output(aggregated, output, fmt)
         if isinstance(output, str) and not self.quiet:
-            print(f"Output written to {output}")
+            print(f"Output written to {output}", file=sys.stderr)
 
 
     def scan_data_client(
@@ -1002,7 +997,9 @@ class CrafterCmd(object):
         if stats_only is not None:
             params['stats_only'] = stats_only
         if dict_share is not None:
-            params['dictshare'] = dict_share
+            params['dict_share'] = dict_share
+        if empty_values is not None:
+            params['empty_values'] = json.dumps(empty_values)
 
         url = api_root + '/api/v1/scan_data'
 
@@ -1040,80 +1037,35 @@ class CrafterCmd(object):
         langs: Optional[List[str]] = None,
         contexts: Optional[List[str]] = None,
     ):
-        """Classify all fields using LLM only.
-        
-        Args:
-            items: List of data items
-            datastats: Field statistics dictionary
-            langs: Optional language filters
-            contexts: Optional context filters (categories)
-            
-        Returns:
-            TableScanResult compatible with rule-based results
-        """
         from metacrafter.classify.processor import TableScanResult, ColumnMatchResult, RuleResult
-        
-        if not self.llm_classifier:
-            return TableScanResult()
-        
-        # Collect sample values for each field
-        field_samples = {}
-        for item in items[:100]:  # Limit to first 100 items for efficiency
-            for field_name, value in item.items():
-                if field_name not in field_samples:
-                    field_samples[field_name] = []
-                if value and len(field_samples[field_name]) < 10:
-                    field_samples[field_name].append(str(value))
-        
-        # Prepare fields for batch classification
-        fields_to_classify = []
-        for field_name in datastats.keys():
-            sample_values = field_samples.get(field_name, [])[:5]  # Limit to 5 samples
-            fields_to_classify.append({
-                "field_name": field_name,
-                "sample_values": sample_values
-            })
-        
-        # Convert contexts to categories for LLM
-        categories = contexts if contexts else None
-        
-        # Classify with LLM
-        try:
-            llm_results = self.llm_classifier.classify_batch(
-                fields=fields_to_classify,
-                langs=langs,
-                categories=categories
-            )
-        except Exception as e:
-            logging.warning(f"LLM classification failed: {e}")
-            return TableScanResult()
-        
-        # Convert LLM results to TableScanResult format
+        from metacrafter.privacy import disclose_samples
+        import math
         results = TableScanResult()
-        for llm_result in llm_results:
-            field_name = llm_result.get("field")
-            if not field_name:
-                continue
-            
-            datatype_id = llm_result.get("datatype_id")
-            confidence = llm_result.get("confidence", 0.0)
-            
-            # Create column result
-            column_result = ColumnMatchResult(field=field_name)
-            
-            # Add LLM match if found
-            if datatype_id and confidence > 0:
-                llm_match = RuleResult(
-                    ruleid="llm_classifier",
-                    dataclass=datatype_id,
-                    confidence=confidence * 100.0,  # Convert to 0-100 scale
-                    ruletype="llm",
-                )
-                column_result.add(llm_match)
-            
-            results.results.append(column_result)
-        
+        columns = dict_to_columns(items)
+        for field in datastats:
+            column = ColumnMatchResult(field=field)
+            results.add(column)
+            try:
+                llm = self.llm_classifier.classify_field(field_name=field,
+                    sample_values=disclose_samples(columns.get(field, []), self.sample_policy),
+                    langs=langs, categories=contexts, country=self.country_codes)
+                confidence = llm.get("confidence", 0)
+                if isinstance(confidence, bool) or not isinstance(confidence, (float, int)) or not math.isfinite(confidence) or not 0 <= confidence <= 1:
+                    raise ValueError("Invalid LLM confidence")
+                if llm.get("datatype_id") and confidence * 100 >= self._scan_llm_threshold:
+                    match = RuleResult(ruleid="llm_classifier", dataclass=llm["datatype_id"], confidence=confidence*100,
+                                       ruletype="llm", is_pii=bool(llm.get("is_pii")))
+                    match.reason = llm.get("reason", "")
+                    column.add(match)
+            except Exception as error:
+                self.llm_errors.append({"field": field, "code": type(error).__name__, "message": "LLM classification failed"})
+                if self.llm_fallback != "rules":
+                    raise RuntimeError("LLM classification failed") from error
+                fallback = self.processor.match_dict(items, fields=[field], datastats=datastats,
+                    **self._scan_rule_options)
+                column.matches = fallback.results[0].matches
         return results
+
     
     def _merge_llm_results(
         self,
@@ -1124,94 +1076,17 @@ class CrafterCmd(object):
         contexts: Optional[List[str]] = None,
         min_confidence: float = 50.0,
     ):
-        """Merge LLM classification results with rule-based results.
-        
-        Args:
-            rule_results: Results from rule-based classification
-            items: Original data items
-            datastats: Field statistics
-            langs: Language filters
-            contexts: Context filters (categories)
-            min_confidence: Minimum confidence for LLM results (0-100)
-            
-        Returns:
-            Merged TableScanResult
-        """
-        from metacrafter.classify.processor import ColumnMatchResult, RuleResult
-        
-        if not self.llm_classifier:
-            return rule_results
-        
-        # Get fields that matched with high confidence
-        matched_fields = {}
-        for res in rule_results.results:
-            if res.matches:
-                # Get highest confidence match
-                max_conf = max(m.confidence for m in res.matches) if res.matches else 0
-                matched_fields[res.field] = max_conf
-        
-        # Collect sample values for each field
-        field_samples = {}
-        for item in items[:100]:  # Limit to first 100 items
-            for field_name, value in item.items():
-                if field_name not in field_samples:
-                    field_samples[field_name] = []
-                if value and len(field_samples[field_name]) < 10:
-                    field_samples[field_name].append(str(value))
-        
-        # Convert contexts to categories for LLM
-        categories = contexts if contexts else None
-        
-        # Try LLM classification for unmatched or low-confidence fields
-        for field_name, stats in datastats.items():
-            # Skip if already matched with high confidence
-            if field_name in matched_fields and matched_fields[field_name] >= min_confidence:
-                continue
-            
-            # Get sample values
-            sample_values = field_samples.get(field_name, [])[:5]  # Limit to 5 samples
-            
-            try:
-                # Classify with LLM
-                llm_result = self.llm_classifier.classify_field(
-                    field_name=field_name,
-                    sample_values=sample_values,
-                    langs=langs,
-                    categories=categories,
-                )
-                
-                # Check if LLM found a match with sufficient confidence
-                llm_confidence = llm_result.get("confidence", 0) * 100  # Convert to 0-100
-                if llm_result.get("datatype_id") and llm_confidence >= min_confidence:
-                    # Find or create column result
-                    column_result = None
-                    for res in rule_results.results:
-                        if res.field == field_name:
-                            column_result = res
-                            break
-                    
-                    if not column_result:
-                        column_result = ColumnMatchResult(field=field_name)
-                        rule_results.results.append(column_result)
-                    
-                    # Add LLM match as a rule result
-                    llm_match = RuleResult(
-                        ruleid="llm_classifier",
-                        dataclass=llm_result["datatype_id"],
-                        confidence=llm_confidence,
-                        ruletype="llm",
-                    )
-                    column_result.add(llm_match)
-                    
-                    if self.verbose:
-                        logging.debug(f"LLM classified {field_name} as {llm_result['datatype_id']} "
-                                    f"(confidence: {llm_confidence:.1f}%)")
-            
-            except Exception as e:
-                logging.warning(f"LLM classification failed for field {field_name}: {e}")
-                continue
-        
+        selected = {r.field for r in rule_results.results if not r.matches or max(m.confidence for m in r.matches) < min_confidence}
+        stats = {field: value for field, value in datastats.items() if field in selected}
+        additions = self._classify_with_llm_only(items, stats, langs, contexts)
+        indexed = {r.field: r for r in rule_results.results}
+        for column in additions.results:
+            if column.field in indexed:
+                indexed[column.field].matches.extend(column.matches)
+            else:
+                rule_results.add(column)
         return rule_results
+
 
     def scan_data(
         self,
@@ -1229,7 +1104,8 @@ class CrafterCmd(object):
         dict_share: Optional[float] = None,
         empty_values: Optional[List[str]] = None,
         classification_mode: Optional[str] = None,
-        llm_min_confidence: float = 50.0,
+        llm_min_confidence: Optional[float] = None,
+        explain: bool = False,
     ) -> Dict[str, Any]:
         """Scan data items and return classification results.
         
@@ -1255,6 +1131,12 @@ class CrafterCmd(object):
                 - 'stats': Dictionary of field statistics
                 - 'stats_table': Table format of statistics
         """
+        confidence = MIN_CONFIDENCE_FOR_MATCH if confidence is None else confidence
+        validate_options(limit, confidence)
+        if not isinstance(items, list) or any(not isinstance(item, dict) for item in items):
+            raise ValueError("items must be an array of objects")
+        observed_count = len(items)
+        items = items[:limit]
         # Parse contexts and langs if they are strings
         if isinstance(contexts, str):
             contexts = [c.strip() for c in contexts.split(',') if c.strip()]
@@ -1263,11 +1145,16 @@ class CrafterCmd(object):
         if isinstance(fields, str):
             fields = [f.strip() for f in fields.split(',') if f.strip()]
 
+        available = dict_to_columns(items)
+        if fields is not None:
+            missing = set(fields) - set(available)
+            if missing:
+                raise ValueError("Unknown selected fields: " + ", ".join(sorted(missing)))
         analyzer = Analyzer()
         analyzer_options = {"delimiter": ",", "format_in": None, "zipfile": None}
         if dict_share is not None:
             analyzer_options["dictshare"] = dict_share
-        if empty_values:
+        if empty_values is not None:
             analyzer_options["empty"] = empty_values
         record_progress = None
         if self.progress_enabled and items:
@@ -1286,39 +1173,36 @@ class CrafterCmd(object):
         finally:
             if record_progress:
                 record_progress.close()
-        headers = [
-            "key",
-            "ftype",
-            "is_dictkey",
-            "is_uniq",
-            "n_uniq",
-            "share_uniq",
-            "minlen",
-            "maxlen",
-            "avglen",
-            "tags",
-            "has_digit",
-            "has_alphas",
-            "has_special",
-            "dictvalues",
-        ]
-        datastats_dict = {}
-        if datastats is not None:
-            for row in datastats:
-                datastats_dict[row[0]] = {}
-                for n in range(0, len(headers)):
-                    datastats_dict[row[0]][headers[n]] = row[n]
+        datastats_dict = statistics_dict(datastats)
+        if fields is not None:
+            datastats_dict = {field: datastats_dict[field] for field in fields}
+            datastats = [row for row in datastats if row[0] in fields]
 
         if stats_only:
             return {
-                "results": [],
-                "data": [],
-                "stats": datastats_dict,
-                "stats_table": datastats,
+                "results": [], "data": [], "fields": [], "stats": datastats_dict,
+                "stats_table": datastats, "report_version": 2, "source": "memory",
+                "complete": True, "errors": [], "requested_mode": "stats", "effective_mode": "stats",
+                "sampling": {"method": "head", "retained_count": len(items), "observed_count": observed_count, "statistics_scope": "sample"},
+                "rules_version": rules_fingerprint(self.processor),
             }
 
+        self._scan_llm_threshold = max(confidence, llm_min_confidence if llm_min_confidence is not None else self.llm_min_confidence)
+        validate_options(limit, self._scan_llm_threshold)
+        self._scan_rule_threshold = confidence
+        self._scan_rule_options = dict(confidence=confidence, stop_on_match=stop_on_match,
+            dateparser=self.dparser, parse_dates=parse_dates, limit=limit,
+            filter_langs=langs, filter_contexts=contexts, except_empty=except_empty,
+            ignore_imprecise=ignore_imprecise, empty_values=empty_values, explain=explain)
+        self.llm_errors = [] if self.llm_classifier else list(self.llm_errors)
+        if self.llm_classifier is not None:
+            self.llm_classifier.request_count = 0
         # Determine classification mode
         mode = classification_mode if classification_mode is not None else self.classification_mode
+        if mode not in ("rules", "llm", "hybrid"):
+            raise ValueError("classification_mode must be rules, llm or hybrid")
+        if mode != "rules" and self.llm_classifier is None and self.llm_fallback != "rules":
+            raise ValueError("Requested LLM mode is unavailable")
         
         # Use provided confidence or default
         confidence_threshold = confidence if confidence is not None else MIN_CONFIDENCE_FOR_MATCH
@@ -1341,6 +1225,8 @@ class CrafterCmd(object):
                     filter_contexts=contexts,
                     filter_langs=langs,
                     except_empty=except_empty,
+                    empty_values=empty_values,
+                    explain=explain,
                     ignore_imprecise=ignore_imprecise,
                 )
             else:
@@ -1364,6 +1250,8 @@ class CrafterCmd(object):
                 filter_contexts=contexts,
                 filter_langs=langs,
                 except_empty=except_empty,
+                empty_values=empty_values,
+                explain=explain,
                 ignore_imprecise=ignore_imprecise,
             )
             
@@ -1375,7 +1263,7 @@ class CrafterCmd(object):
                     datastats=datastats_dict,
                     langs=langs,
                     contexts=contexts,
-                    min_confidence=llm_min_confidence,
+                    min_confidence=self._scan_llm_threshold,
                 )
         output = []
         outdata = []
@@ -1385,13 +1273,17 @@ class CrafterCmd(object):
             # by confidence descending for a cleaner summary string.
             best_by_class = {}
             order = []
+            res.matches = [match for match in res.matches if match.confidence >= confidence]
             for match in res.matches:
                 existing = best_by_class.get(match.dataclass)
                 if existing is None:
                     order.append(match.dataclass)
                     best_by_class[match.dataclass] = match
-                elif match.confidence > existing.confidence:
-                    best_by_class[match.dataclass] = match
+                else:
+                    pii = existing.is_pii or match.is_pii
+                    if match.confidence > existing.confidence:
+                        best_by_class[match.dataclass] = match
+                    best_by_class[match.dataclass].is_pii = pii
             deduped = sorted(
                 (best_by_class[name] for name in order),
                 key=lambda m: m.confidence,
@@ -1411,7 +1303,7 @@ class CrafterCmd(object):
                     datastats_dict[res.field]["ftype"],
                     ",".join(datastats_dict[res.field]["tags"]),
                     ",".join(matches),
-                    BASE_URL.format(dataclass=res.matches[0].dataclass)
+                    (self.registry_url + "/datatype/{dataclass}").format(dataclass=res.matches[0].dataclass)
                     if len(res.matches) > 0
                     else "",
                 ]
@@ -1420,7 +1312,7 @@ class CrafterCmd(object):
             record["tags"] = datastats_dict[res.field]["tags"]
             record["ftype"] = datastats_dict[res.field]["ftype"]
             record["datatype_url"] = (
-                BASE_URL.format(dataclass=res.matches[0].dataclass)
+                (self.registry_url + "/datatype/{dataclass}").format(dataclass=res.matches[0].dataclass)
                 if len(res.matches) > 0
                 else ""
             )
@@ -1432,6 +1324,15 @@ class CrafterCmd(object):
             'data': outdata,
             'stats': datastats_dict,
             'stats_table': datastats,
+            'report_version': 2,
+            'source': 'memory',
+            'complete': not self.llm_errors,
+            'errors': list(self.llm_errors),
+            'sampling': {'method': 'head', 'retained_count': len(items), 'observed_count': observed_count, 'statistics_scope': 'sample'},
+            'rules_version': rules_fingerprint(self.processor),
+            'requested_mode': mode,
+            'effective_mode': ('hybrid' if any(m.ruletype == 'llm' for r in results.results for m in r.matches) else 'rules') if mode != 'rules' and (self.llm_classifier is None or self.llm_errors) else mode,
+            'sample_policy': self.sample_policy,
         }            
         return report
 
@@ -1459,7 +1360,10 @@ class CrafterCmd(object):
         empty_values=None,
         compression="auto",
         classification_mode=None,
-        llm_min_confidence=50.0,
+        llm_min_confidence=None,
+        sampling="head",
+        seed=0,
+        explain=False,
     ):
         """Scan a file and classify its fields.
         
@@ -1526,6 +1430,7 @@ class CrafterCmd(object):
             ...     output="results.json"
             ... )
         """
+        validate_options(limit, confidence if confidence is not None else MIN_CONFIDENCE_FOR_MATCH)
         iterableargs = {}
         if tagname is not None:
             iterableargs['tagname'] = tagname
@@ -1537,11 +1442,16 @@ class CrafterCmd(object):
         if compression is not None and compression.lower() != "auto":
             iterableargs['compression'] = None if compression.lower() == "none" else compression
                    
+        if tagname is None and ".xml" in str(filename).lower():
+            from metacrafter.classify.utils import xml_quick_analyzer
+            discovered = xml_quick_analyzer(filename)
+            if discovered:
+                iterableargs["tagname"] = discovered["short"]
         try:
             data_file = open_iterable(filename, iterableargs=iterableargs) 
         except (IOError, OSError) as e:
             logging.error(f"Error opening file {filename}: {e}")
-            print(f"Error: Could not open file {filename}: {e}")
+            print(f"Error: Could not open file {filename}: {e}", file=sys.stderr)
             return []
         except ValueError as e:
             logging.error(f"Unsupported file type {filename}: {e}")
@@ -1552,12 +1462,12 @@ class CrafterCmd(object):
                 f"Supported formats: {supported_formats}\n"
                 f"Supported compression codecs: {', '.join(sorted(CODECS))}\n"
                 f"For more information, see the documentation at "
-                f"https://github.com/apicrafter/metacrafter"
+                f"https://github.com/apicrafter/metacrafter", file=sys.stderr
             )
             return []
         except Exception as e:
             logging.error(f"Unexpected error opening file {filename}: {e}", exc_info=True)
-            print(f"Unexpected error processing file {filename}: {e}")
+            print(f"Unexpected error processing file {filename}: {e}", file=sys.stderr)
             return []
         # Process file efficiently - collect items from iterator
         # Note: For very large files, consider implementing streaming processing
@@ -1570,20 +1480,17 @@ class CrafterCmd(object):
                 data_file, desc=f"Reading {filename}", unit="records"
             )
             try:
-                for item in progress_iter:
-                    items.append(item)
+                from metacrafter.sampling import sample_records
+                items, provenance = sample_records(progress_iter, limit, sampling, seed)
             finally:
                 if progress_bar:
                     progress_bar.close()
 
-            if len(items) == 0:
-                if not self.quiet:
-                    print("No records found to process")
-                return
+            if len(items) == 0 and output_format == "table" and not self.quiet:
+                print("No records found to process")
 
-            self._print_scan_header(
-                filename, data_file.id(), len(items), contexts, langs
-            )
+            if output_format == "table":
+                self._print_scan_header(filename, data_file.id(), len(items), contexts, langs)
 
             if self.remote is None:
                 report = self.scan_data(
@@ -1600,6 +1507,7 @@ class CrafterCmd(object):
                     stats_only=stats_only,
                     dict_share=dict_share,
                     empty_values=empty_values,
+                    explain=explain,
                     classification_mode=classification_mode,
                     llm_min_confidence=llm_min_confidence,
                 )
@@ -1623,6 +1531,7 @@ class CrafterCmd(object):
                 if stats_only and not report.get("stats_table"):
                     print("Stats-only mode is not available for remote scans.")
                     return
+            report.update(source=str(filename), table=str(filename), sampling=provenance)
             self._write_results(
                 report,
                 filename,
@@ -1631,6 +1540,7 @@ class CrafterCmd(object):
                 output_format=output_format,
                 stats_only=stats_only,
             )
+            return report
         finally:
             if data_file is not None:
                 data_file.close()
@@ -1660,58 +1570,31 @@ class CrafterCmd(object):
         empty_values: Optional[List[str]] = None,
         compression: str = "auto",
     ) -> None:
-        filelist = [
-            os.path.join(dp, f) for dp, dn, filenames in os.walk(dirname) for f in filenames
-        ]
-        output_handle = None
-        should_close = False
-        if output and hasattr(output, "write"):
-            output_handle = output
-        elif output:
-            output_handle = open(output, "w", encoding="utf8")
-            should_close = True
-        try:
-            for filename in filelist:                
+        """Scan a directory into one valid aggregate with source failures."""
+        import io
+        reports, errors = {}, []
+        for directory, directories, names in os.walk(dirname):
+            directories.sort()
+            for name in sorted(names):
+                filename = os.path.join(directory, name)
+                if output and isinstance(output, str) and os.path.abspath(filename) == os.path.abspath(output):
+                    continue
                 try:
-                    self.scan_file(
-                        filename, 
-                        delimiter=delimiter, 
-                        tagname=tagname, 
-                        limit=limit, 
-                        encoding=encoding,
-                        contexts=contexts, 
-                        langs=langs, 
-                        dformat="full",
-                        output=output_handle if output_handle else None,
-                        confidence=confidence,
-                        stop_on_match=stop_on_match,
-                        parse_dates=parse_dates,
-                        ignore_imprecise=ignore_imprecise,
-                        except_empty=except_empty,
-                        fields=fields,
-                        output_format=output_format,
-                        stats_only=stats_only,
-                        dict_share=dict_share,
-                        empty_values=empty_values,
-                        compression=compression,
-                    )
-                except (IOError, OSError) as e:
-                    logging.error(f"File I/O error processing {filename}: {e}")
-                    if not self.quiet:
-                        print(f"File I/O error on {filename}: {e}")
-                except ValueError as e:
-                    logging.error(f"Value error processing {filename}: {e}")
-                    if not self.quiet:
-                        print(f"Value error on {filename}: {e}")
-                except Exception as e:
-                    logging.error(
-                        f"Unexpected error processing {filename}: {e}", exc_info=True
-                    )
-                    if not self.quiet:
-                        print(f"Unexpected error on {filename}: {e}")
-        finally:
-            if output_handle and should_close:
-                output_handle.close()
+                    report = self.scan_file(filename, delimiter=delimiter, tagname=tagname,
+                        limit=limit, encoding=encoding, contexts=contexts, langs=langs,
+                        confidence=confidence, stop_on_match=stop_on_match,
+                        parse_dates=parse_dates, ignore_imprecise=ignore_imprecise,
+                        except_empty=except_empty, fields=fields, stats_only=stats_only,
+                        dict_share=dict_share, empty_values=empty_values, compression=compression,
+                        output=io.StringIO(), output_format="json")
+                    if not isinstance(report, dict):
+                        raise ValueError("Source produced no report")
+                    reports[filename] = report
+                except Exception as error:
+                    errors.append({"source": filename, "code": type(error).__name__, "message": "File scan failed"})
+        self._write_db_results(reports, "full", output, output_format, stats_only, errors=errors)
+        return aggregate_reports(list(reports.values()), errors)
+
 
     def _scan_duckdb_native(
         self,
@@ -1734,165 +1617,17 @@ class CrafterCmd(object):
         empty_values: Optional[List[str]] = None,
         batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
-        """Scan DuckDB database using native Python API to avoid SQLAlchemy type issues.
-        
-        This method bypasses SQLAlchemy's type system which has issues with DuckDB's
-        unhashable type objects.
-        """
-        try:
-            import duckdb
-        except ImportError:
-            raise ImportError(
-                "DuckDB Python package is required. Install it with: pip install duckdb"
-            )
-        
-        import os
-        
-        # Parse DuckDB connection string: duckdb:///path/to/file.duckdb
-        # or duckdb://:memory: for in-memory database
-        db_path = connectstr.replace("duckdb:///", "").replace("duckdb://", "")
-        if db_path == ":memory:":
-            db_path = ":memory:"
-        elif not os.path.isabs(db_path):
-            # Relative path - make it absolute
-            db_path = os.path.abspath(db_path)
-        
-        if not self.quiet:
-            print(f"Connecting to DuckDB: {db_path}")
-        
-        # Connect using DuckDB native API
-        conn = duckdb.connect(db_path)
-        db_results = {}
-        
-        effective_batch = batch_size if batch_size and batch_size > 0 else DEFAULT_BATCH_SIZE
-        
-        try:
-            # Get list of tables
-            # Escape schema name to prevent SQL injection
-            if schema:
-                safe_schema = schema.replace("'", "''")  # Escape single quotes
-                tables_query = f"SELECT table_name FROM information_schema.tables WHERE table_schema = '{safe_schema}'"
-            else:
-                tables_query = "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main'"
-            
-            tables_result = conn.execute(tables_query).fetchall()
-            tables = [row[0] for row in tables_result]
-            
-            if not tables:
-                if not self.quiet:
-                    print("No tables found in database")
-                return
-            
-            for table in tables:
-                if not self.quiet:
-                    print(f"- table {table}")
-                
-                try:
-                    # Query table data using DuckDB native API
-                    # Use parameterized query to avoid SQL injection
-                    # DuckDB uses ? for parameters, but LIMIT doesn't support parameters well
-                    # So we validate limit is an integer and quote the table name
-                    safe_limit = int(limit)
-                    safe_table = table.replace('"', '""')  # Escape double quotes
-                    query = f'SELECT * FROM "{safe_table}" LIMIT {safe_limit}'
-                    result = conn.execute(query)
-                    
-                    # Get column names from description
-                    column_names = [desc[0] for desc in result.description]
-                    
-                    items = []
-                    fetch_progress = self._create_progress_bar(
-                        total=limit if limit else None,
-                        desc=f"Fetching rows for {table}",
-                        unit="records",
-                    )
-                    
-                    try:
-                        # Fetch rows in batches
-                        while True:
-                            row_batch = result.fetchmany(effective_batch)
-                            if not row_batch:
-                                break
-                            
-                            # Convert rows to dictionaries
-                            for row in row_batch:
-                                row_dict = {}
-                                for i, col_name in enumerate(column_names):
-                                    val = row[i]
-                                    # Convert any problematic types
-                                    if val is not None:
-                                        type_name = type(val).__name__
-                                        if 'DuckDBPyType' in type_name:
-                                            val = None
-                                    row_dict[col_name] = val
-                                items.append(row_dict)
-                            
-                            if fetch_progress:
-                                fetch_progress.update(len(row_batch))
-                            
-                            if len(items) >= limit:
-                                items = items[:limit]
-                                break
-                    finally:
-                        if fetch_progress:
-                            fetch_progress.close()
-                    
-                    # Process the data
-                    if self.remote is None:
-                        report = self.scan_data(
-                            items,
-                            limit,
-                            contexts,
-                            langs,
-                            confidence=confidence,
-                            stop_on_match=stop_on_match,
-                            parse_dates=parse_dates,
-                            ignore_imprecise=ignore_imprecise,
-                            except_empty=except_empty,
-                            fields=fields,
-                            stats_only=stats_only,
-                            dict_share=dict_share,
-                            empty_values=empty_values,
-                        )
-                    else:
-                        report = self.scan_data_client(
-                            self.remote,
-                            items,
-                            limit,
-                            contexts,
-                            langs,
-                            confidence=confidence,
-                            stop_on_match=stop_on_match,
-                            parse_dates=parse_dates,
-                            ignore_imprecise=ignore_imprecise,
-                            except_empty=except_empty,
-                            fields=fields,
-                            stats_only=stats_only,
-                            dict_share=dict_share,
-                            empty_values=empty_values,
-                        )
-                        if stats_only and not report.get("stats_table"):
-                            print("Stats-only mode is not available for remote database scans.")
-                            return
-                    
-                    db_results[table] = report
-                    
-                except Exception as e:
-                    logging.error(f"Error processing table {table}: {e}")
-                    if not self.quiet:
-                        print(f"Error processing table {table}: {e}")
-                    continue
-            
-            self._write_db_results(
-                db_results,
-                dformat,
-                output,
-                output_format=output_format,
-                stats_only=stats_only,
-            )
-            
-        finally:
-            conn.close()
+        """Scan bounded database samples with schema identity and cleanup."""
+        from metacrafter.sources import scan_duckdb
+        options = dict(contexts=contexts, langs=langs, confidence=confidence,
+                       stop_on_match=stop_on_match, parse_dates=parse_dates,
+                       ignore_imprecise=ignore_imprecise, except_empty=except_empty,
+                       fields=fields, stats_only=stats_only, dict_share=dict_share,
+                       empty_values=empty_values)
+        reports, errors = scan_duckdb(self, connectstr, schema, limit, options)
+        self._write_db_results(reports, dformat, output, output_format, stats_only, errors=errors)
+        return aggregate_reports(list(reports.values()), errors)
+
 
     def scan_db(
         self,
@@ -1915,337 +1650,21 @@ class CrafterCmd(object):
         empty_values: Optional[List[str]] = None,
         batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
-        """Scan SQL database tables and classify their fields.
-        
-        Connects to a SQL database using SQLAlchemy connection string and
-        scans all tables (optionally filtered by schema) to classify field types.
-        
-        Args:
-            connectstr: SQLAlchemy connection string (e.g., "postgresql://user:pass@host/db")
-            schema: Optional database schema name to filter tables
-            limit: Maximum records to process per field
-            contexts: Optional context filters (comma-separated string or list)
-            langs: Optional language filters (comma-separated string or list)
-            dformat: Output detail format - "short" or "full"
-            output: Optional output file path or file-like object
-            confidence: Optional minimum confidence threshold
-            stop_on_match: If True, stop after first rule match
-            parse_dates: Enable date pattern matching
-            ignore_imprecise: Ignore imprecise rules
-            except_empty: Exclude empty values from calculations
-            fields: Optional list of specific fields to process
-            output_format: Output format - "table", "json", "yaml", or "csv"
-            stats_only: Return only statistics without classification
-            dict_share: Override dictionary share threshold
-            empty_values: Override list of values treated as empty
-            batch_size: Number of rows to fetch per batch
-            
-        Raises:
-            ValueError: If schema name is invalid or not found
-            sqlalchemy.exc.SQLAlchemyError: If database connection or query fails
-        """
-        from sqlalchemy import create_engine, inspect, text, event
-        import sqlalchemy.exc
-        import re
-
-        dbtype = connectstr.split(":", 1)[0].lower()
-        
-        # Special handling for DuckDB to avoid SQLAlchemy type caching issues
-        if dbtype == "duckdb":
-            return self._scan_duckdb_native(connectstr, schema, limit, contexts, langs, 
-                                            dformat, output, confidence, stop_on_match,
-                                            parse_dates, ignore_imprecise, except_empty,
-                                            fields, output_format, stats_only, dict_share,
-                                            empty_values, batch_size)
-        
-        if not self.quiet:
-            print("Connecting to %s" % (connectstr))
-        
-        # Configure SQLite to handle encoding errors gracefully
-        if dbtype == "sqlite":
-            import sqlite3
-            
-            def set_sqlite_text_factory(dbapi_conn, connection_record):
-                """Set text factory to handle UTF-8 decoding errors gracefully"""
-                def text_factory(data):
-                    """Custom text factory that handles encoding errors"""
-                    try:
-                        return data.decode('utf-8')
-                    except UnicodeDecodeError:
-                        # Replace invalid bytes with replacement character
-                        return data.decode('utf-8', errors='replace')
-                dbapi_conn.text_factory = text_factory
-            
-            dbe = create_engine(connectstr)
-            event.listen(dbe, "connect", set_sqlite_text_factory)
+        """Scan bounded database samples with schema identity and cleanup."""
+        from metacrafter.sources import scan_sql
+        options = dict(contexts=contexts, langs=langs, confidence=confidence,
+                       stop_on_match=stop_on_match, parse_dates=parse_dates,
+                       ignore_imprecise=ignore_imprecise, except_empty=except_empty,
+                       fields=fields, stats_only=stats_only, dict_share=dict_share,
+                       empty_values=empty_values)
+        if connectstr.split(":", 1)[0].split("+", 1)[0] == "duckdb":
+            from metacrafter.sources import scan_duckdb
+            reports, errors = scan_duckdb(self, connectstr, schema, limit, options)
         else:
-            dbe = create_engine(connectstr)
-        inspector = inspect(dbe)
-        db_schemas = inspector.get_schema_names()
-        con = dbe.connect()
-        db_results = {}
-        
-        if schema:
-            if not re.match(r"^[a-zA-Z0-9_.]+$", schema):
-                raise ValueError(
-                    f"Invalid schema name: {schema}. Only alphanumeric, underscore, and dot characters are allowed."
-                )
-            if schema not in db_schemas:
-                raise ValueError(f"Schema '{schema}' not found in database.")
-        
-        effective_batch = batch_size if batch_size and batch_size > 0 else DEFAULT_BATCH_SIZE
-        
-        for db_schema in db_schemas:
-            if schema and schema != db_schema:
-                continue
-            if not self.quiet:
-                print("Processing schema: %s" % db_schema)
-            if dbtype == "postgres" and db_schema:
-                from sqlalchemy.sql import quoted_name
+            reports, errors = scan_sql(self, connectstr, schema, limit, options, batch_size)
+        self._write_db_results(reports, dformat, output, output_format, stats_only, errors=errors)
+        return aggregate_reports(list(reports.values()), errors)
 
-                safe_schema = str(quoted_name(db_schema, quote=True))
-                con.execute(text(f"SET search_path TO {safe_schema}"))
-            
-            valid_tables = inspector.get_table_names(schema=db_schema)
-            for table in valid_tables:
-                if not self.quiet:
-                    print("- table %s" % (table))
-                try:
-                    from sqlalchemy.sql import quoted_name
-
-                    safe_table = str(quoted_name(table, quote=True))
-                    query = text(f"SELECT * FROM {safe_table} LIMIT :limit")
-                    queryres = con.execute(query, {"limit": limit})
-                except sqlalchemy.exc.ProgrammingError as e:
-                    print("Error processing table %s: %s" % (table, str(e)))
-                    continue
-                
-                items = []
-                fetch_progress = self._create_progress_bar(
-                    total=limit if limit else None,
-                    desc=f"Fetching rows for {table}",
-                    unit="records",
-                )
-                try:
-                    # Get column names from result set metadata (safer for DuckDB)
-                    # This avoids issues with DuckDB type objects in keys()
-                    column_names = None
-                    
-                    # First, try to get column names from inspector (most reliable)
-                    try:
-                        columns = inspector.get_columns(table, schema=db_schema)
-                        column_names = [col['name'] for col in columns]
-                    except Exception:
-                        pass
-                    
-                    # If that didn't work, try getting from the result set
-                    if column_names is None:
-                        try:
-                            # Try to get column names from the result set's column metadata
-                            if hasattr(queryres, 'keys'):
-                                raw_keys = queryres.keys()
-                                # Convert all keys to strings to avoid unhashable type issues
-                                column_names = [str(k) if k is not None else f"col_{i}" 
-                                              for i, k in enumerate(raw_keys)]
-                        except Exception:
-                            pass
-                    
-                    # Fetch first batch
-                    try:
-                        row_batch = queryres.fetchmany(effective_batch)
-                    except sqlalchemy.exc.OperationalError as e:
-                        error_msg = str(e)
-                        if "Could not decode to UTF-8" in error_msg or "decode" in error_msg.lower():
-                            if not self.quiet:
-                                print(f"Warning: Encoding error in table {table}: {error_msg}")
-                                print("Skipping table due to encoding issues. Consider re-encoding the database.")
-                            continue
-                        else:
-                            # Re-raise if it's a different OperationalError
-                            raise
-                    
-                    # If still no column names, try getting from the first row
-                    if column_names is None and row_batch:
-                        first_row = row_batch[0]
-                        try:
-                            if hasattr(first_row, '_fields'):
-                                # SQLAlchemy 2.x Row has _fields attribute
-                                column_names = list(first_row._fields)
-                            elif hasattr(first_row, 'keys'):
-                                raw_keys = first_row.keys()
-                                # Convert all keys to strings to avoid unhashable type issues
-                                column_names = [str(k) if k is not None else f"col_{i}" 
-                                              for i, k in enumerate(raw_keys)]
-                        except Exception:
-                            pass
-                    
-                    # If we still don't have column names, we'll use fallback methods
-                    
-                    while row_batch:
-                        # Convert SQLAlchemy Row objects to dictionaries
-                        # Handle both SQLAlchemy 1.x and 2.x Row objects
-                        # Special handling for DuckDB which may return unhashable type objects
-                        batch_dicts = []
-                        for row in row_batch:
-                            row_dict = {}
-                            try:
-                                # Use column names if available, otherwise try row methods
-                                if column_names:
-                                    # Access by index to avoid type object issues with DuckDB
-                                    for i, col_name in enumerate(column_names):
-                                        try:
-                                            # Ensure col_name is a string (not a DuckDB type object)
-                                            col_name_str = str(col_name) if col_name is not None else f"col_{i}"
-                                            
-                                            # Access value by index to avoid DuckDB type object issues
-                                            if hasattr(row, '__getitem__'):
-                                                val = row[i]
-                                            elif hasattr(row, '_mapping'):
-                                                val = row._mapping.get(col_name_str)
-                                            elif hasattr(row, 'mapping'):
-                                                val = row.mapping.get(col_name_str)
-                                            else:
-                                                val = getattr(row, col_name_str, None)
-                                            
-                                            # Convert DuckDB type objects to None
-                                            if val is not None:
-                                                type_name = type(val).__name__
-                                                if 'DuckDBPyType' in type_name:
-                                                    val = None
-                                            
-                                            row_dict[col_name_str] = val
-                                        except (TypeError, ValueError, IndexError, AttributeError) as e:
-                                            # If there's an error accessing the value, set to None
-                                            col_name_str = str(col_name) if col_name is not None else f"col_{i}"
-                                            row_dict[col_name_str] = None
-                                else:
-                                    # Fallback: try standard SQLAlchemy row conversion methods
-                                    try:
-                                        if hasattr(row, '_mapping'):
-                                            row_dict = dict(row._mapping)
-                                        elif hasattr(row, 'mapping'):
-                                            row_dict = dict(row.mapping)
-                                        elif hasattr(row, '_asdict'):
-                                            row_dict = row._asdict()
-                                        else:
-                                            # Last resort: try direct dict conversion
-                                            row_dict = dict(row)
-                                    except (TypeError, ValueError) as e:
-                                        # If dict conversion fails, try manual conversion
-                                        # This handles cases where keys() returns unhashable types
-                                        row_dict = {}
-                                        try:
-                                            # Try to get column count and access by index
-                                            if hasattr(row, '__len__'):
-                                                num_cols = len(row)
-                                                for i in range(num_cols):
-                                                    try:
-                                                        val = row[i]
-                                                        # Check for DuckDB type objects
-                                                        if val is not None:
-                                                            type_name = type(val).__name__
-                                                            if 'DuckDBPyType' in type_name:
-                                                                val = None
-                                                        row_dict[f"col_{i}"] = val
-                                                    except (TypeError, ValueError, IndexError):
-                                                        row_dict[f"col_{i}"] = None
-                                        except Exception:
-                                            # If all else fails, create empty dict
-                                            pass
-                                
-                                # Clean up any unhashable types in the final dict
-                                # Also ensure all keys are strings
-                                cleaned_dict = {}
-                                for key, value in row_dict.items():
-                                    # Ensure key is a string
-                                    key_str = str(key) if key is not None else "unknown"
-                                    
-                                    if value is not None:
-                                        type_name = type(value).__name__
-                                        if 'DuckDBPyType' in type_name:
-                                            cleaned_dict[key_str] = None
-                                        else:
-                                            cleaned_dict[key_str] = value
-                                    else:
-                                        cleaned_dict[key_str] = None
-                                
-                                batch_dicts.append(cleaned_dict)
-                            except (TypeError, ValueError) as e:
-                                # If all else fails, log and skip this row
-                                logging.warning(f"Failed to convert row to dictionary: {e}")
-                                continue
-                        
-                        items.extend(batch_dicts)
-                        if fetch_progress:
-                            fetch_progress.update(len(batch_dicts))
-                        if len(items) >= limit:
-                            items = items[:limit]
-                            break
-                        try:
-                            row_batch = queryres.fetchmany(effective_batch)
-                        except sqlalchemy.exc.OperationalError as e:
-                            error_msg = str(e)
-                            if "Could not decode to UTF-8" in error_msg or "decode" in error_msg.lower():
-                                if not self.quiet:
-                                    print(f"Warning: Encoding error while fetching from table {table}: {error_msg}")
-                                    print("Stopping fetch for this table due to encoding issues.")
-                                # Break out of while loop
-                                row_batch = []
-                                break
-                            else:
-                                # Re-raise if it's a different OperationalError
-                                raise
-                finally:
-                    if fetch_progress:
-                        fetch_progress.close()
-
-                if self.remote is None:
-                    report = self.scan_data(
-                        items,
-                        limit,
-                        contexts,
-                        langs,
-                        confidence=confidence,
-                        stop_on_match=stop_on_match,
-                        parse_dates=parse_dates,
-                        ignore_imprecise=ignore_imprecise,
-                        except_empty=except_empty,
-                        fields=fields,
-                        stats_only=stats_only,
-                        dict_share=dict_share,
-                        empty_values=empty_values,
-                    )
-                else:
-                    report = self.scan_data_client(
-                        self.remote,
-                        items,
-                        limit,
-                        contexts,
-                        langs,
-                        confidence=confidence,
-                        stop_on_match=stop_on_match,
-                        parse_dates=parse_dates,
-                        ignore_imprecise=ignore_imprecise,
-                        except_empty=except_empty,
-                        fields=fields,
-                        stats_only=stats_only,
-                        dict_share=dict_share,
-                        empty_values=empty_values,
-                    )
-                    if stats_only and not report.get("stats_table"):
-                        print(
-                            "Stats-only mode is not available for remote database scans."
-                        )
-                        return
-                db_results[table] = report
-
-        self._write_db_results(
-            db_results,
-            dformat,
-            output,
-            output_format=output_format,
-            stats_only=stats_only,
-        )
 
 
 
@@ -2273,95 +1692,15 @@ class CrafterCmd(object):
         empty_values: Optional[List[str]] = None,
         batch_size: int = DEFAULT_BATCH_SIZE,
     ) -> None:
-        """Scan entire MongoDB database and classify collection fields.
-        
-        Connects to MongoDB and scans all collections in the specified database
-        to classify field types.
-        
-        Args:
-            host: MongoDB hostname or connection URI
-            port: MongoDB port number
-            dbname: Database name to scan
-            username: Optional MongoDB username
-            password: Optional MongoDB password
-            limit: Maximum documents to process per field
-            contexts: Optional context filters (comma-separated string or list)
-            langs: Optional language filters (comma-separated string or list)
-            dformat: Output detail format - "short" or "full"
-            output: Optional output file path or file-like object
-            confidence: Optional minimum confidence threshold
-            stop_on_match: If True, stop after first rule match
-            parse_dates: Enable date pattern matching
-            ignore_imprecise: Ignore imprecise rules
-            except_empty: Exclude empty values from calculations
-            fields: Optional list of specific fields to process
-            output_format: Output format - "table", "json", "yaml", or "csv"
-            stats_only: Return only statistics without classification
-            dict_share: Override dictionary share threshold
-            empty_values: Override list of values treated as empty
-            batch_size: Number of documents to fetch per batch
-            
-        Raises:
-            pymongo.errors.PyMongoError: If MongoDB connection fails
-        """
-        if not self.quiet:
-            print("Connecting to %s %d" % (host, port))
-        from pymongo import MongoClient
+        """Scan bounded database samples with schema identity and cleanup."""
+        from metacrafter.sources import scan_mongo
+        options = dict(contexts=contexts, langs=langs, confidence=confidence,
+                       stop_on_match=stop_on_match, parse_dates=parse_dates,
+                       ignore_imprecise=ignore_imprecise, except_empty=except_empty,
+                       fields=fields, stats_only=stats_only, dict_share=dict_share,
+                       empty_values=empty_values)
+        reports, errors = scan_mongo(self, host, port, dbname, username, password, limit, options, batch_size)
+        self._write_db_results(reports, dformat, output, output_format, stats_only, errors=errors)
+        return aggregate_reports(list(reports.values()), errors)
 
-        client = MongoClient(host, port, username=username, password=password)
-        db = client[dbname]
-        tables = db.list_collection_names()
-        db_results = {}
-        effective_batch = batch_size if batch_size and batch_size > 0 else DEFAULT_BATCH_SIZE
-
-        for table in tables:
-            if not self.quiet:
-                print("- table %s" % (table))
-            cursor = db[table].find().batch_size(effective_batch).limit(limit)
-            items = list(cursor)
-            if self.remote is None:
-                report = self.scan_data(
-                    items,
-                    limit,
-                    contexts,
-                    langs,
-                    confidence=confidence,
-                    stop_on_match=stop_on_match,
-                    parse_dates=parse_dates,
-                    ignore_imprecise=ignore_imprecise,
-                    except_empty=except_empty,
-                    fields=fields,
-                    stats_only=stats_only,
-                    dict_share=dict_share,
-                    empty_values=empty_values,
-                )
-            else:
-                report = self.scan_data_client(
-                    self.remote,
-                    items,
-                    limit,
-                    contexts,
-                    langs,
-                    confidence=confidence,
-                    stop_on_match=stop_on_match,
-                    parse_dates=parse_dates,
-                    ignore_imprecise=ignore_imprecise,
-                    except_empty=except_empty,
-                    fields=fields,
-                    stats_only=stats_only,
-                    dict_share=dict_share,
-                    empty_values=empty_values,
-                )
-                if stats_only and not report.get("stats_table"):
-                    print("Stats-only mode is not available for remote scans.")
-                    return
-            db_results[table] = report
-
-        self._write_db_results(
-            db_results,
-            dformat,
-            output,
-            output_format=output_format,
-            stats_only=stats_only,
-        )
 

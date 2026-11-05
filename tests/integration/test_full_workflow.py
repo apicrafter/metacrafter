@@ -46,7 +46,7 @@ def test_full_scan_workflow_table_output(tmp_path):
     )
     
     # Should complete without errors
-    assert result is None or result == []
+    assert isinstance(result, dict) and result["report_version"] == 2
 
 
 def test_scan_data_integration():

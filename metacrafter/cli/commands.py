@@ -54,6 +54,9 @@ def server_run(
 ):
     """Start the API server that exposes the classifier via HTTP."""
     logging.info("Run server with classifier API")
+    from metacrafter.exceptions import require_extra
+
+    require_extra("flask", "server", "The API server")
     from metacrafter.server.manager import run_server
 
     run_server(host, port, debug)
@@ -163,13 +166,21 @@ def scan_file(
     classification_mode: str = typer.Option(None, "--classification-mode", help="Classification mode: rules (default), llm, or hybrid"),
     llm_only: bool = typer.Option(False, "--llm-only", help="Use only LLM classification (shortcut for --classification-mode llm)"),
     use_llm: bool = typer.Option(False, "--use-llm", help="Use LLM as fallback (shortcut for --classification-mode hybrid)"),
-    llm_provider: str = typer.Option("openai", "--llm-provider", help="LLM provider: openai, openrouter, ollama, lmstudio, perplexity"),
+    llm_provider: Optional[str] = typer.Option(None, "--llm-provider", help="LLM provider: openai, openrouter, ollama, lmstudio, perplexity"),
     llm_registry: Optional[str] = typer.Option(None, "--llm-registry", help="Path to registry JSONL file"),
     llm_index: Optional[str] = typer.Option(None, "--llm-index", help="Path to vector index directory"),
     llm_model: Optional[str] = typer.Option(None, "--llm-model", help="LLM model name (provider-specific default if not specified)"),
     llm_base_url: Optional[str] = typer.Option(None, "--llm-base-url", help="Base URL for provider (for Ollama, LM Studio custom URLs)"),
     llm_api_key: Optional[str] = typer.Option(None, "--llm-api-key", help="API key for provider (or use provider-specific env var)"),
-    llm_min_confidence: float = typer.Option(50.0, "--llm-min-confidence", help="Minimum confidence for LLM results (default: 50.0)"),
+    explain: bool = typer.Option(False, help="Include rejected value-rule candidates"),
+    sampling: str = typer.Option("head", help="head or reservoir"),
+    seed: int = typer.Option(0, help="Reservoir sampling seed"),
+    sample_policy: str = typer.Option("names-only", help="LLM samples: names-only, redacted, raw"),
+    llm_fallback: str = typer.Option("error", help="LLM failure: error or rules"),
+    embedding_provider: Optional[str] = typer.Option(None),
+    embedding_model: Optional[str] = typer.Option(None),
+    embedding_base_url: Optional[str] = typer.Option(None),
+    llm_min_confidence: Optional[float] = typer.Option(None, "--llm-min-confidence", help="Minimum confidence for LLM results (default: 50.0)"),
 ):
     """Scan a single file and classify its fields."""
     # Fail fast (non-zero exit) when scanning a local file that does not exist.
@@ -256,6 +267,9 @@ def scan_file(
         llm_model=llm_model,
         llm_api_key=llm_api_key,
         llm_base_url=llm_base_url,
+        sample_policy=sample_policy, llm_fallback=llm_fallback,
+        embedding_provider=embedding_provider, embedding_model=embedding_model,
+        embedding_base_url=embedding_base_url,
     )
     acmd.scan_file(
         filename=filename,
@@ -278,6 +292,7 @@ def scan_file(
         dict_share=dict_share,
         empty_values=empty_values_list,
         compression=compression,
+        sampling=sampling, seed=seed, explain=explain,
         classification_mode=final_classification_mode,
         llm_min_confidence=llm_min_confidence,
     )
@@ -663,6 +678,8 @@ def export_datahub(
     min_confidence: float = typer.Option(0.0, "--min-confidence", help="Minimum confidence threshold (0-100)"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
+    source: Optional[str] = typer.Option(None, help="Source identity for an aggregate report"),
+    dry_run: bool = typer.Option(False, help="Plan writes without performing them"),
 ):
     """Export Metacrafter scan results to DataHub metadata catalog.
     
@@ -711,8 +728,14 @@ def export_datahub(
         raise typer.BadParameter(f"Scan results file not found: {file}")
     
     try:
-        with open(file, 'r', encoding='utf8') as f:
-            scan_report = json.load(f)
+        from metacrafter.product_tools import load_document
+        from metacrafter.reports import report_sources
+        reports = report_sources(load_document(file))
+        if source:
+            reports = [report for report in reports if report["source"] == source]
+        if len(reports) != 1:
+            raise ValueError("Select exactly one report source with --source")
+        scan_report = reports[0]
     except json.JSONDecodeError as e:
         raise typer.BadParameter(f"Invalid JSON in scan results file: {e}")
     except Exception as e:
@@ -747,6 +770,7 @@ def export_datahub(
         stats = exporter.export_scan_results(
             dataset_urn=dataset_urn,
             scan_report=scan_report,
+            dry_run=dry_run,
             add_pii_tags=add_pii_tags,
             add_datatype_tags=add_datatype_tags,
             link_glossary_terms=link_glossary_terms,
@@ -790,6 +814,8 @@ def export_openmetadata(
     min_confidence: float = typer.Option(0.0, "--min-confidence", help="Minimum confidence threshold (0-100)"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
+    source: Optional[str] = typer.Option(None, help="Source identity for an aggregate report"),
+    dry_run: bool = typer.Option(False, help="Plan writes without performing them"),
 ):
     """Export Metacrafter scan results to OpenMetadata metadata catalog.
     
@@ -838,8 +864,14 @@ def export_openmetadata(
         raise typer.BadParameter(f"Scan results file not found: {file}")
     
     try:
-        with open(file, 'r', encoding='utf8') as f:
-            scan_report = json.load(f)
+        from metacrafter.product_tools import load_document
+        from metacrafter.reports import report_sources
+        reports = report_sources(load_document(file))
+        if source:
+            reports = [report for report in reports if report["source"] == source]
+        if len(reports) != 1:
+            raise ValueError("Select exactly one report source with --source")
+        scan_report = reports[0]
     except json.JSONDecodeError as e:
         raise typer.BadParameter(f"Invalid JSON in scan results file: {e}")
     except Exception as e:
@@ -874,6 +906,7 @@ def export_openmetadata(
         stats = exporter.export_scan_results(
             table_fqn=table_fqn,
             scan_report=scan_report,
+            dry_run=dry_run,
             add_pii_tags=add_pii_tags,
             add_datatype_tags=add_datatype_tags,
             link_glossary_terms=link_glossary_terms,
@@ -918,6 +951,8 @@ def export_atlas(
     entity_type: str = typer.Option("rdbms_column", "--entity-type", help="Atlas entity type for columns (default: rdbms_column)"),
     verbose: bool = typer.Option(False, "--verbose", help="Enable verbose logging"),
     quiet: bool = typer.Option(False, "--quiet", help="Reduce non-essential output"),
+    source: Optional[str] = typer.Option(None, help="Source identity for an aggregate report"),
+    dry_run: bool = typer.Option(False, help="Plan writes without performing them"),
 ):
     """Export Metacrafter scan results to Apache Atlas metadata catalog.
     
@@ -975,8 +1010,14 @@ def export_atlas(
         raise typer.BadParameter(f"Scan results file not found: {file}")
     
     try:
-        with open(file, 'r', encoding='utf8') as f:
-            scan_report = json.load(f)
+        from metacrafter.product_tools import load_document
+        from metacrafter.reports import report_sources
+        reports = report_sources(load_document(file))
+        if source:
+            reports = [report for report in reports if report["source"] == source]
+        if len(reports) != 1:
+            raise ValueError("Select exactly one report source with --source")
+        scan_report = reports[0]
     except json.JSONDecodeError as e:
         raise typer.BadParameter(f"Invalid JSON in scan results file: {e}")
     except Exception as e:
@@ -1012,6 +1053,7 @@ def export_atlas(
         stats = exporter.export_scan_results(
             table_qualified_name=table_qn,
             scan_report=scan_report,
+            dry_run=dry_run,
             entity_type=entity_type,
             add_pii_classifications=add_pii_classifications,
             add_datatype_classifications=add_datatype_classifications,
@@ -1038,3 +1080,8 @@ def export_atlas(
             traceback.print_exc()
         raise typer.BadParameter(f"Failed to export to Apache Atlas: {e}")
 
+
+# Product workflows operate on saved reports and never write to external services.
+from metacrafter.core import app
+from metacrafter.product_tools import register_product_commands
+register_product_commands(app, rules_app, scan_app, export_app)

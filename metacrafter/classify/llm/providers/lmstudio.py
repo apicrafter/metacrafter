@@ -115,12 +115,12 @@ class LMStudioProvider(BaseLLMProvider):
 
             return response.choices[0].message.content
         except APIConnectionError as e:
-            logger.error(f"LM Studio connection error: {e}. Is LM Studio server running at {self.base_url}?")
+            logger.error("LLM operation failed (%s)", type(e).__name__)
             raise
         except RateLimitError as e:
-            logger.warning(f"LM Studio rate limit error: {e}")
+            logger.warning("LLM operation failed (%s)", type(e).__name__)
             raise
         except APIError as e:
-            logger.error(f"LM Studio API error: {e}")
+            logger.error("LLM operation failed (%s)", type(e).__name__)
             raise
 

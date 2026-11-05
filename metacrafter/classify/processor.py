@@ -1,6 +1,7 @@
 """Rules processor module for classifying and matching data types."""
 import glob
 import importlib
+import ast
 import logging
 import warnings
 from functools import lru_cache
@@ -139,7 +140,33 @@ def _compile_rule_with_warning_capture(
         )
     return compiled_rule
 
-@lru_cache(maxsize=256)
+_MAX_REPETITION = 1000
+
+
+def _is_bounded_repetition(node: ast.AST) -> bool:
+    """Return True for a repetition count PyParsing accepts with a safe upper bound.
+
+    Accepted forms: an integer ``0..1000``, or a 2-tuple of such integers where the
+    upper bound may also be ``None`` or ``...`` (open-ended, as in ``ZeroOrMore``).
+    """
+    def bounded_int(item: ast.AST) -> bool:
+        return (
+            isinstance(item, ast.Constant)
+            and isinstance(item.value, int)
+            and not isinstance(item.value, bool)
+            and 0 <= item.value <= _MAX_REPETITION
+        )
+
+    if bounded_int(node):
+        return True
+    if isinstance(node, ast.Tuple) and len(node.elts) == 2:
+        low, high = node.elts
+        open_high = isinstance(high, ast.Constant) and (high.value is None or high.value is Ellipsis)
+        return bounded_int(low) and (bounded_int(high) or open_high)
+    return False
+
+
+@lru_cache(maxsize=4096)
 def _safe_eval_pyparsing_rule(
     rule_string: str, rule_source: str = "<string>"
 ) -> ParserElement:
@@ -158,45 +185,46 @@ def _safe_eval_pyparsing_rule(
         ValueError: If rule contains unsafe code or compilation fails
         SyntaxError: If rule syntax is invalid
     """
-    # Validate that the rule doesn't contain dangerous patterns
-    dangerous_patterns = [
-        '__',
-        'import',
-        'exec',
-        'eval',
-        'compile',
-        'open',
-        'file',
-        'input',
-        'raw_input',
-        'reload',
-        '__import__',
-        'getattr',
-        'setattr',
-        'delattr',
-        'hasattr',
-        'globals',
-        'locals',
-        'vars',
-        'dir',
-    ]
-
-    rule_lower = rule_string.lower()
-    for pattern in dangerous_patterns:
-        if pattern in rule_lower:
-            raise ValueError(
-                f"Rule contains potentially dangerous pattern: {pattern}. "
-                "Only PyParsing expressions are allowed."
-            )
-
-    # Use restricted namespace for eval
+    if not isinstance(rule_string, str) or len(rule_string) > 16000:
+        raise ValueError("Pattern must be a string of at most 16000 characters")
     safe_dict = _create_safe_namespace()
+    safe_dict.pop("__builtins__", None)
+    tree = ast.parse(rule_string, mode="eval")
+    nodes = list(ast.walk(tree))
+    if len(nodes) > 2000:
+        raise ValueError("Pattern expression is too complex")
+    allowed = (ast.Expression, ast.Constant, ast.Name, ast.Load, ast.Call,
+               ast.keyword, ast.BinOp, ast.Add, ast.Sub, ast.BitOr, ast.BitAnd, ast.BitXor,
+               ast.Mult, ast.UnaryOp, ast.USub, ast.List, ast.Tuple, ast.Attribute,
+               ast.Subscript)
+    methods = {"suppress", "setResultsName", "set_results_name", "leaveWhitespace",
+               "leave_whitespace", "copy", "combine", "setName", "set_name"}
+    for node in nodes:
+        if not isinstance(node, allowed):
+            raise ValueError("Unsupported pattern syntax: " + type(node).__name__)
+        if isinstance(node, ast.Name) and node.id not in safe_dict:
+            raise ValueError("Unknown pattern name: " + node.id)
+        if isinstance(node, ast.Attribute) and node.attr not in methods:
+            raise ValueError("Unsupported parser method: " + node.attr)
+        if isinstance(node, ast.Call):
+            if not isinstance(node.func, (ast.Name, ast.Attribute)):
+                raise ValueError("Unsupported pattern call")
+        if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Mult):
+            # PyParsing repetition: ``expr * 3``, ``3 * expr`` or ``expr * (0, 6)``.
+            if not (_is_bounded_repetition(node.right) or _is_bounded_repetition(node.left)):
+                raise ValueError("Parser repetition must be a bounded integer")
+        if isinstance(node, ast.Subscript):
+            # PyParsing indexed repetition: ``expr[2]``, ``expr[0, ...]``.
+            if not _is_bounded_repetition(node.slice):
+                raise ValueError("Parser repetition must be a bounded integer")
     rule_filename = rule_source or "<string>"
 
     try:
         # Compile the rule in restricted namespace
-        code_obj = compile(rule_string, rule_filename, "eval")
+        code_obj = compile(rule_string, "<pyparsing-rule>", "eval")
         compiled_rule = eval(code_obj, {"__builtins__": {}}, safe_dict)
+        if not isinstance(compiled_rule, ParserElement):
+            raise ValueError("Expression must produce a PyParsing parser")
         return compiled_rule
     except (SyntaxError, NameError, TypeError) as e:
         # These are expected errors for invalid rule syntax
@@ -274,6 +302,7 @@ class ColumnMatchResult:
         """
         self.field: str = field
         self.matches: List['RuleResult'] = matches if matches is not None else []
+        self.rejected = None
 
     def add(self, match: 'RuleResult') -> None:
         """Add a rule match result.
@@ -300,7 +329,10 @@ class ColumnMatchResult:
         matches = []
         for m in self.matches:
             matches.append(m.asdict())
-        return {"field": self.field, "matches": matches}
+        result = {"field": self.field, "matches": matches}
+        if self.rejected is not None:
+            result["rejected_candidates"] = self.rejected
+        return result
 
 
 class RuleResult:
@@ -317,6 +349,7 @@ class RuleResult:
         ruletype: str,
         is_pii: bool = False,
         format: Optional[str] = None,
+        evidence=None,
     ) -> None:
         """Initialize rule match result.
         
@@ -334,6 +367,7 @@ class RuleResult:
         self.ruletype: str = ruletype
         self.is_pii: bool = is_pii
         self.format: Optional[str] = format
+        self.evidence = evidence
 
     def class_url(self) -> str:
         """Get URL to data class registry entry.
@@ -341,7 +375,8 @@ class RuleResult:
         Returns:
             URL string pointing to the data class definition
         """
-        return BASE_URL.format(dataclass=self.dataclass)
+        from metacrafter.registry.client import default_registry_url
+        return (default_registry_url() + "/datatype/{dataclass}").format(dataclass=self.dataclass)
 
     def asdict(self) -> Dict[str, Any]:
         """Convert rule result to dictionary format.
@@ -350,6 +385,8 @@ class RuleResult:
             Dictionary containing all rule result fields
         """
         return {
+            "evidence": self.evidence,
+            "reason": getattr(self, "reason", None),
             "ruleid": self.ruleid,
             "dataclass": self.dataclass,
             "confidence": self.confidence,
@@ -393,6 +430,7 @@ class RulesProcessor:
         Removes all field rules, data rules, and resets language/context/country
         statistics. Useful for reinitializing the processor.
         """
+        self.diagnostics = []
         self.data_rules: List[Dict[str, Any]] = []
         self.field_rules: List[Dict[str, Any]] = []
         self.__rule_keys: List[str] = []
@@ -418,6 +456,12 @@ class RulesProcessor:
         with open(filename, "r", encoding="utf8") as f:
             ruledata = yaml.safe_load(f)
 
+        if not isinstance(ruledata, dict) or not isinstance(ruledata.get("rules"), dict):
+            raise ValueError("Rule file must contain a rules mapping: " + filename)
+        for key in ("lang", "context", "name", "description"):
+            if not isinstance(ruledata.get(key), str):
+                raise ValueError("Rule group requires string " + key)
+
         # If group of rules context or lang not in allowed list, skip it
         if self.preset_langs and ruledata["lang"] not in self.preset_langs:
             return
@@ -431,20 +475,26 @@ class RulesProcessor:
                 return
 
         for rulekey in ruledata["rules"].keys():
-            if rulekey in self.__rule_keys:
-                # Rulekeys must be globally unique; a collision means a later
-                # rule is silently skipped. Warn so the duplicate can be fixed
-                # (see metacrafter-rules scripts/check_rules.py).
-                logging.warning(
-                    "Duplicate rulekey '%s' encountered while loading %s; "
-                    "skipping the duplicate definition.",
-                    rulekey,
-                    filename,
-                )
-                continue
-            else:
-                self.__rule_keys.append(rulekey)
             rule = ruledata["rules"][rulekey]
+            if isinstance(rule, dict) and rule.get("disabled") is True:
+                continue
+            if not isinstance(rule, dict) or rule.get("match") not in ("text", "ppr", "func") or rule.get("type") not in ("field", "data") or not isinstance(rule.get("key"), str) or not isinstance(rule.get("rule"), str) or not rule.get("rule"):
+                self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Invalid rule structure"})
+                continue
+            try:
+                rule["priority"] = int(rule.get("priority", 0))
+                rule["minlen"] = int(rule.get("minlen", DEFAULT_MIN_LEN))
+                rule["maxlen"] = int(rule.get("maxlen", DEFAULT_MAX_LEN))
+                if not 0 <= rule["minlen"] <= rule["maxlen"] <= 100000:
+                    raise ValueError("Invalid length range")
+            except (ValueError, TypeError):
+                self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Invalid priority or length"})
+                continue
+            if "fieldrule" in rule and rule.get("fieldrulematch") not in ("ppr", "text"):
+                self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Invalid field guard"})
+                continue
+            rule["is_pii"] = rule.get("is_pii") in (True, "True", "true", 1)
+            rule["source"] = filename
 
             rule["imprecise"] = (
                 (int(rule["imprecise"]) != 0) if "imprecise" in rule.keys() else False
@@ -464,6 +514,7 @@ class RulesProcessor:
                         f"Failed to compile PyParsing rule '{rulekey}': {e}. "
                         "Skipping this rule."
                     )
+                    self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Pattern compilation failed"})
                     continue
             elif rule["match"] == "func":
                 try:
@@ -475,6 +526,7 @@ class RulesProcessor:
                         f"Failed to import function '{rule['rule']}' for rule '{rulekey}': {e}. "
                         "Skipping this rule."
                     )
+                    self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Function import failed"})
                     continue
             elif rule["match"] == "text":
                 keywords = rule["rule"].split(",")
@@ -503,7 +555,8 @@ class RulesProcessor:
                         f"Failed to import validator '{rule['validator']}' for rule '{rulekey}': {e}. "
                         "Skipping validator."
                     )
-                    # Continue without validator - rule can still work
+                    self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Required validator unavailable"})
+                    continue
             if "fieldrule" in rule.keys() and "fieldrulematch" in rule.keys():
                 if rule["fieldrulematch"] == "ppr":
                     try:
@@ -519,7 +572,8 @@ class RulesProcessor:
                             f"Failed to compile field PyParsing rule '{rulekey}': {e}. "
                             "Skipping field rule."
                         )
-                        # Continue without field rule - data rule can still work
+                        self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Required field guard unavailable"})
+                        continue
                 elif rule["fieldrulematch"] == "text":
                     keywords = rule["fieldrule"].split(",")
                     # Convert to set for O(1) membership testing instead of O(n) list lookup
@@ -529,6 +583,17 @@ class RulesProcessor:
                     ruledata["rules"][rulekey]["f_compiled"] = (
                         lineStart + oneOf(keywords, caseless=True) + lineEnd
                     )
+            if rulekey in self.__rule_keys:
+                # Later rulepath entries override earlier ones for the same rule id
+                # (default pack first, then .metacrafter rulepath, then --rulepath).
+                previous = self._unregister_rule(rulekey)
+                logging.info(
+                    "Rule '%s' from %s overrides the definition from %s",
+                    rulekey,
+                    filename,
+                    previous.get("source") if previous else "an earlier file",
+                )
+            self.__rule_keys.append(rulekey)
             rule["id"] = rulekey
             for key in ["context", "lang"]:
                 rule[key] = ruledata[key]
@@ -549,7 +614,7 @@ class RulesProcessor:
             # Add more than one context
             if (
                 "is_pii" in rule.keys()
-                and rule["is_pii"] == "True"
+                and rule["is_pii"]
                 and "pii" not in rule["context"]
             ):
                 rule["context"].append("pii")
@@ -565,7 +630,33 @@ class RulesProcessor:
                 v = self.countries.get(None, 0)
                 self.countries[None] = v + 1
 
+        self.field_rules.sort(key=lambda r: -r["priority"])
+        self.data_rules.sort(key=lambda r: -r["priority"])
         logging.debug("Loaded rules from %s", filename)
+
+    def _unregister_rule(self, rulekey: str) -> Optional[Dict[str, Any]]:
+        """Remove a loaded rule by id and roll back its statistics counters."""
+        previous = None
+        for rules in (self.field_rules, self.data_rules):
+            for index, existing in enumerate(rules):
+                if existing.get("id") == rulekey:
+                    previous = rules.pop(index)
+                    break
+            if previous is not None:
+                break
+        self.__rule_keys.remove(rulekey)
+        if previous is None:
+            return None
+        lang = previous.get("lang")
+        if lang in self.langs:
+            self.langs[lang] -= 1
+        for context in previous.get("context", []):
+            if context in self.contexts:
+                self.contexts[context] -= 1
+        for code in previous.get("country_code") or [None]:
+            if code in self.countries:
+                self.countries[code] -= 1
+        return previous
 
     def import_rules_path(self, pathname: str, recursive: bool = True) -> None:
         """Import rules from a directory path.
@@ -582,11 +673,11 @@ class RulesProcessor:
             yaml.YAMLError: If any YAML file is malformed
         """
         if not recursive:
-            filenames = glob.glob(pathname + "/*.yaml")
+            filenames = sorted(glob.glob(pathname + "/*.yaml"))
             for filename in filenames:
                 self.import_rules(filename)
         else:
-            for path in Path(pathname).rglob("*.yaml"):
+            for path in sorted(Path(pathname).rglob("*.yaml")):
                 self.import_rules(str(path))
 
     def dumpStats(self) -> None:
@@ -608,7 +699,7 @@ class RulesProcessor:
             print(f"- {key} {self.langs[key]}")
         if self.countries:
             print("Country codes:")
-            for key in sorted(self.countries.keys()):
+            for key in sorted(self.countries.keys(), key=lambda value: value or ""):
                 print(f"- {key or 'unknown'} {self.countries[key]}")
         dparser = qddate.DateParser(
             patterns=qddate.patterns.PATTERNS_EN + qddate.patterns.PATTERNS_RU
@@ -678,6 +769,8 @@ class RulesProcessor:
         filter_langs: Optional[List[str]] = None,
         except_empty: bool = True,
         ignore_imprecise: bool = True,
+        empty_values=None,
+        explain=False,
     ) -> TableScanResult:
         """Match classification rules against a list of dictionaries.
         
@@ -712,7 +805,12 @@ class RulesProcessor:
         Raises:
             ValueError: If dateparser is required but not provided
         """
+        from metacrafter.reports import validate_options
+        validate_options(limit, confidence)
+        from metacrafter.classify.stats import DEFAULT_EMPTY_VALUES
+        empty_values = DEFAULT_EMPTY_VALUES if empty_values is None else empty_values
         results = TableScanResult()
+        data = data[:limit]
         if not fields:
             fields = headers(data)
         field_rules = self.get_filtered_rules(
@@ -723,6 +821,9 @@ class RulesProcessor:
         )
 
         data_columns = dict_to_columns(data)
+        missing = set(fields) - set(data_columns)
+        if missing:
+            raise ValueError("Unknown selected fields: " + ", ".join(sorted(missing)))
         nonstr = []
         if datastats:
             for field in datastats.keys():
@@ -730,6 +831,8 @@ class RulesProcessor:
                     nonstr.append(field)
         for field in fields:
             m_result = ColumnMatchResult(field=field, matches=[])
+            if explain:
+                m_result.rejected = []
             shortfield = field.rsplit(".", 1)[-1].strip()
             # Match field name first
             for rule in field_rules:
@@ -840,7 +943,7 @@ class RulesProcessor:
                 try:
                     min_len = len(min(data, key=len))
                     max_len = len(max(data, key=len))
-                except TypeError:
+                except (TypeError, ValueError):
                     min_len = 4
                     max_len = 4
 
@@ -876,7 +979,7 @@ class RulesProcessor:
                     empty = 0
                     total = len(slice)
                     for value in slice:
-                        if value is None:
+                        if value in empty_values:
                             if except_empty:
                                 empty += 1
                             continue
@@ -917,19 +1020,23 @@ class RulesProcessor:
                         else:
                             result = success * 100.0 / (total - empty)
                     else:
-                        result = success * 100.0 / total
-                    if result > confidence:
+                        result = success * 100.0 / total if total else 0
+                    if success and result >= confidence:
                         m_result.add(
                             RuleResult(
                                 ruleid=rule["id"],
                                 confidence=result,
                                 dataclass=rule["key"],
                                 ruletype="data",
+                                evidence={"matched_count": success, "considered_count": total-empty if except_empty else total, "empty_count": empty, "rule_source": rule.get("source")},
                                 is_pii="pii" in rule.get("context", []),
                             )
                         )
                         if stop_on_match:
                             break
+
+                    elif explain:
+                        m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": result, "matched_count": success, "considered_count": total-empty if except_empty else total, "reason": "No matching values" if not success else "Below confidence threshold"})
 
             if m_result.is_empty() and parse_dates and field not in nonstr and dateparser is not None:
                 total = len(slice)
@@ -937,7 +1044,7 @@ class RulesProcessor:
                 empty = 0
                 date_format = None
                 for value in slice:
-                    if value is None:
+                    if value in empty_values:
                         if except_empty:
                             empty += 1
                         continue
@@ -961,8 +1068,8 @@ class RulesProcessor:
                     else:
                         result = success * 100.0 / (total - empty)
                 else:
-                    result = success * 100.0 / total
-                if result > confidence:
+                    result = success * 100.0 / total if total else 0
+                if success and result >= confidence:
                     m_result.add(
                         RuleResult(
                             ruleid="qddate",

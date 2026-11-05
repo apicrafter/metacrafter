@@ -92,12 +92,12 @@ class OpenRouterProvider(BaseLLMProvider):
             
             return response.choices[0].message.content
         except RateLimitError as e:
-            logger.warning(f"OpenRouter rate limit error: {e}")
+            logger.warning("LLM operation failed (%s)", type(e).__name__)
             raise
         except APIConnectionError as e:
-            logger.warning(f"OpenRouter connection error: {e}")
+            logger.warning("LLM operation failed (%s)", type(e).__name__)
             raise
         except APIError as e:
-            logger.error(f"OpenRouter API error: {e}")
+            logger.error("LLM operation failed (%s)", type(e).__name__)
             raise
 

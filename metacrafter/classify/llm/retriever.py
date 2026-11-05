@@ -60,8 +60,8 @@ class Retriever:
         try:
             query_embedding = self.embedder.embed_text(query_text)
         except Exception as e:
-            logger.error(f"Error generating query embedding: {e}")
-            return []
+            logger.error("Query embedding failed")
+            raise
         
         # Build filters
         filters = {}
@@ -69,19 +69,19 @@ class Retriever:
             if isinstance(country, str):
                 filters["country"] = country.lower()
             elif isinstance(country, list) and country:
-                filters["country"] = country[0].lower()  # ChromaDB where clause supports single value
+                filters["country"] = [c.lower() for c in country]  # ChromaDB where clause supports single value
         
         if langs:
             if isinstance(langs, str):
                 filters["langs"] = langs.lower()
             elif isinstance(langs, list) and langs:
-                filters["langs"] = langs[0].lower()
+                filters["langs"] = [c.lower() for c in langs]
         
         if categories:
             if isinstance(categories, str):
                 filters["categories"] = categories.lower()
             elif isinstance(categories, list) and categories:
-                filters["categories"] = categories[0].lower()
+                filters["categories"] = [c.lower() for c in categories]
         
         # Search vector store
         k = top_k if top_k is not None else self.top_k

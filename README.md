@@ -22,23 +22,29 @@ Repository assessment and proposed work: [Code quality review and improvement pl
 
 ## Installation
 
+Requires Python 3.10+. The default rule pack, [metacrafter-rules](https://github.com/apicrafter/metacrafter-rules),
+is a required dependency that is not on PyPI yet, so install it from GitHub first:
+
 ```bash
+pip install "metacrafter-rules @ git+https://github.com/apicrafter/metacrafter-rules"
 pip install metacrafter
 ```
 
 Optional extras:
 
 ```bash
-pip install 'metacrafter[rules]'         # extended YAML rules pack
+pip install 'metacrafter[formats]'       # Parquet, ORC, Excel, XML, compressed files
+pip install 'metacrafter[mongodb]'       # MongoDB and BSON
+pip install 'metacrafter[duckdb]'        # native DuckDB scanning
+pip install 'metacrafter[server]'        # HTTP API server
 pip install 'metacrafter[llm]'           # LLM/RAG hybrid classification
 pip install 'metacrafter[datahub]'       # DataHub export
 pip install 'metacrafter[openmetadata]'  # OpenMetadata export
-pip install 'metacrafter[all]'           # rules + integrations
+pip install 'metacrafter[all]'           # everything above
 pip install 'metacrafter[dev]'           # tests and linters
 ```
 
-When `metacrafter[rules]` is installed, the extended pack loads automatically.
-Set `auto_rules: false` in `.metacrafter` to use only paths you list.
+Set `auto_rules: false` in `.metacrafter` to load only the rule paths you list.
 
 ```python
 from metacrafter import CrafterCmd

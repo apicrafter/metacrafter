@@ -172,6 +172,8 @@ class TestDataHubExporter:
         )
         
         dataset_urn = "urn:li:dataset:(urn:li:dataPlatform:postgres,users,PROD)"
+        exporter.graph = Mock()
+        exporter.graph.get_aspect.return_value = None
         stats = exporter.export_scan_results(
             dataset_urn=dataset_urn,
             scan_report=sample_scan_report,
@@ -194,6 +196,8 @@ class TestDataHubExporter:
         )
         
         dataset_urn = "urn:li:dataset:(urn:li:dataPlatform:postgres,users,PROD)"
+        exporter.graph = Mock()
+        exporter.graph.get_aspect.return_value = None
         stats = exporter.export_scan_results(
             dataset_urn=dataset_urn,
             scan_report=sample_scan_report,

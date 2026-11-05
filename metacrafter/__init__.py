@@ -7,6 +7,7 @@ from metacrafter.exceptions import (
     FileProcessingError,
     DatabaseError,
     ValidationError,
+    MissingExtraError,
 )
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "FileProcessingError",
     "DatabaseError",
     "ValidationError",
+    "MissingExtraError",
     "CrafterCmd",
 ]
 

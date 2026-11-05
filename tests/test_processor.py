@@ -184,8 +184,8 @@ rules:
         processor_ca.import_rules(str(sample_rule))
         assert len(processor_ca.field_rules) == 0
 
-    def test_rulekey_collision_warns_and_skips(self, tmp_path, caplog):
-        """A duplicate rulekey across files must warn and skip the duplicate."""
+    def test_rulekey_collision_later_file_overrides(self, tmp_path, caplog):
+        """A duplicate rulekey in a later file replaces the earlier definition."""
         rule_body = """
 name: sample
 description: Sample ruleset
@@ -207,12 +207,15 @@ rules:
 
         processor = RulesProcessor()
         processor.import_rules(str(first))
-        with caplog.at_level("WARNING"):
+        with caplog.at_level("INFO"):
             processor.import_rules(str(second))
 
-        assert any("Duplicate rulekey 'dup_field'" in rec.message for rec in caplog.records)
-        # Only one field rule should be registered for the duplicated key.
-        assert sum(1 for r in processor.field_rules if r.get("id") == "dup_field") == 1
+        assert any("overrides" in rec.message for rec in caplog.records)
+        # Only one field rule is registered, and it comes from the later file.
+        matching = [r for r in processor.field_rules if r.get("id") == "dup_field"]
+        assert len(matching) == 1
+        assert matching[0]["source"] == str(second)
+        assert processor.langs["en"] == 1
 
     def test_get_filtered_rules_no_filters(self):
         processor = RulesProcessor()

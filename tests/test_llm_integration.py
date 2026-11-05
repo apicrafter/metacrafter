@@ -74,6 +74,7 @@ class TestLLMIntegration:
             use_llm=True,
             llm_provider="openai",
             llm_registry_path=str(registry_file),
+            llm_fallback="rules",
             llm_index_path=str(index_path),
             llm_api_key="test-key"
         )
@@ -92,9 +93,7 @@ class TestLLMIntegration:
         
         # Mock OpenAI clients
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(2)]
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
         mock_provider_client = Mock()
@@ -110,6 +109,7 @@ class TestLLMIntegration:
             llm_only=True,
             llm_provider="openai",
             llm_registry_path=str(registry_file),
+            llm_fallback="rules",
             llm_index_path=str(index_path),
             llm_api_key="test-key"
         )
@@ -128,9 +128,7 @@ class TestLLMIntegration:
         
         # Mock embeddings
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(3)]
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
         # Mock LLM response
@@ -147,6 +145,7 @@ class TestLLMIntegration:
             llm_only=True,
             llm_provider="openai",
             llm_registry_path=str(registry_file),
+            llm_fallback="rules",
             llm_index_path=str(index_path),
             llm_api_key="test-key"
         )
@@ -177,9 +176,7 @@ class TestLLMIntegration:
         
         # Mock embeddings
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(3)]
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
         # Mock LLM response
@@ -196,6 +193,7 @@ class TestLLMIntegration:
             use_llm=True,
             llm_provider="openai",
             llm_registry_path=str(registry_file),
+            llm_fallback="rules",
             llm_index_path=str(index_path),
             llm_api_key="test-key"
         )
@@ -251,9 +249,7 @@ class TestLLMIntegration:
         
         # Mock embeddings
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(3)]
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
         # Mock LLM to raise error
@@ -267,6 +263,7 @@ class TestLLMIntegration:
             use_llm=True,
             llm_provider="openai",
             llm_registry_path=str(registry_file),
+            llm_fallback="rules",
             llm_index_path=str(index_path),
             llm_api_key="test-key"
         )
@@ -291,8 +288,8 @@ class TestLLMIntegration:
         """Test LLM-only mode falls back to rules if classifier not available."""
         from metacrafter.core import CrafterCmd
         
-        cmd = CrafterCmd(remote=None, debug=False)
-        # No LLM classifier initialized
+        cmd = CrafterCmd(remote=None, debug=False, llm_fallback="rules")
+        # Explicitly allow fallback when no LLM classifier is initialized
         
         items = [
             {"email": "test@example.com"},
@@ -329,9 +326,7 @@ class TestLLMResultFormat:
         
         # Mock embeddings
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(3)]
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
         # Mock LLM response
@@ -348,6 +343,7 @@ class TestLLMResultFormat:
             llm_only=True,
             llm_provider="openai",
             llm_registry_path=str(registry_file),
+            llm_fallback="rules",
             llm_index_path=str(index_path),
             llm_api_key="test-key"
         )

@@ -1,265 +1,177 @@
-"""API module for Metacrafter server endpoints."""
-import logging
-import json as std_json
-from typing import Optional
-import qddate
-import yaml
-from flask import (
-    Flask,
-    json,
-    jsonify,
-    request,
-)
+"""Validated HTTP adapter for the shared scanning service."""
 
-from metacrafter.classify.stats import Analyzer
-from metacrafter.config import ConfigLoader, DEFAULT_RULEPATH
-from metacrafter.classify.processor import RulesProcessor, BASE_URL
+import hmac
+import json
+import logging
+import os
+from threading import Lock
+from flask import Flask, jsonify, request
+from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 MANAGE_PREFIX = ""
 DEFAULT_LIMIT = 1000
 
 
 class MetacrafterApp:
-    """Application factory for Metacrafter API server.
-    
-    Manages dependencies (rules processor and date parser) and provides
-    dependency injection for API endpoints.
-    """
-    
-    def __init__(
-        self,
-        rules_processor: Optional[RulesProcessor] = None,
-        date_parser: Optional[qddate.DateParser] = None,
-    ):
-        """Initialize MetacrafterApp with optional dependencies.
-        
-        Args:
-            rules_processor: Optional pre-initialized rules processor.
-                If None, will be created from configuration.
-            date_parser: Optional pre-initialized date parser.
-                If None, will be created with default patterns.
-        """
+    def __init__(self, rules_processor=None, date_parser=None, auth_token=None):
         self.rules_processor = rules_processor
         self.date_parser = date_parser
+        self.auth_token = auth_token or os.environ.get("METACRAFTER_API_TOKEN")
+        self.service = None
+        self._lock = Lock()
         self.app = Flask("Metacrafter")
-        self._setup_routes()
-    
-    def _create_processor(self) -> RulesProcessor:
-        """Create and initialize rules processor from configuration."""
+        self.app.config.update(
+            MAX_CONTENT_LENGTH=10 * 1024 * 1024, MAX_RECORDS=10000, MAX_DEPTH=32
+        )
+        self.app.add_url_rule(
+            "/api/v1/scan_data", "scan_data", self._scan, methods=["POST"]
+        )
+        self.app.add_url_rule("/health", "health", lambda: jsonify(status="ok"))
+        self.app.add_url_rule("/ready", "ready", self._ready)
+        self.app.register_error_handler(
+            RequestEntityTooLarge,
+            lambda error: (jsonify(error="Payload too large"), 413),
+        )
+
+    def _create_processor(self):
+        from metacrafter.classify.processor import RulesProcessor
+        from metacrafter.config import ConfigLoader
+
         processor = RulesProcessor()
-        try:
-            rulepath = ConfigLoader.get_rulepath()
-            for rp in rulepath:
-                processor.import_rules_path(rp, recursive=True)
-        except (yaml.YAMLError, IOError) as e:
-            logging.error("Error loading configuration: %s", e)
-            # Fall back to default rulepath
-            rulepath = DEFAULT_RULEPATH
-            for rp in rulepath:
-                processor.import_rules_path(rp, recursive=True)
+        for path in ConfigLoader.get_rulepath():
+            processor.import_rules_path(path)
         return processor
-    
-    def _create_date_parser(self) -> qddate.DateParser:
-        """Create date parser with default patterns."""
+
+    def _create_date_parser(self):
+        import qddate
+
         return qddate.DateParser(
             patterns=qddate.patterns.PATTERNS_EN + qddate.patterns.PATTERNS_RU
         )
-    
-    def _setup_routes(self):
-        """Set up Flask routes with dependency injection."""
-        self.app.add_url_rule(
-            MANAGE_PREFIX + "/api/v1/scan_data",
-            "scan_data",
-            lambda: scan_data(self.rules_processor or self._create_processor(),
-                            self.date_parser or self._create_date_parser()),
-            methods=["POST"],
-        )
-    
+
     def initialize_rules(self):
-        """Initialize rules processor and date parser from configuration.
-        
-        This method is provided for backward compatibility.
-        Dependencies are now lazily initialized when needed.
-        """
-        if self.rules_processor is None:
-            self.rules_processor = self._create_processor()
-        if self.date_parser is None:
-            self.date_parser = self._create_date_parser()
+        with self._lock:
+            if self.service is None:
+                from metacrafter.core import CrafterCmd
+
+                self.rules_processor = self.rules_processor or self._create_processor()
+                self.date_parser = self.date_parser or self._create_date_parser()
+                self.service = CrafterCmd(remote="injected", quiet=True)
+                self.service.processor = self.rules_processor
+                self.service.dparser = self.date_parser
+                self.service.llm_classifier = None
+                self.service.classification_mode = "rules"
+
+    def _ready(self):
+        try:
+            self.initialize_rules()
+            return jsonify(status="ready")
+        except Exception:
+            return jsonify(status="unavailable"), 503
+
+    def _scan(self):
+        if self.auth_token:
+            supplied = request.headers.get("Authorization", "")
+            if not hmac.compare_digest(supplied, "Bearer " + self.auth_token):
+                return jsonify(error="Unauthorized"), 401
+        try:
+            self.initialize_rules()
+            return _scan_service(self.service)
+        except Exception:
+            logging.exception("Scan service initialization failed")
+            return jsonify(error="Internal server error"), 500
 
 
-def scan_data(rules_processor: RulesProcessor, date_parser: qddate.DateParser):
-    """API endpoint to scan data items and return classification results.
+def _depth(value):
+    if isinstance(value, dict):
+        return 1 + max((_depth(v) for v in value.values()), default=0)
+    if isinstance(value, list):
+        return 1 + max((_depth(v) for v in value), default=0)
+    return 0
 
-    Accepts JSON array of items and returns classification results.
 
-    Args:
-        rules_processor: Initialized rules processor instance
-        date_parser: Initialized date parser instance
-
-    Query Parameters:
-        format: Output format (short/full), default: short
-        langs: Comma-separated language filters
-        contexts: Comma-separated context filters
-        limit: Maximum records to process per field, default: 1000
-
-    Returns:
-        JSON response with classification results
-
-    Raises:
-        ValueError: If request data is invalid
-        KeyError: If required data is missing
-    """
-    output_format = request.args.get("format", default="short", type=str)
-    langs = request.args.get("langs", default=None, type=str)
-    contexts = request.args.get("contexts", default=None, type=str)
-    scan_limit = request.args.get("limit", default=DEFAULT_LIMIT, type=int)
-    langs = langs.split(",") if langs is not None else None
-    contexts = contexts.split(",") if contexts is not None else None
-
+def _scan_service(service):
     try:
         if not request.data:
-            raise ValueError("Request data is empty")
-        items = std_json.loads(request.data)
-        analyzer = Analyzer()
-        datastats = analyzer.analyze(
-            fromfile=None,
-            itemlist=items,
-            options={"delimiter": ",", "format_in": None, "zipfile": None},
+            return jsonify(error="Invalid JSON", message="Request data is empty"), 400
+        items = json.loads(request.data)
+        if not isinstance(items, list) or any(
+            not isinstance(item, dict) for item in items
+        ):
+            raise ValueError("Payload must be an array of objects")
+        from flask import current_app
+
+        if len(items) > current_app.config.get("MAX_RECORDS", 10000) or _depth(
+            items
+        ) > current_app.config.get("MAX_DEPTH", 32):
+            raise ValueError("Payload exceeds record or nesting limit")
+        options = {}
+        for key in ("limit",):
+            if key in request.args:
+                options[key] = int(request.args[key])
+        for key in ("confidence", "dict_share", "llm_min_confidence"):
+            if key in request.args:
+                options[key] = float(request.args[key])
+        for key in ("contexts", "langs", "fields"):
+            if key in request.args:
+                options[key] = request.args[key]
+        for key in (
+            "stop_on_match",
+            "parse_dates",
+            "ignore_imprecise",
+            "except_empty",
+            "stats_only",
+            "explain",
+        ):
+            if key in request.args:
+                value = request.args[key].lower()
+                if value not in ("true", "false", "1", "0"):
+                    raise ValueError(key + " must be true or false")
+                options[key] = value in ("true", "1")
+        if "empty_values" in request.args:
+            options["empty_values"] = json.loads(request.args["empty_values"])
+            if not isinstance(options["empty_values"], list):
+                raise ValueError("empty_values must be an array")
+        report = service.scan_data(items, **options)
+        return jsonify(report)
+    except (json.JSONDecodeError, BadRequest):
+        return jsonify(error="Invalid JSON"), 400
+    except (ValueError, TypeError, RecursionError) as error:
+        return (
+            jsonify(
+                error="Invalid request data",
+                message=(
+                    str(error)
+                    if not isinstance(error, RecursionError)
+                    else "Payload nesting limit exceeded"
+                ),
+            ),
+            400,
         )
-        if datastats is None:
-            raise ValueError("No data to analyze")
-        headers = [
-            "key",
-            "ftype",
-            "is_dictkey",
-            "is_uniq",
-            "n_uniq",
-            "share_uniq",
-            "minlen",
-            "maxlen",
-            "avglen",
-            "tags",
-            "has_digit",
-            "has_alphas",
-            "has_special",
-            "minval",
-            "maxval",
-            "has_any_digit",
-            "has_any_alphas",
-            "has_any_special",
-            "dictvalues",
-        ]
-        datastats_dict = {}
-        for row in datastats:
-            datastats_dict[row[0]] = {}
-        for row in datastats:
-            for n, header in enumerate(headers):
-                if n < len(row):
-                    datastats_dict[row[0]][header] = row[n]
-
-        # Use minimum confidence threshold (5%) for API requests
-        MIN_CONFIDENCE_FOR_MATCH = 5.0
-        results = rules_processor.match_dict(
-            items,
-            datastats=datastats_dict,
-            confidence=MIN_CONFIDENCE_FOR_MATCH,
-            dateparser=date_parser,
-            parse_dates=True,
-            limit=scan_limit,
-            filter_contexts=contexts,
-            filter_langs=langs,
-        )
+    except Exception:
+        logging.exception("Scan request failed")
+        return jsonify(error="Internal server error"), 500
 
 
-        output = []
-        outdata = []
-        report = {}
-        for res in results.results:
-            matches = []
-            for match in res.matches:
-                s = f"{match.dataclass} {match.confidence:0.2f}"
-                if match.format is not None:
-                    s += f" ({match.format})"
-                matches.append(s)
-            if res.field not in datastats_dict:
-                continue
-            output.append(
-                [
-                    res.field,
-                    datastats_dict[res.field]["ftype"],
-                    ",".join(datastats_dict[res.field]["tags"]),
-                    ",".join(matches),
-                    BASE_URL.format(dataclass=res.matches[0].dataclass)
-                    if res.matches
-                    else "",
-                ]
-            )
-            record = res.asdict()
-            record["tags"] = datastats_dict[res.field]["tags"]
-            record["ftype"] = datastats_dict[res.field]["ftype"]
-            record["datatype_url"] = (
-                BASE_URL.format(dataclass=res.matches[0].dataclass)
-                if res.matches
-                else ""
-            )
-            record["stats"] = datastats_dict[res.field]
+def scan_data(rules_processor, date_parser):
+    from metacrafter.core import CrafterCmd
 
-            outdata.append(record)
-        report = {'results': output, 'data': outdata}
-    except std_json.JSONDecodeError as ex:
-        logging.error("JSON decode error: %s", ex)
-        report = {"error": "Invalid JSON", "message": str(ex)}
-        return jsonify(report), 400
-    except ValueError as ex:
-        # Check if it's an empty data error that should be "Invalid JSON"
-        if "empty" in str(ex).lower() or not request.data:
-            logging.error("Invalid request data: %s", ex)
-            report = {"error": "Invalid JSON", "message": str(ex)}
-        else:
-            logging.error("Invalid request data: %s", ex)
-            report = {"error": "Invalid request data", "message": str(ex)}
-        return jsonify(report), 400
-    except KeyError as ex:
-        logging.error("Invalid request data: %s", ex)
-        report = {"error": "Invalid request data", "message": str(ex)}
-        return jsonify(report), 400
-    except Exception as ex:
-        logging.error("Unexpected error in scan_data: %s", ex, exc_info=True)
-        report = {"error": "Internal server error", "message": str(ex)}
-        return jsonify(report), 500
-    return jsonify(report)
+    service = CrafterCmd(remote="injected", quiet=True)
+    service.processor, service.dparser = rules_processor, date_parser
+    service.llm_classifier, service.classification_mode = None, "rules"
+    return _scan_service(service)
 
 
-def add_api_rules(app: Flask, prefix: str = MANAGE_PREFIX):
-    """Add API routes to Flask application (backward compatibility).
-    
-    Note: This function is kept for backward compatibility.
-    For new code, use MetacrafterApp class directly.
-    
-    Args:
-        app: Flask application instance
-        prefix: URL prefix for API routes
-    """
-    # Create a temporary app instance to get dependencies
-    # This maintains backward compatibility but is not ideal
-    # Prefer using MetacrafterApp directly
-    app_instance = MetacrafterApp()
+def add_api_rules(app, prefix=MANAGE_PREFIX):
+    instance = MetacrafterApp()
     app.add_url_rule(
-        prefix + "/api/v1/scan_data",
-        "classify",
-        lambda: scan_data(
-            app_instance.rules_processor or app_instance._create_processor(),
-            app_instance.date_parser or app_instance._create_date_parser()
-        ),
-        methods=["POST"],
+        prefix + "/api/v1/scan_data", "classify", instance._scan, methods=["POST"]
     )
 
 
-# Backward compatibility function
 def initialize_rules():
-    """Initialize rules (backward compatibility function).
-    
-    Note: This function is kept for backward compatibility.
-    Dependencies are now managed by MetacrafterApp.
-    """
-    pass
+    """Compatibility hook; application instances own initialized dependencies."""
+
+
+def create_app():
+    return MetacrafterApp().app

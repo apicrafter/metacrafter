@@ -2,6 +2,8 @@
 """Vector store for registry embeddings using ChromaDB."""
 import logging
 import os
+import json
+import uuid
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 
@@ -43,6 +45,9 @@ class VectorStore:
         """
         self.persist_directory = persist_directory
         self.collection_name = collection_name
+        pointer = Path(persist_directory) / "active-index.json" if persist_directory else None
+        if pointer and pointer.exists():
+            self.collection_name = collection_name = json.loads(pointer.read_text())["collection"]
         
         # Initialize ChromaDB client
         if persist_directory:
@@ -89,6 +94,7 @@ class VectorStore:
                 "id": meta.get("id", ""),
                 "name": meta.get("name", ""),
                 "doc": meta.get("doc", ""),
+                "is_pii": bool(meta.get("is_pii", False)),
             }
             # Add categories, country, langs as comma-separated strings for filtering
             if "categories" in meta and meta["categories"]:
@@ -119,7 +125,7 @@ class VectorStore:
             )
             logger.info(f"Added {len(embeddings)} documents to collection")
         except Exception as e:
-            logger.error(f"Error adding documents: {e}")
+            logger.error("LLM operation failed (%s)", type(e).__name__)
             raise
     
     def search(
@@ -142,7 +148,9 @@ class VectorStore:
         # ChromaDB doesn't support $contains, so we need to retrieve more results
         # and filter them post-retrieval for comma-separated string matching
         # Retrieve more results to account for filtering
-        query_top_k = top_k * 3 if filters else top_k
+        query_top_k = self.count() if filters else min(top_k, self.count())
+        if query_top_k == 0:
+            return []
         
         try:
             results = self.collection.query(
@@ -157,34 +165,17 @@ class VectorStore:
                 for i in range(len(results["ids"][0])):
                     metadata = results["metadatas"][0][i]
                     
-                    # Apply filters if provided
                     if filters:
-                        match = True
-                        
-                        # Check country filter (comma-separated string)
-                        if "country" in filters:
-                            country_value = filters["country"].lower()
-                            metadata_country = metadata.get("country", "").lower()
-                            if not metadata_country or country_value not in metadata_country.split(","):
-                                match = False
-                        
-                        # Check langs filter (comma-separated string)
-                        if match and "langs" in filters:
-                            langs_value = filters["langs"].lower()
-                            metadata_langs = metadata.get("langs", "").lower()
-                            if not metadata_langs or langs_value not in metadata_langs.split(","):
-                                match = False
-                        
-                        # Check categories filter (comma-separated string)
-                        if match and "categories" in filters:
-                            categories_value = filters["categories"].lower()
-                            metadata_categories = metadata.get("categories", "").lower()
-                            if not metadata_categories or categories_value not in metadata_categories.split(","):
-                                match = False
-                        
-                        if not match:
+                        eligible = True
+                        for key, requested in filters.items():
+                            requested = [requested] if isinstance(requested, str) else requested
+                            stored = set(str(metadata.get(key, "")).lower().split(","))
+                            if not stored.intersection(str(value).lower() for value in requested):
+                                eligible = False
+                                break
+                        if not eligible:
                             continue
-                    
+
                     result = {
                         "id": results["ids"][0][i],
                         "metadata": metadata,
@@ -199,8 +190,8 @@ class VectorStore:
             
             return formatted_results
         except Exception as e:
-            logger.error(f"Error searching: {e}")
-            return []
+            logger.error("Vector search failed")
+            raise
     
     def get_by_id(self, datatype_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -223,7 +214,7 @@ class VectorStore:
                 }
             return None
         except Exception as e:
-            logger.error(f"Error getting by ID {datatype_id}: {e}")
+            logger.error("LLM operation failed (%s)", type(e).__name__)
             return None
     
     def count(self) -> int:
@@ -231,9 +222,29 @@ class VectorStore:
         try:
             return self.collection.count()
         except Exception as e:
-            logger.error(f"Error counting documents: {e}")
+            logger.error("LLM operation failed (%s)", type(e).__name__)
             return 0
     
+    def replace_documents(self, embeddings, metadatas, ids, manifest):
+        """Populate a replacement collection before atomically selecting it."""
+        previous, previous_name = self.collection, self.collection_name
+        name = "metacrafter_" + uuid.uuid4().hex
+        replacement = self.client.create_collection(name=name, metadata={"fingerprint": manifest["fingerprint"], "dimension": manifest["dimension"]})
+        try:
+            self.collection = replacement
+            self.add_documents(embeddings, metadatas, ids)
+            if self.persist_directory:
+                pointer = Path(self.persist_directory) / "active-index.json"
+                temporary = pointer.with_suffix(".tmp")
+                temporary.write_text(json.dumps(dict(manifest, collection=name)), encoding="utf8")
+                os.replace(temporary, pointer)
+            self.collection_name = name
+        except Exception:
+            self.collection, self.collection_name = previous, previous_name
+            self.client.delete_collection(name=name)
+            raise
+        # Old collections are retained for recovery; the pointer defines the active index.
+
     def clear(self):
         """Clear all documents from the collection."""
         try:
@@ -241,7 +252,7 @@ class VectorStore:
             self.collection = self.client.create_collection(name=self.collection_name)
             logger.info(f"Cleared collection: {self.collection_name}")
         except Exception as e:
-            logger.error(f"Error clearing collection: {e}")
+            logger.error("LLM operation failed (%s)", type(e).__name__)
             raise
 
 

@@ -87,12 +87,12 @@ class PerplexityProvider(BaseLLMProvider):
             result = response.json()
             return result["choices"][0]["message"]["content"]
         except requests.exceptions.ConnectionError as e:
-            logger.error(f"Perplexity connection error: {e}")
+            logger.error("LLM operation failed (%s)", type(e).__name__)
             raise
         except requests.exceptions.Timeout as e:
-            logger.error(f"Perplexity timeout error: {e}")
+            logger.error("LLM operation failed (%s)", type(e).__name__)
             raise
         except requests.exceptions.RequestException as e:
-            logger.error(f"Perplexity API error: {e}")
+            logger.error("LLM operation failed (%s)", type(e).__name__)
             raise
 

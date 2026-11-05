@@ -66,9 +66,7 @@ class TestLLMClassifier:
         
         # Mock OpenAI clients
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(2)]
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
         mock_provider_client = Mock()
@@ -100,13 +98,11 @@ class TestLLMClassifier:
         registry_dir = tmp_path / "metacrafter-registry" / "data"
         registry_dir.mkdir(parents=True)
         registry_file = registry_dir / "datatypes_latest.jsonl"
-        self.create_test_registry(registry_dir.parent.parent)
+        self.create_test_registry(registry_dir).replace(registry_file)
         
         # Mock OpenAI clients
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(2)]
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
         mock_provider_client = Mock()
@@ -119,10 +115,9 @@ class TestLLMClassifier:
         # Change to directory where registry would be found
         original_cwd = Path.cwd()
         try:
-            monkeypatch.chdir(tmp_path)
-            # This should find the registry
-            # Note: This test may need adjustment based on actual path discovery logic
-            pass
+            monkeypatch.chdir(registry_dir)
+            classifier = LLMClassifier(embedding_api_key="test-key", llm_api_key="test-key")
+            assert classifier.registry_path.resolve() == registry_file.resolve()
         finally:
             monkeypatch.chdir(original_cwd)
     
@@ -137,9 +132,7 @@ class TestLLMClassifier:
         
         # Mock embeddings
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(3)]  # 2 datatypes + 1 query
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
         # Mock LLM response
@@ -181,9 +174,7 @@ class TestLLMClassifier:
         
         # Mock embeddings
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(4)]  # 2 datatypes + 2 queries
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
         # Mock LLM responses
@@ -224,9 +215,7 @@ class TestLLMClassifier:
         
         # Mock embeddings (still uses OpenAI)
         mock_embedder_client = Mock()
-        mock_embedder_client.embeddings.create.return_value = Mock(
-            data=[Mock(embedding=[0.1] * 1536) for _ in range(3)]
-        )
+        mock_embedder_client.embeddings.create.side_effect = lambda **kwargs: Mock(data=[Mock(embedding=[0.1] * 1536) for _ in range(len(kwargs["input"]) if isinstance(kwargs["input"], list) else 1)])
         mock_embedder_openai.return_value = mock_embedder_client
         
         # Mock Ollama response
@@ -242,6 +231,7 @@ class TestLLMClassifier:
             index_path=str(index_path),
             embedding_api_key="test-key",
             llm_provider="ollama",
+            embedding_provider="openai",
             llm_base_url="http://localhost:11434",
             rebuild_index=True
         )
@@ -285,6 +275,7 @@ class TestLLMClassifierErrors:
                     LLMClassifier(
                         registry_path=registry_path,
                         embedding_api_key=None,
+                        embedding_provider="openai",
                         llm_provider="ollama"
                     )
         finally:

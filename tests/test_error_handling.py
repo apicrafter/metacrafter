@@ -38,7 +38,7 @@ def test_scan_file_empty_file():
     try:
         result = cmd.scan_file(temp_path)
         # Should handle empty file gracefully
-        assert result is None or result == []
+        assert result["report_version"] == 2 and result["data"] == []
     finally:
         if os.path.exists(temp_path):
             os.unlink(temp_path)
@@ -53,11 +53,10 @@ def test_config_validation_invalid_path():
 
 
 def test_config_validation_empty_rulepath():
-    """Test configuration validation with empty rulepath."""
+    """An empty user rulepath is valid: the default pack still applies."""
     from metacrafter.config import MetacrafterConfig
-    
-    with pytest.raises(ValueError, match="rulepath cannot be empty"):
-        MetacrafterConfig(rulepath=[])
+
+    assert MetacrafterConfig(rulepath=[]).rulepath == []
 
 
 def test_config_validation_valid_path(tmp_path):

@@ -76,12 +76,12 @@ class OllamaProvider(BaseLLMProvider):
             result = response.json()
             return result.get("message", {}).get("content", "")
         except requests.exceptions.ConnectionError as e:
-            logger.error(f"Ollama connection error: {e}. Is Ollama running at {self.base_url}?")
+            logger.error("LLM operation failed (%s)", type(e).__name__)
             raise
         except requests.exceptions.Timeout as e:
-            logger.error(f"Ollama timeout error: {e}")
+            logger.error("LLM operation failed (%s)", type(e).__name__)
             raise
         except requests.exceptions.RequestException as e:
-            logger.error(f"Ollama API error: {e}")
+            logger.error("LLM operation failed (%s)", type(e).__name__)
             raise
 

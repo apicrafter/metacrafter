@@ -24,6 +24,32 @@ Beads epic: `metacrafter-76s`.
 
 **Approval gate:** Do not implement a change until its proposal is approved.
 
+## Execution plan (2026-11-05)
+
+One ordered list that merges the July roadmap, the Codex review (its uncommitted
+implementation is imported into this branch), the Beads issues and the November plan.
+Each step ends with a green test suite and a commit.
+
+| Step | Work | Changes | Beads |
+|---|---|---|---|
+| S1 | Import the Codex implementation; make tests hermetic and green | `update-hermetic-quality-gates`, July `improve-metacrafter-ci` | `metacrafter-10` |
+| S2 | Foundation: Python >=3.10, pydantic v2, extras, `metacrafter-rules` required, no vendored rules | `refactor-metacrafter-foundation`, `update-rule-loading-and-packaging`, July `modernize-metacrafter-packaging` | `metacrafter-76s.1`, `metacrafter-3` |
+| S3 | Verify and complete the Codex reliability changes against their specs | `improve-scan-result-integrity`, `update-source-scanning-and-sampling`, `refactor-scan-service-and-api`, `update-rule-loading-and-packaging` | `metacrafter-2`, `-4`, `-5`, `-6`, `-7`, `-8`, `-11` |
+| S4 | Registry adapter, canonical ids, enrichment, PII, provenance | `add-registry-integration` | `metacrafter-76s.2`, `metacrafter-13` |
+| S5 | Rule format v2, regex/registry match, checksums, derived detectors, scoring | `update-detection-engine` | `metacrafter-76s.3` |
+| S6 | Report v2, schema, legacy format, crosswalk and Frictionless export; review product tools | `add-report-v2`, `add-report-and-rule-product-tools` | `metacrafter-76s.4`, `metacrafter-12` |
+| S7 | FastAPI HTTP v2, MCP server, skills | `add-agent-interfaces` | `metacrafter-76s.5` |
+| S8 | LLM: trust fixes, registry shortlist, constrained output, disclosure | `update-llm-trust-and-offline-index`, `update-llm-classification` | `metacrafter-9`, `metacrafter-76s.6` |
+| S9 | Contract tests, `ecosystem.lock`, scheduled check, benchmark | `add-ecosystem-contract-tests`, July `add-ecosystem-alignment-workflow` | `metacrafter-76s.7` |
+| S10 | Docs, CHANGELOG, version, archive delivered changes | all | epic `metacrafter-76s` |
+
+Blocked outside this repository:
+- **PyPI publication.** `metacrafter-rules` and `metacrafter-registry` are not on PyPI.
+  CI installs them from GitHub at the commits pinned in `ecosystem.lock`. A PyPI release
+  of metacrafter waits for both packages.
+- **Archive the `metacrafter-llm` repository.** Owner action.
+- **Fix the 32 unresolved rule keys** in `metacrafter-rules`.
+
 ## Phase 0 — Foundation and reliability
 
 | Change | Origin | Beads | Notes |

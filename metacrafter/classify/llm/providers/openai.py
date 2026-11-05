@@ -74,12 +74,12 @@ class OpenAIProvider(BaseLLMProvider):
             
             return response.choices[0].message.content
         except RateLimitError as e:
-            logger.warning(f"OpenAI rate limit error: {e}")
+            logger.warning("LLM operation failed (%s)", type(e).__name__)
             raise
         except APIConnectionError as e:
-            logger.warning(f"OpenAI connection error: {e}")
+            logger.warning("LLM operation failed (%s)", type(e).__name__)
             raise
         except APIError as e:
-            logger.error(f"OpenAI API error: {e}")
+            logger.error("LLM operation failed (%s)", type(e).__name__)
             raise
 

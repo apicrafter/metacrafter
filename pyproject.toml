@@ -7,86 +7,108 @@ name = "metacrafter"
 version = "0.0.6"
 description = "Metacrafter metadata classification tool"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [
     { name = "Ivan Begtin", email = "ivan@begtin.tech" },
 ]
-keywords = ["json", "jsonl", "csv", "bson", "cli", "dataset", "metadata"]
+keywords = ["json", "jsonl", "csv", "bson", "cli", "dataset", "metadata", "pii", "semantic-types"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 4 - Beta",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Environment :: Console",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
     "License :: OSI Approved :: Apache Software License",
     "Topic :: Software Development",
-    "Topic :: System :: Networking",
-    "Topic :: Terminals",
     "Topic :: Text Processing",
     "Topic :: Utilities",
 ]
 
-# Core runtime dependencies. Optional integrations live in [project.optional-dependencies].
+# Core runtime dependencies: file and SQL scanning with rule-based classification.
+# metacrafter-rules provides the default rule pack. It is not on PyPI yet; install it
+# from GitHub first (see ecosystem.lock and the installation docs).
 dependencies = [
-    "pyparsing",
+    "metacrafter-rules>=0.0.2",
+    "pyparsing>=3.1",
     "phonenumbers",
     "qddate",
     "orjson",
-    "pymongo",
-    "PyYAML",
-    "sqlalchemy",
-    "duckdb-engine",
-    "duckdb",
+    "PyYAML>=6.0",
+    "sqlalchemy>=2.0",
     "validators",
     "typer",
     "tabulate",
     "rich",
-    "pydantic",
-    "flask",
+    "pydantic>=2.0",
     "xmltodict",
-    "iterabledata",
+    "iterabledata>=1.1",
     "tqdm",
+    "requests>=2.28.0",
+    "chardet",
 ]
 
 [project.optional-dependencies]
-# Extended YAML rules and validators from the metacrafter-rules package.
-rules = [
-    "metacrafter-rules>=0.0.2",
+# Kept for backward compatibility: metacrafter-rules is now a core dependency.
+rules = []
+# Binary, compressed and XML file formats handled by iterabledata.
+formats = [
+    "pyarrow>=10.0",
+    "pyorc",
+    "xlrd>=2.0",
+    "openpyxl>=3.0",
+    "lxml>=4.9",
+    "lz4",
+    "zstandard",
+    "brotli",
+    "brotli_file",
 ]
+# MongoDB scanning (`metacrafter scan mongodb`).
+mongodb = ["pymongo>=4.6"]
+# Native DuckDB scanning and duckdb:// SQLAlchemy URLs.
+duckdb = ["duckdb>=0.9", "duckdb-engine>=0.9"]
+# HTTP API server (`metacrafter server run`).
+server = ["flask>=2.0"]
 # LLM / RAG hybrid classification (OpenAI, local providers, vector store).
 llm = [
     "openai>=1.0.0",
     "chromadb>=0.4.0",
-    "requests>=2.28.0",
 ]
 # Metadata catalog integrations.
 datahub = ["acryl-datahub[datahub-rest]>=0.12.0"]
-openmetadata = ["openmetadata-ingestion>=1.0.0"]
+openmetadata = []
 # Development and testing.
 dev = [
     "pytest>=7.4.0",
     "pytest-cov",
     "pytest-mock",
-    "mock",
-    "flake8",
-    "black",
+    "ruff",
     "mypy",
+    "build",
 ]
 # Everything except dev tooling.
 all = [
-    "metacrafter-rules>=0.0.2",
+    "pyarrow>=10.0",
+    "pyorc",
+    "xlrd>=2.0",
+    "openpyxl>=3.0",
+    "lxml>=4.9",
+    "lz4",
+    "zstandard",
+    "brotli",
+    "brotli_file",
+    "pymongo>=4.6",
+    "duckdb>=0.9",
+    "duckdb-engine>=0.9",
+    "flask>=2.0",
     "openai>=1.0.0",
     "chromadb>=0.4.0",
-    "requests>=2.28.0",
     "acryl-datahub[datahub-rest]>=0.12.0",
-    "openmetadata-ingestion>=1.0.0",
 ]
 
 [project.urls]
@@ -98,8 +120,16 @@ Repository = "https://github.com/apicrafter/metacrafter/"
 metacrafter = "metacrafter.__main__:main"
 
 [tool.setuptools.packages.find]
+include = ["metacrafter", "metacrafter.*"]
 exclude = ["tests", "tests.*"]
 
 [tool.setuptools]
 include-package-data = true
 zip-safe = false
+
+[tool.ruff]
+line-length = 127
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

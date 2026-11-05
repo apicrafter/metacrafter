@@ -41,55 +41,18 @@ def mock_date_parser():
     return Mock(spec=qddate.DateParser)
 
 
-def test_scan_data_endpoint_success(client, mock_processor, mock_date_parser):
-    """Test successful API request."""
-    with patch('metacrafter.server.api.Analyzer') as mock_analyzer_class:
-        mock_analyzer = Mock()
-        mock_analyzer.analyze.return_value = [
-            ['field1', 'str', False, False, 10, 1.0, 5, 10, 7.5, [], True, True, False, {}]
-        ]
-        mock_analyzer_class.return_value = mock_analyzer
-        
-        # Replace the endpoint handler
-        client.application.view_functions['scan_data'] = lambda: scan_data(
-            mock_processor, mock_date_parser
-        )
-        
-        response = client.post(
-            "/api/v1/scan_data",
-            json=[{"name": "John", "email": "john@example.com"}],
-            query_string={"limit": 100}
-        )
-        
-        assert response.status_code == 200
-        data = response.get_json()
-        assert "results" in data
-        assert "data" in data
+def test_scan_data_endpoint_success(client):
+    response = client.post("/api/v1/scan_data", json=[{"name": "John", "email": "john@example.com"}], query_string={"limit": 100})
+    assert response.status_code == 200
+    report = response.get_json()
+    assert report["report_version"] == 2
+    assert {field["field"] for field in report["data"]} == {"name", "email"}
 
 
-def test_scan_data_comma_separated_langs_contexts(client, mock_processor, mock_date_parser):
-    """langs/contexts query params must be split on commas (consistent with CLI)."""
-    with patch('metacrafter.server.api.Analyzer') as mock_analyzer_class:
-        mock_analyzer = Mock()
-        mock_analyzer.analyze.return_value = [
-            ['field1', 'str', False, False, 10, 1.0, 5, 10, 7.5, [], True, True, False, {}]
-        ]
-        mock_analyzer_class.return_value = mock_analyzer
-
-        client.application.view_functions['scan_data'] = lambda: scan_data(
-            mock_processor, mock_date_parser
-        )
-
-        response = client.post(
-            "/api/v1/scan_data",
-            json=[{"name": "John"}],
-            query_string={"langs": "en,ru", "contexts": "pii,finance"},
-        )
-
-        assert response.status_code == 200
-        _, kwargs = mock_processor.match_dict.call_args
-        assert kwargs["filter_langs"] == ["en", "ru"]
-        assert kwargs["filter_contexts"] == ["pii", "finance"]
+def test_scan_data_comma_separated_langs_contexts(client):
+    response = client.post("/api/v1/scan_data", json=[{"name": "John", "email": "a@b.test"}], query_string={"langs": "en,ru", "contexts": "pii,finance", "confidence": "100", "fields": "email"})
+    assert response.status_code == 200
+    assert [f["field"] for f in response.get_json()["data"]] == ["email"]
 
 
 def test_scan_data_invalid_json(client):
@@ -112,7 +75,7 @@ def test_scan_data_missing_data(client):
         data="",
         content_type="application/json"
     )
-    assert response.status_code in [400, 500]  # Could be either depending on implementation
+    assert response.status_code == 400  # Could be either depending on implementation
 
 
 def test_metacrafter_app_initialization():

@@ -6,9 +6,9 @@ import zipfile
 from datetime import datetime, date
 from typing import List, Dict, Any, Optional, Union, Generator, Tuple
 
-import bson
 import orjson
 from qddate import DateParser
+from metacrafter.exceptions import require_extra
 
 DEFAULT_DICT_SHARE = 10
 # Note: This list is for backward compatibility with Analyzer class.
@@ -146,42 +146,7 @@ def guess_datatype(
     return attrs
 
 
-def dict_generator(
-    indict: Union[Dict[str, Any], Any], pre: Optional[List[str]] = None
-) -> Generator[List[Any], None, None]:
-    """Generate flattened key-value pairs from nested dictionary.
-    
-    Recursively traverses nested dictionaries and lists, generating
-    dot-separated key paths with their values. Skips MongoDB _id fields.
-    
-    Args:
-        indict: Dictionary or value to process
-        pre: Prefix list for nested keys (used in recursion)
-        
-    Yields:
-        Lists of [key_path..., value] where key_path is a list of keys
-    """
-    pre = pre[:] if pre else []
-    if isinstance(indict, dict):
-        for key, value in list(indict.items()):
-            if key == "_id":
-                continue
-            if isinstance(value, dict):
-                #                print 'dgen', value, key, pre
-                for d in dict_generator(value, pre + [key]):
-                    yield d
-            elif isinstance(value, list) or isinstance(value, tuple):
-                for v in value:
-                    if isinstance(v, dict):
-                        #                print 'dgen', value, key, pre
-                        for d in dict_generator(v, pre + [key]):
-                            yield d
-            #                    for d in dict_generator(v, [key] + pre):
-            #                        yield d
-            else:
-                yield pre + [key, value]
-    else:
-        yield indict
+from metacrafter.classify.utils import dict_generator
 
 
 class Analyzer:
@@ -317,6 +282,7 @@ class Analyzer:
                 for r in reader:
                     itemlist.append(r)
             elif f_type == "bson":
+                bson = require_extra("bson", "mongodb", "Reading BSON files")
                 bson_iter = bson.decode_file_iter(infile)
                 for r in bson_iter:
                     itemlist.append(r)
@@ -337,10 +303,6 @@ class Analyzer:
                 #            print(i)
                 k = ".".join(i[:-1])
                 if len(i) == 0:
-                    continue
-                if i[0].isdigit():
-                    continue
-                if len(i[0]) == 1:
                     continue
                 v = i[-1]
                 if k not in fielddata:

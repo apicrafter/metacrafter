@@ -14,7 +14,8 @@ def default_registry_url():
     Precedence: ``METACRAFTER_REGISTRY_URL`` environment variable, then the
     built-in :data:`BASE_REGISTRY_URL` default.
     """
-    return os.environ.get("METACRAFTER_REGISTRY_URL", BASE_REGISTRY_URL).rstrip("/")
+    from metacrafter.config import ConfigLoader
+    return ConfigLoader.get_registry_url().rstrip("/")
 
 
 class RegistryClient:
@@ -23,14 +24,18 @@ class RegistryClient:
     def __init__(self, connstr=None, preload=False):
         self.connstr = (connstr or default_registry_url()).rstrip("/")
         self.cached = None
+        self._cache = {}
         if preload:
             self.preload()
 
     def preload(self):
         """Preloads all semantic data types from registry"""
-        self.cached = requests.get(
-            f"{self.connstr}/registry.json", timeout=DEFAULT_TIMEOUT
-        ).json()
+        response = requests.get(f"{self.connstr}/registry.json", timeout=DEFAULT_TIMEOUT)
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("Registry response must be an object")
+        self.cached = payload
 
     def getlist(self):
         """List all semantic types ids"""
@@ -51,6 +56,15 @@ class RegistryClient:
         """Returns selected semantic data type"""
         if self.cached:
             return self.cached[datatype_id]
-        return requests.get(
-            f"{self.connstr}/datatype/{datatype_id}.json", timeout=DEFAULT_TIMEOUT
-        ).json()
+        if datatype_id in self._cache:
+            return self._cache[datatype_id]
+        from urllib.parse import quote
+        response = requests.get(f"{self.connstr}/datatype/{quote(datatype_id, safe='')}.json", timeout=DEFAULT_TIMEOUT)
+        response.raise_for_status()
+        payload = response.json()
+        if not isinstance(payload, dict):
+            raise ValueError("Datatype response must be an object")
+        if len(self._cache) >= 256:
+            self._cache.pop(next(iter(self._cache)))
+        self._cache[datatype_id] = payload
+        return payload

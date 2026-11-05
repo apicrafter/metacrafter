@@ -23,7 +23,7 @@ def sqlite_db(tmp_path):
     # Users table with PII data
     cursor.execute("""
         CREATE TABLE users (
-            id INTEGER PRIMARY KEY,
+            id INTEGER,
             name TEXT,
             email TEXT,
             created_at TEXT,
@@ -43,7 +43,7 @@ def sqlite_db(tmp_path):
     # Orders table
     cursor.execute("""
         CREATE TABLE orders (
-            order_id INTEGER PRIMARY KEY,
+            order_id INTEGER,
             customer_name TEXT,
             order_date TEXT,
             amount REAL,
@@ -91,7 +91,7 @@ def duckdb_db(tmp_path):
     # Create test tables
     conn.execute("""
         CREATE TABLE users (
-            id INTEGER PRIMARY KEY,
+            id INTEGER,
             name VARCHAR,
             email VARCHAR,
             created_at DATE,
@@ -108,7 +108,7 @@ def duckdb_db(tmp_path):
     
     conn.execute("""
         CREATE TABLE products (
-            product_id INTEGER PRIMARY KEY,
+            product_id INTEGER,
             product_name VARCHAR,
             price DECIMAL(10,2),
             category VARCHAR
@@ -148,7 +148,7 @@ class TestSQLiteDatabaseScanning:
         )
         
         # scan_db returns None when output is written, but we can verify no exceptions
-        assert result is None
+        assert isinstance(result, dict) and result["report_version"] == 2
     
     def test_scan_sqlite_with_output(self, sqlite_db, tmp_path):
         """Test SQLite scanning with JSON output file."""
@@ -245,7 +245,7 @@ class TestSQLiteDatabaseScanning:
             dformat="short"
         )
         
-        assert result is None
+        assert isinstance(result, dict) and result["report_version"] == 2
 
 
 class TestDuckDBDatabaseScanning:
@@ -271,7 +271,7 @@ class TestDuckDBDatabaseScanning:
         )
         
         # scan_db returns None when output is written
-        assert result is None
+        assert isinstance(result, dict) and result["report_version"] == 2
     
     def test_scan_duckdb_with_output(self, duckdb_db, tmp_path):
         """Test DuckDB scanning with output file."""
@@ -359,7 +359,7 @@ class TestDatabaseErrorHandling:
             dformat="short"
         )
         
-        assert result is None
+        assert isinstance(result, dict) and result["report_version"] == 2
         
         # Cleanup
         if db_path.exists():

@@ -4,27 +4,42 @@ description: "Install Metacrafter with pip and optional extras"
 ---
 # Installation
 
+### Requirements
+
+- Python 3.10 or newer (CI tests 3.10–3.13)
+- [metacrafter-rules](https://github.com/apicrafter/metacrafter-rules), the default rule pack. It is a
+  required dependency.
+
 ### Using pip
 
+`metacrafter-rules` is not published on PyPI yet. Install it from GitHub first, then
+install Metacrafter:
+
 ```bash
+pip install "metacrafter-rules @ git+https://github.com/apicrafter/metacrafter-rules"
 pip install metacrafter
 ```
 
 Optional features are available as install extras:
 
 ```bash
-pip install metacrafter               # core (built-in rules, CLI, server)
-pip install 'metacrafter[rules]'      # + extended rules pack (metacrafter-rules)
-pip install 'metacrafter[llm]'        # + LLM/RAG hybrid classification
-pip install 'metacrafter[datahub]'    # + DataHub export integration
-pip install 'metacrafter[openmetadata]'  # + OpenMetadata integration
-pip install 'metacrafter[all]'        # extended rules + all optional integrations
-pip install 'metacrafter[dev]'        # development + test tooling
+pip install 'metacrafter[formats]'       # Parquet, ORC, Excel, XML, lz4/zstd/brotli
+pip install 'metacrafter[mongodb]'       # metacrafter scan mongodb, .bson files
+pip install 'metacrafter[duckdb]'        # native DuckDB scanning, duckdb:// URLs
+pip install 'metacrafter[server]'        # metacrafter server run
+pip install 'metacrafter[llm]'           # LLM/RAG hybrid classification
+pip install 'metacrafter[datahub]'       # DataHub export
+pip install 'metacrafter[openmetadata]'  # OpenMetadata export
+pip install 'metacrafter[all]'           # every optional feature
+pip install 'metacrafter[dev]'           # tests and linters
 ```
 
-When `metacrafter[rules]` is installed, Metacrafter automatically loads the
-extended `metacrafter-rules` YAML pack. Set `auto_rules: false` in `.metacrafter`
-to use only paths you list explicitly.
+A command that needs a missing extra stops with an error naming the extra, for example
+`pip install 'metacrafter[mongodb]'`.
+
+The default rule pack comes from the installed `metacrafter-rules` package, not from the
+current directory. Set `auto_rules: false` in `.metacrafter` to load only the paths you
+list in `rulepath`.
 
 The stable public Python API is importable from the package:
 
@@ -36,25 +51,27 @@ from metacrafter import CrafterCmd
 
 | Extra | Enables |
 |-------|---------|
-| `rules` | Extended YAML rules and validators from [metacrafter-rules](https://github.com/apicrafter/metacrafter-rules) |
-| `llm` | LLM/RAG hybrid classification (OpenAI, ChromaDB, requests) |
+| `formats` | Parquet, ORC, Excel, XML and lz4/zstd/brotli files (via iterabledata) |
+| `mongodb` | MongoDB scanning and BSON files (`pymongo`) |
+| `duckdb` | Native DuckDB scanning (`duckdb`, `duckdb-engine`) |
+| `server` | HTTP API server |
+| `llm` | LLM/RAG hybrid classification (OpenAI, ChromaDB) |
 | `datahub` | Export scan results to DataHub (`acryl-datahub`) |
 | `openmetadata` | Export scan results to OpenMetadata |
-| `all` | Extended rules plus LLM and catalog integrations |
-| `dev` | pytest, coverage, flake8, black, mypy |
+| `rules` | No-op, kept for compatibility: `metacrafter-rules` is a core dependency |
+| `all` | Every optional feature above |
+| `dev` | pytest, coverage, ruff, mypy, build |
 
 ### From source
 
 ```bash
 git clone https://github.com/apicrafter/metacrafter.git
 cd metacrafter
-pip install -e '.[dev]'
+pip install "$(python scripts/ecosystem_ref.py metacrafter-rules)"
+pip install -e '.[dev,formats]'
 ```
 
-### Requirements
-
-- Python 3.8 or newer
-- CI currently tests Python 3.8–3.12
+`ecosystem.lock` pins the `metacrafter-rules` commit that CI is tested against.
 
 ### Next steps
 

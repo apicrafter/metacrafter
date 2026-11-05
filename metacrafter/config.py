@@ -2,28 +2,43 @@
 """Configuration management module for Metacrafter."""
 import logging
 import os
+import math
+from pathlib import Path
 from typing import List, Optional
 
 import yaml
-from pydantic import BaseModel, validator, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from metacrafter.exceptions import ConfigurationError
 
 DEFAULT_METACRAFTER_CONFIGFILE = ".metacrafter"
-DEFAULT_RULEPATH = ["rules"]
-
-
 def discover_extended_rules_path() -> Optional[str]:
-    """Return the metacrafter-rules rules directory when that package is installed."""
+    """Return the rules directory of the installed ``metacrafter-rules`` package.
+
+    ``metacrafter-rules`` is a required dependency and provides the default rule pack.
+    Returns ``None`` when the package is missing or ships no YAML rules.
+    """
     try:
         from metacrafterext.rules import rules_dir
     except ImportError:
         return None
 
-    path = rules_dir()
+    path = Path(rules_dir())
     if path.is_dir() and any(path.rglob("*.yaml")):
         return str(path)
     return None
+
+
+def default_rulepath() -> List[str]:
+    """Return the default rule pack location as a list (empty when unavailable)."""
+    path = discover_extended_rules_path()
+    return [path] if path else []
+
+
+# Resolved once at import time for callers that need a constant. The default pack
+# always comes from the installed ``metacrafter-rules`` package, never from the
+# current working directory.
+DEFAULT_RULEPATH: List[str] = default_rulepath()
 
 
 def _normalize_rulepath_key(path: str) -> str:
@@ -36,7 +51,12 @@ def build_rulepath(
     user_paths: Optional[List[str]] = None,
     auto_rules: bool = True,
 ) -> List[str]:
-    """Compose the effective rulepath from defaults, extended rules, and user paths."""
+    """Compose the effective rulepath.
+
+    Order: the ``metacrafter-rules`` default pack (unless ``auto_rules`` is false),
+    then user paths from ``.metacrafter`` and CLI ``--rulepath`` in the given order.
+    Later entries override earlier ones for the same rule id.
+    """
     ordered: List[str] = []
     seen = set()
 
@@ -48,33 +68,28 @@ def build_rulepath(
         ordered.append(path)
 
     if auto_rules:
-        for path in DEFAULT_RULEPATH:
-            add(path)
-        extended = discover_extended_rules_path()
-        if extended:
-            logging.info(
-                "Auto-appending extended rules from metacrafter-rules: %s",
-                extended,
+        default_pack = discover_extended_rules_path()
+        if default_pack:
+            logging.debug("Using default rule pack from metacrafter-rules: %s", default_pack)
+            add(default_pack)
+        else:
+            logging.warning(
+                "metacrafter-rules is not installed; no default rule pack is available"
             )
-            add(extended)
-        if user_paths:
-            for path in user_paths:
-                add(path)
-    else:
-        paths = user_paths if user_paths is not None else list(DEFAULT_RULEPATH)
-        for path in paths:
-            add(path)
-
+    for path in user_paths or []:
+        add(path)
     return ordered
 
 
 class MetacrafterConfig(BaseModel):
     """Pydantic model for Metacrafter configuration validation."""
 
-    rulepath: List[str] = Field(default_factory=lambda: DEFAULT_RULEPATH.copy())
+    model_config = ConfigDict(extra="ignore")
+
+    rulepath: List[str] = Field(default_factory=list)
     auto_rules: bool = Field(
         default=True,
-        description="When true, auto-append metacrafter-rules if installed",
+        description="When true, load the default rule pack from metacrafter-rules",
     )
 
     # Registry configuration
@@ -90,7 +105,8 @@ class MetacrafterConfig(BaseModel):
     llm_base_url: Optional[str] = None
     llm_min_confidence: Optional[float] = Field(default=50.0, description="Minimum confidence for LLM results (0-100)")
     
-    @validator('rulepath')
+    @field_validator('rulepath')
+    @classmethod
     def validate_rulepath(cls, v):
         """Validate that all rule paths exist.
         
@@ -103,8 +119,6 @@ class MetacrafterConfig(BaseModel):
         Raises:
             ConfigurationError: If any path does not exist
         """
-        if not v:
-            raise ValueError("rulepath cannot be empty")
         for path in v:
             if not isinstance(path, str):
                 raise ValueError(f"Rule path must be a string, got {type(path)}")
@@ -115,30 +129,29 @@ class MetacrafterConfig(BaseModel):
                 )
         return v
     
-    @validator('classification_mode')
+    @field_validator('classification_mode')
+    @classmethod
     def validate_classification_mode(cls, v):
         """Validate classification mode."""
         if v is not None and v.lower() not in ("rules", "llm", "hybrid"):
             raise ValueError(f"classification_mode must be one of: rules, llm, hybrid. Got: {v}")
         return v.lower() if v else "rules"
     
-    @validator('llm_provider')
+    @field_validator('llm_provider')
+    @classmethod
     def validate_llm_provider(cls, v):
         """Validate LLM provider."""
         if v is not None and v.lower() not in ("openai", "openrouter", "ollama", "lmstudio", "perplexity"):
             raise ValueError(f"llm_provider must be one of: openai, openrouter, ollama, lmstudio, perplexity. Got: {v}")
         return v.lower() if v else "openai"
     
-    @validator('llm_min_confidence')
+    @field_validator('llm_min_confidence')
+    @classmethod
     def validate_llm_min_confidence(cls, v):
         """Validate LLM minimum confidence."""
-        if v is not None and (v < 0 or v > 100):
+        if v is not None and (not math.isfinite(v) or v < 0 or v > 100):
             raise ValueError(f"llm_min_confidence must be between 0 and 100. Got: {v}")
         return v
-    
-    class Config:
-        """Pydantic configuration."""
-        extra = "ignore"  # Ignore extra fields in config file
 
 
 class ConfigLoader:
@@ -177,7 +190,7 @@ class ConfigLoader:
                     config = yaml.safe_load(f)
                     return config
             except yaml.YAMLError as e:
-                logging.error("Error parsing YAML config file %s: %s", filepath, e)
+                logging.error("Invalid YAML configuration (%s)", type(e).__name__)
                 raise
             except IOError as e:
                 logging.error("Error reading config file %s: %s", filepath, e)
@@ -212,7 +225,7 @@ class ConfigLoader:
             if isinstance(e, ConfigurationError):
                 raise
             raise ConfigurationError(
-                f"Invalid configuration: {e}. "
+                "Invalid configuration. "
                 "Please check your .metacrafter configuration file."
             ) from e
 
@@ -244,14 +257,20 @@ class ConfigLoader:
                 if isinstance(e, ConfigurationError):
                     raise
                 raise ConfigurationError(
-                    f"Invalid configuration: {e}. "
+                    "Invalid configuration. "
                     "Please check your .metacrafter configuration file."
                 ) from e
 
         if extra_paths:
             user_paths = (user_paths or []) + list(extra_paths)
 
-        return build_rulepath(user_paths=user_paths, auto_rules=auto_rules)
+        paths = build_rulepath(user_paths=user_paths, auto_rules=auto_rules)
+        if not paths:
+            raise ConfigurationError(
+                "No rule directories are configured. Install metacrafter-rules, "
+                "or set 'rulepath' in .metacrafter, or pass --rulepath."
+            )
+        return paths
     
     @staticmethod
     def get_registry_url() -> str:
@@ -277,7 +296,7 @@ class ConfigLoader:
                 if validated_config.registry_url:
                     return validated_config.registry_url.rstrip("/")
             except Exception as e:  # noqa: BLE001 - fall back to default on any error
-                logging.debug("Could not read registry_url from config: %s", e)
+                logging.debug("Registry configuration validation failed (%s)", type(e).__name__)
         return BASE_REGISTRY_URL.rstrip("/")
 
     @staticmethod
@@ -318,13 +337,13 @@ class ConfigLoader:
                 )
                 
                 if has_llm_config:
-                    logging.debug(f"Loaded LLM config: {llm_config}")
+                    logging.debug("Loaded LLM config (credentials redacted)")
                     return llm_config
                 else:
                     logging.debug("No LLM configuration found in config file")
             except Exception as e:
-                logging.warning(f"Error loading LLM config: {e}")
-                logging.debug(f"Config content: {config}", exc_info=True)
+                logging.warning("LLM configuration validation failed")
+                logging.debug("Configuration validation failed; contents omitted")
         else:
             logging.debug("No .metacrafter config file found")
         return None

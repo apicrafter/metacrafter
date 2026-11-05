@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 import pytest
 
+from metacrafter.exceptions import ConfigurationError
+
 from metacrafter.config import (
     ConfigLoader,
     DEFAULT_RULEPATH,
@@ -30,7 +32,7 @@ def test_discover_extended_rules_path_not_installed():
 
 def test_build_rulepath_without_extended():
     with patch("metacrafter.config.discover_extended_rules_path", return_value=None):
-        assert build_rulepath() == list(DEFAULT_RULEPATH)
+        assert build_rulepath() == []
 
 
 def test_build_rulepath_with_extended(tmp_path):
@@ -40,8 +42,7 @@ def test_build_rulepath_with_extended(tmp_path):
 
     with patch("metacrafter.config.discover_extended_rules_path", return_value=str(extended)):
         paths = build_rulepath()
-    assert paths[0] == "rules"
-    assert paths[1] == str(extended)
+    assert paths == [str(extended)]
 
 
 def test_build_rulepath_auto_rules_disabled():
@@ -61,13 +62,34 @@ def test_build_rulepath_appends_cli_paths(tmp_path):
     with patch("metacrafter.config.discover_extended_rules_path", return_value=str(extended)):
         paths = build_rulepath(user_paths=[str(cli_dir)], auto_rules=True)
 
-    assert paths == ["rules", str(extended), str(cli_dir)]
+    assert paths == [str(extended), str(cli_dir)]
 
 
-def test_get_rulepath_without_config(monkeypatch):
+def test_get_rulepath_without_config_uses_default_pack(monkeypatch, tmp_path):
+    pack = tmp_path / "pack"
+    pack.mkdir()
+    monkeypatch.setattr(ConfigLoader, "load_config", staticmethod(lambda: None))
+    with patch("metacrafter.config.discover_extended_rules_path", return_value=str(pack)):
+        assert ConfigLoader.get_rulepath() == [str(pack)]
+
+
+def test_get_rulepath_fails_when_nothing_resolves(monkeypatch):
     monkeypatch.setattr(ConfigLoader, "load_config", staticmethod(lambda: None))
     with patch("metacrafter.config.discover_extended_rules_path", return_value=None):
-        assert ConfigLoader.get_rulepath() == list(DEFAULT_RULEPATH)
+        with pytest.raises(ConfigurationError, match="No rule directories"):
+            ConfigLoader.get_rulepath()
+
+
+def test_local_rules_folder_is_not_loaded_implicitly(monkeypatch, tmp_path):
+    (tmp_path / "rules").mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(ConfigLoader, "load_config", staticmethod(lambda: None))
+    pack = tmp_path / "pack"
+    pack.mkdir()
+    with patch("metacrafter.config.discover_extended_rules_path", return_value=str(pack)):
+        paths = ConfigLoader.get_rulepath()
+    assert "rules" not in paths
+    assert str(tmp_path / "rules") not in paths
 
 
 def test_get_rulepath_auto_rules_false_from_config(monkeypatch, tmp_path):
@@ -95,16 +117,17 @@ def test_get_rulepath_composes_cli_override(monkeypatch, tmp_path):
     monkeypatch.setattr(ConfigLoader, "load_config", staticmethod(lambda: None))
     with patch("metacrafter.config.discover_extended_rules_path", return_value=None):
         paths = ConfigLoader.get_rulepath(extra_paths=[str(cli_dir)])
-    assert paths == ["rules", str(cli_dir)]
+    assert paths == [str(cli_dir)]
 
 
 def test_metacrafter_config_auto_rules_default():
-    config = MetacrafterConfig(rulepath=["rules"])
+    config = MetacrafterConfig()
     assert config.auto_rules is True
+    assert config.rulepath == []
 
 
-def test_duplicate_rule_keys_do_not_crash(tmp_path, caplog):
-    """Loading built-in and extended paths with duplicate rulekeys only warns."""
+def test_later_rule_overrides_earlier_definition(tmp_path, caplog):
+    """A later rulepath entry overrides an earlier rule with the same id."""
     from metacrafter.classify.processor import RulesProcessor
 
     builtin = tmp_path / "builtin"
@@ -128,11 +151,14 @@ rules:
     (builtin / "a.yaml").write_text(rule_yaml, encoding="utf-8")
     (extended / "b.yaml").write_text(rule_yaml, encoding="utf-8")
 
+    caplog.set_level("INFO")
     processor = RulesProcessor()
     processor.import_rules_path(str(builtin), recursive=True)
     processor.import_rules_path(str(extended), recursive=True)
     assert processor._RulesProcessor__rule_keys == ["shared_rule"]
-    assert any("Duplicate rulekey 'shared_rule'" in record.message for record in caplog.records)
+    assert len(processor.field_rules) == 1
+    assert processor.field_rules[0]["source"].endswith("b.yaml")
+    assert any("overrides" in record.message for record in caplog.records)
 
 
 @pytest.mark.skipif(
