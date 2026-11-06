@@ -4,14 +4,6 @@
       "precision": 0.0,
       "recall": null
     },
-    "aebankaccount": {
-      "precision": 0.0,
-      "recall": null
-    },
-    "aeiban": {
-      "precision": 0.0,
-      "recall": null
-    },
     "bankaccount": {
       "precision": 0.0,
       "recall": null
@@ -40,18 +32,6 @@
       "precision": 0.0,
       "recall": null
     },
-    "de_iban": {
-      "precision": 0.0,
-      "recall": null
-    },
-    "egbankaccount": {
-      "precision": 0.0,
-      "recall": null
-    },
-    "egiban": {
-      "precision": 0.0,
-      "recall": null
-    },
     "email": {
       "precision": 1.0,
       "recall": 1.0
@@ -69,22 +49,6 @@
       "recall": 1.0
     },
     "okvalpha": {
-      "precision": 0.0,
-      "recall": null
-    },
-    "rufias": {
-      "precision": 0.0,
-      "recall": null
-    },
-    "sabankaccount": {
-      "precision": 0.0,
-      "recall": null
-    },
-    "saiban": {
-      "precision": 0.0,
-      "recall": null
-    },
-    "trbankaccount": {
       "precision": 0.0,
       "recall": null
     },

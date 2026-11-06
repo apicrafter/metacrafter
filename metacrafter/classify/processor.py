@@ -12,6 +12,7 @@ from typing import List, Dict, Any, Optional, Union, Set, Callable
 
 import yaml
 
+from metacrafter.engine.registry_detectors import detector_name_evidence
 from metacrafter.engine.scoring import data_score, field_score, priority_weight
 from pyparsing import (
     LineEnd,
@@ -944,10 +945,16 @@ class RulesProcessor:
                 m_result.rejected = []
             shortfield = field.rsplit(".", 1)[-1].strip()
             # Match field name first
-            field_hits: Dict[str, float] = {}
+            field_found: List[Dict[str, Any]] = []
             for rule in field_rules:
                 if not self._field_rule_matches(rule, shortfield, field):
                     continue
+                field_found.append(rule)
+                if stop_on_match:
+                    break
+            field_found = self._drop_country_name_variants(field_found, m_result, explain)
+            field_hits: Dict[str, float] = {}
+            for rule in field_found:
                 field_hits[rule["key"]] = max(
                     field_hits.get(rule["key"], 0.0), priority_weight(rule.get("priority"))
                 )
@@ -966,8 +973,6 @@ class RulesProcessor:
                         },
                     )
                 )
-                if stop_on_match:
-                    break
             data = data_columns[field]
             slice = data[0:limit]
             min_len = 0
@@ -1050,7 +1055,17 @@ class RulesProcessor:
                 #                print(field)
                 #                for rule in rules:
                 #                    print('- %s' %(rule['key']))
+                data_found = []
                 for rule in rules:
+                    name_weight = field_hits.get(rule["key"], 0.0)
+                    if rule.get("derived"):
+                        if not name_weight and detector_name_evidence(rule, shortfield):
+                            name_weight = 1.0
+                        gate = self._detector_gate(rule, name_weight)
+                        if gate:
+                            if explain:
+                                m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": 0.0, "matched_count": 0, "considered_count": 0, "reason": gate})
+                            continue
                     success = 0
                     pattern_hits = 0
                     empty = 0
@@ -1079,7 +1094,7 @@ class RulesProcessor:
                         pattern_hits=pattern_hits,
                         considered=considered,
                         specificity=rule.get("specificity", 1.0),
-                        name_weight=field_hits.get(rule["key"], 0.0),
+                        name_weight=name_weight,
                         country_match=self._country_match(rule),
                         draft=rule.get("registry_status") == "draft",
                         legacy=legacy_scoring,
@@ -1091,22 +1106,23 @@ class RulesProcessor:
                     evidence = scored["evidence"]
                     evidence["rule_source"] = rule.get("source")
                     if success and result >= confidence:
-                        m_result.add(
-                            RuleResult(
-                                ruleid=rule["id"],
-                                confidence=result,
-                                dataclass=rule["key"],
-                                ruletype=rule.get("ruletype", "data"),
-                                evidence=evidence,
-                                is_pii=rule_is_pii(rule),
-                                pii_source=rule_pii_source(rule),
-                            )
+                        match = RuleResult(
+                            ruleid=rule["id"],
+                            confidence=result,
+                            dataclass=rule["key"],
+                            ruletype=rule.get("ruletype", "data"),
+                            evidence=evidence,
+                            is_pii=rule_is_pii(rule),
+                            pii_source=rule_pii_source(rule),
                         )
+                        m_result.add(match)
+                        data_found.append((rule, match, name_weight))
                         if stop_on_match:
                             break
 
                     elif explain:
                         m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": result, "matched_count": success, "considered_count": considered, "reason": "No matching values" if not success else "Below confidence threshold"})
+                self._drop_shadowed_country_matches(data_found, m_result, explain)
 
             if m_result.is_empty() and parse_dates and field not in nonstr and dateparser is not None:
                 total = len(slice)
@@ -1232,6 +1248,86 @@ class RulesProcessor:
             return None
         wanted = {c.upper() for c in self.preset_countries}
         return bool(wanted & {c.upper() for c in countries})
+
+    @staticmethod
+    def _rule_countries(rule: Dict[str, Any]) -> Set[str]:
+        """Countries a rule is specific to; empty for universal rules (``country_code: xx``)."""
+        codes = rule.get("country_code") or rule.get("registry_country") or []
+        codes = {str(code).lower() for code in codes if code}
+        return set() if "xx" in codes else codes
+
+    def _detector_gate(self, rule: Dict[str, Any], name_weight: float) -> Optional[str]:
+        """Reason a registry-derived detector may not report a match on this field, or None.
+
+        Without field-name evidence a detector is skipped when its regexp is generic (it
+        accepts a large share of ordinary tokens) or when its datatype is country-specific
+        and the scan country differs, or is unknown and the record has no checksum.
+        """
+        if name_weight:
+            return None
+        if rule.get("needs_name_evidence"):
+            return "Generic pattern without field-name evidence"
+        if rule.get("registry_country"):
+            country = self._country_match(rule)
+            if country is False:
+                return "Country-specific type outside the scan countries"
+            if country is None and "vfunc" not in rule:
+                return "Country-specific type without country or field-name evidence"
+        return None
+
+    def _drop_country_name_variants(
+        self, found: List[Dict[str, Any]], m_result: ColumnMatchResult, explain: bool
+    ) -> List[Dict[str, Any]]:
+        """Drop country-specific field-name matches that other name matches already cover.
+
+        Applies when no scan country is set. A country-specific rule (its rule file has a
+        country other than ``xx``) is dropped when a universal rule matched the field with
+        at least its priority weight, or when any rule matched with a higher weight: a field
+        ``city`` matched by a universal rule does not also report ``egcity`` or ``trcity``.
+        """
+        if self.preset_countries or len(found) < 2:
+            return found
+        best_any = max(priority_weight(r.get("priority")) for r in found)
+        universal = [priority_weight(r.get("priority")) for r in found if not self._rule_countries(r)]
+        best_universal = max(universal) if universal else None
+        kept = []
+        for rule in found:
+            weight = priority_weight(rule.get("priority"))
+            if self._rule_countries(rule) and (
+                weight < best_any or (best_universal is not None and weight <= best_universal)
+            ):
+                if explain:
+                    m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": 0.0, "matched_count": 0, "considered_count": 0, "reason": "Country-specific field name covered by a universal rule"})
+                continue
+            kept.append(rule)
+        return kept
+
+    def _drop_shadowed_country_matches(self, found, m_result: ColumnMatchResult, explain: bool) -> None:
+        """Drop country-specific value matches that only repeat a universal match.
+
+        Applies when no scan country is set, to curated rules without a validator and
+        without field-name evidence: ``rufias`` (a GUID pattern) is dropped when ``uuid``
+        matched the same values with at least the same confidence.
+        """
+        if self.preset_countries or not found:
+            return
+        universal = [match.confidence for rule, match, _ in found if not self._rule_countries(rule)]
+        if not universal:
+            return
+        best = max(universal)
+        for rule, match, name_weight in found:
+            if (
+                rule.get("derived")
+                or name_weight
+                or not self._rule_countries(rule)
+                or rule.get("match") == "func"
+                or "vfunc" in rule
+                or match.confidence > best
+            ):
+                continue
+            m_result.matches.remove(match)
+            if explain:
+                m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": match.confidence, "matched_count": match.evidence.get("matched_count", 0) if match.evidence else 0, "considered_count": match.evidence.get("considered_count", 0) if match.evidence else 0, "reason": "Country-specific pattern repeats a universal match"})
 
     def qddate_pattern(self, date_format: Optional[str]) -> Optional[str]:
         """Registry pattern record id for a qddate format key, via the registry crosswalk."""

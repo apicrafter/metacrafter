@@ -18,6 +18,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Package metadata uses the SPDX license expression `Apache-2.0` (PEP 639); building needs
   setuptools 77 or newer.
 
+### Fixed
+
+- **Fewer false positives from registry-derived detectors.** Registry specificity is
+  measured against other records' examples, which are mostly long identifiers, so
+  patterns such as `\d{1,4}` (`flightnumber`), `\d{4}` (`am_postal_code`) or
+  `[A-Za-z]{2,63}` (`tld`) passed the `stable` threshold and matched every counter, year
+  and plain word. A detector whose regexp accepts at least 30% of a class of ordinary
+  tokens (integers of one length, words, short acronyms) and has no checksum now needs
+  field-name evidence: a field rule for the datatype, or the registry id or an alias in
+  the field name. Country-specific detectors without field-name evidence are skipped when
+  the scan country differs, or is unknown and the record has no checksum. `--explain`
+  lists the reasons. On `armsis` GeoNode metadata (105 fields, 59 labelled) false
+  positives fell from 89 to 1 with no labelled field lost; across seven other Armenian
+  open-data catalogues matches fell from 961 to 371, and none of those reviewed was a
+  true positive.
+- **Country-specific duplicates of universal matches.** Without `--country-codes`, a
+  field-name match from a country-specific rule file is dropped when a universal rule
+  matched the field with at least its priority, or any rule matched with a higher
+  priority (`city` no longer also reports `egcity`, `idcity`, `trcity`); a value match
+  from a country-specific rule without a validator or field-name evidence is dropped when
+  a universal rule matched the same values (`uuid` no longer also reports `rufias`).
+  `tests/benchmark/baseline.json` loses nine datatypes that only had false positives.
+
 ### Performance
 
 - **Bundled registry snapshot.** The package ships the registry snapshot recorded in

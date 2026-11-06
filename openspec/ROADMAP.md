@@ -66,6 +66,11 @@ pinned GitHub release; the registry is read from its website. Since
 release archive, and since `update-bundle-registry-snapshot` (2026-11-06) the registry
 snapshot recorded in `ecosystem.lock`, so the first scan downloads neither.
 
+`update-detector-false-positive-gates` (2026-11-06): registry-derived detectors with
+generic regexps (`\d{1,4}`, `[A-Za-z]{2,63}`, ...) and country-specific detectors need
+field-name evidence; country-specific duplicates of universal matches are dropped when no
+scan country is set. Measured on hand-labelled GeoNode metadata: 89 false matches to 1.
+
 Blocked outside this repository:
 - **Archive the `metacrafter-llm` repository.** Owner action.
 - **Fix the 32 unresolved rule keys** in `metacrafter-rules`.

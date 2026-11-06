@@ -1,0 +1,229 @@
+"""False-positive gates: generic registry patterns, country-specific types, name variants."""
+
+import pytest
+
+from metacrafter.classify.processor import RulesProcessor
+from metacrafter.engine.background import background_broadness, is_generic
+from metacrafter.engine.registry_detectors import detector_name_evidence
+from metacrafter.registry.adapter import RegistryAdapter, SnapshotRegistry
+
+UUID_RE = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+RECORDS = [
+    # A real registry regexp that accepts any 1-4 digit number.
+    {"id": "flightnumber", "status": "stable", "kind": "datatype", "name": "Flight number",
+     "regexp": "([A-Z]{2,3}|[A-Z][0-9]|[0-9][A-Z])\\d{1,4}[A-Z]?|\\d{1,4}"},
+    {"id": "am_postal_code", "status": "stable", "kind": "datatype", "name": "Armenian postal code",
+     "regexp": "\\d{4}", "country": ["AM"]},
+    {"id": "tld", "status": "stable", "kind": "datatype", "name": "Top-level domain",
+     "regexp": "^\\.?(?:[A-Za-z]{2,63}|[Xx][Nn]--[A-Za-z0-9-]{1,59})$"},
+    {"id": "de_tax_code", "status": "stable", "kind": "datatype", "name": "German tax code",
+     "regexp": "DE\\d{9}", "country": ["DE"]},
+]
+ALIASES = {"domain_zone": "tld"}
+
+PLACEHOLDER = """
+  placeholder:
+    key: email
+    match: text
+    type: field
+    rule: email
+"""
+
+
+def ruleset(body, country=None):
+    head = "format_version: 2\nname: t\ndescription: t\ncontext: common\nlang: common\n"
+    if country:
+        head += f"country_code: {country}\n"
+    return head + "rules:\n" + body
+
+
+@pytest.fixture
+def adapter():
+    registry = SnapshotRegistry(datatypes=RECORDS, aliases=ALIASES, manifest={"version": "test"}, source="test")
+    return RegistryAdapter._wrap(registry, None, "test")
+
+
+def processor_with(tmp_path, files, adapter=None, countries=None):
+    processor = RulesProcessor(countries=countries)
+    for index, (body, country) in enumerate(files):
+        path = tmp_path / f"r{index}.yaml"
+        path.write_text(ruleset(body, country), encoding="utf-8")
+        processor.import_rules(str(path))
+    if adapter is not None:
+        processor.bind_registry(adapter, detectors="stable")
+    return processor
+
+
+def scan(processor, rows, explain=False):
+    result = processor.match_dict(rows, confidence=5, parse_dates=False, explain=explain)
+    return {r.field: r for r in result.results}
+
+
+def classes(column):
+    return {m.dataclass for m in column.matches}
+
+
+# --- background broadness ---------------------------------------------------
+
+@pytest.mark.parametrize("regexp", ["\\d{1,4}", "[1234]", RECORDS[2]["regexp"], "[A-Z]{2}[A-Z0-9]{0,3}"])
+def test_generic_patterns(regexp):
+    assert is_generic(regexp)
+
+
+@pytest.mark.parametrize("regexp", [UUID_RE, "[A-Z]{2}\\d{2}[A-Z0-9]{11,30}", "DE\\d{9}", "[a-z0-9.]+@[a-z0-9.]+"])
+def test_distinctive_patterns(regexp):
+    assert not is_generic(regexp)
+
+
+def test_background_broadness_reports_class():
+    assert background_broadness("\\d{4}") == (1.0, "int4")
+    assert background_broadness("(") == (0.0, None)
+
+
+# --- generic registry detectors ---------------------------------------------
+
+def test_generic_detector_needs_field_name_evidence(tmp_path, adapter):
+    processor = processor_with(tmp_path, [(PLACEHOLDER, None)], adapter)
+    detector = next(r for r in processor.data_rules if r["id"] == "registry:flightnumber")
+    assert detector["needs_name_evidence"] and detector["background_class"] == "int1"
+    rows = [{"layers_count": str(n), "flight_number": str(1000 + n)} for n in range(1, 30)]
+    columns = scan(processor, rows, explain=True)
+    assert "flightnumber" not in classes(columns["layers_count"])
+    assert {"ruleid": "registry:flightnumber", "reason": "Generic pattern without field-name evidence"}.items() <= next(
+        r for r in columns["layers_count"].rejected if r["ruleid"] == "registry:flightnumber"
+    ).items()
+    flight = [m for m in columns["flight_number"].matches if m.dataclass == "flightnumber"]
+    assert flight and flight[0].evidence["name_score"] == 1.0
+
+
+def test_generic_word_detector_ignores_plain_words(tmp_path, adapter):
+    processor = processor_with(tmp_path, [(PLACEHOLDER, None)], adapter)
+    rows = [{"workspace": "geonode", "domain_zone": "com"}, {"workspace": "local", "domain_zone": "org"}]
+    columns = scan(processor, rows)
+    assert "tld" not in classes(columns["workspace"])
+    assert "tld" in classes(columns["domain_zone"])  # registry alias names the type
+
+
+def test_name_evidence_skips_stop_tokens_and_country_codes(tmp_path, adapter):
+    processor = processor_with(tmp_path, [(PLACEHOLDER, None)], adapter)
+    rule = next(r for r in processor.data_rules if r["id"] == "registry:am_postal_code")
+    assert rule["name_keys"] == [("postal",)]
+    assert detector_name_evidence(rule, "postal_code")
+    assert detector_name_evidence(rule, "postalCode")
+    assert detector_name_evidence(rule, "postalindex")
+    assert not detector_name_evidence(rule, "code")
+    assert not detector_name_evidence(rule, "am_id")
+
+
+def test_year_column_is_not_a_postal_code(tmp_path, adapter):
+    processor = processor_with(tmp_path, [(PLACEHOLDER, None)], adapter, countries=["am"])
+    columns = scan(processor, [{"edition": "2020"}, {"edition": "2021"}])
+    assert "am_postal_code" not in classes(columns["edition"])
+    columns = scan(processor, [{"postal_code": "0001"}, {"postal_code": "3101"}])
+    assert "am_postal_code" in classes(columns["postal_code"])
+
+
+# --- country-specific registry detectors ------------------------------------
+
+def test_country_detector_without_checksum_needs_country(tmp_path, adapter):
+    rows = [{"x": "DE123456789"}, {"x": "DE987654321"}]
+    unknown = processor_with(tmp_path, [(PLACEHOLDER, None)], adapter)
+    assert "de_tax_code" not in classes(scan(unknown, rows)["x"])
+    other = processor_with(tmp_path, [], adapter, countries=["fr"])
+    assert "de_tax_code" not in classes(scan(other, rows)["x"])
+    same = processor_with(tmp_path, [], adapter, countries=["de"])
+    assert "de_tax_code" in classes(scan(same, rows)["x"])
+
+
+def test_country_detector_kept_with_field_name_evidence(tmp_path, adapter):
+    processor = processor_with(tmp_path, [(PLACEHOLDER, None)], adapter)
+    rows = [{"de_tax_code": "DE123456789"}, {"de_tax_code": "DE987654321"}]
+    assert "de_tax_code" in classes(scan(processor, rows)["de_tax_code"])
+
+
+# --- curated rules ----------------------------------------------------------
+
+CITY = """
+  cityfield:
+    key: city
+    match: text
+    type: field
+    rule: city
+    priority: 1
+"""
+EGCITY = """
+  egcityfield:
+    key: egcity
+    match: text
+    type: field
+    rule: city
+    priority: 3
+"""
+AUNAME = """
+  aupersonname:
+    key: person_name
+    match: text
+    type: field
+    rule: full_name
+    priority: 1
+"""
+RUNAME = """
+  rufullname:
+    key: rusfullname
+    match: text
+    type: field
+    rule: full_name
+    priority: 3
+"""
+
+
+def test_country_name_variant_dropped_when_universal_rule_matches(tmp_path):
+    processor = processor_with(tmp_path, [(CITY, "xx"), (EGCITY, "eg")])
+    columns = scan(processor, [{"city": ""}], explain=True)
+    assert classes(columns["city"]) == {"city"}
+    assert any(r["ruleid"] == "egcityfield" for r in columns["city"].rejected)
+
+
+def test_weaker_country_name_variant_dropped(tmp_path):
+    processor = processor_with(tmp_path, [(AUNAME, "au"), (RUNAME, "ru")])
+    assert classes(scan(processor, [{"full_name": "x"}])["full_name"]) == {"person_name"}
+
+
+def test_country_name_variant_kept_alone(tmp_path):
+    processor = processor_with(tmp_path, [(EGCITY, "eg")])
+    assert classes(scan(processor, [{"city": "Cairo"}])["city"]) == {"egcity"}
+
+
+UUIDRULE = f"""
+  uuidbyvalue:
+    key: uuid
+    match: regex
+    type: data
+    rule: '{UUID_RE}'
+"""
+FIAS = f"""
+  rufiasvalue:
+    key: rufias
+    match: regex
+    type: data
+    rule: '{UUID_RE}'
+  rufiasfield:
+    key: rufias
+    match: text
+    type: field
+    rule: aoguid
+"""
+GUIDS = ["d87bcaa2-3c7e-11eb-9e5f-0242ac130008", "e2c3a00c-3d55-11eb-9088-0242ac130008"]
+
+
+def test_country_pattern_repeating_universal_match_is_dropped(tmp_path):
+    processor = processor_with(tmp_path, [(UUIDRULE, "xx"), (FIAS, "ru")])
+    columns = scan(processor, [{"uuid": g, "aoguid": g} for g in GUIDS], explain=True)
+    assert classes(columns["uuid"]) == {"uuid"}
+    assert any(r["reason"] == "Country-specific pattern repeats a universal match" for r in columns["uuid"].rejected)
+    assert {"uuid", "rufias"} <= classes(columns["aoguid"])  # the field name supports rufias
+
+
+def test_country_pattern_kept_when_scan_country_matches(tmp_path):
+    processor = processor_with(tmp_path, [(FIAS, "ru")], countries=["ru"])
+    assert "rufias" in classes(scan(processor, [{"id": g} for g in GUIDS])["id"])
