@@ -1,9 +1,9 @@
 """Default rule pack from GitHub releases of ``apicrafter/metacrafter-rules``.
 
-The rule pack is not a Python dependency. Metacrafter downloads the release archive
-pinned below, verifies its SHA-256, unpacks it into the cache and loads ``rules/``. The
-pack's Python validators (``metacrafterext``) become importable from the unpacked
-archive.
+The rule pack is not a Python dependency. The package ships a copy of the release archive
+pinned below (``bundled/``), so the default pack needs no network access. Metacrafter
+verifies the archive's SHA-256, unpacks it into the cache and loads ``rules/``. The pack's
+Python validators (``metacrafterext``) become importable from the unpacked archive.
 
 Source order (first match wins):
 
@@ -11,7 +11,8 @@ Source order (first match wins):
    an unpacked pack (a directory with ``rules/``), or a plain directory of rule YAML;
 2. an installed ``metacrafterext`` package (development installs);
 3. the cached release in ``~/.cache/metacrafter/rules/<tag>/``;
-4. a download of the release, unless ``rules_offline`` / ``METACRAFTER_RULES_OFFLINE``.
+4. the bundled archive, for the pinned release and hash only;
+5. a download of the release, unless ``rules_offline`` / ``METACRAFTER_RULES_OFFLINE``.
 
 ``rules_release`` selects another release tag and needs ``rules_sha256``; an unpinned
 release is refused.
@@ -41,6 +42,8 @@ DEFAULT_SHA256 = "6828315bda4e36ba7afcb24ba949bcaea73faff4b08cc2b4f2d8609b26f6d9
 MARKER = ".metacrafter-pack.json"
 DOWNLOAD_TIMEOUT = 60.0
 MAX_ARCHIVE_BYTES = 50 * 1024 * 1024
+#: Copies of pinned release archives shipped with the package (scripts/bundle_rule_pack.py).
+BUNDLED_DIR = Path(__file__).resolve().parent / "bundled"
 
 
 class RulePackError(RuntimeError):
@@ -59,6 +62,11 @@ class RulePack:
 
 def archive_url(tag: str, repo: str = RULES_REPO) -> str:
     return f"https://github.com/{repo}/archive/refs/tags/{tag}.tar.gz"
+
+
+def bundled_archive(tag: str = DEFAULT_RELEASE, repo: str = RULES_REPO) -> Path:
+    """Path of the bundled copy of a release archive (it exists for the pinned release)."""
+    return BUNDLED_DIR / f"{repo.rsplit('/', 1)[-1]}-{tag}.tar.gz"
 
 
 def cache_root() -> Path:
@@ -136,21 +144,13 @@ def _download(url: str, timeout: float) -> bytes:
     return data
 
 
-def fetch_pack(tag: str = DEFAULT_RELEASE, sha256: str = DEFAULT_SHA256, *, repo: str = RULES_REPO,
-               force: bool = False, timeout: float = DOWNLOAD_TIMEOUT) -> RulePack:
-    """Download, verify and unpack a release into the cache; return the pack."""
-    if not force:
-        cached = _cached_pack(tag, sha256)
-        if cached is not None:
-            return cached
-    url = archive_url(tag, repo)
-    logger.info("Downloading rule pack %s from %s", tag, url)
-    try:
-        data = _download(url, timeout)
-    except RulePackError:
-        raise
-    except Exception as exc:  # noqa: BLE001
-        raise RulePackError(f"Could not download the rule pack {tag} from {url}: {exc}") from exc
+def _install(data: bytes, tag: str, sha256: str, repo: str, source: str,
+             replace: bool = False) -> RulePack:
+    """Verify an archive, unpack it into the cache and return the pack.
+
+    ``replace`` overwrites a cached copy of the same release; otherwise a copy that another
+    process installed meanwhile is kept.
+    """
     actual = hashlib.sha256(data).hexdigest()
     if actual != sha256:
         raise RulePackError(
@@ -172,13 +172,69 @@ def fetch_pack(tag: str = DEFAULT_RELEASE, sha256: str = DEFAULT_SHA256, *, repo
             json.dumps({"repo": repo, "tag": tag, "sha256": sha256, "root": top}), "utf-8"
         )
         target = root_dir / tag
+        if not replace:
+            existing = _cached_pack(tag, sha256)
+            if existing is not None:
+                return existing
         if target.exists():
             shutil.rmtree(target)
-        os.replace(staging, target)
-    except Exception:
-        shutil.rmtree(staging, ignore_errors=True)
+        try:
+            os.replace(staging, target)
+        except OSError:
+            # Another process installed the pack between rmtree() and replace().
+            existing = _cached_pack(tag, sha256)
+            if existing is None:
+                raise
+            return existing
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
+    return _pack_from_dir(target / top, source, tag)
+
+
+def _bundled_pack(tag: str, sha256: str, repo: str = RULES_REPO) -> Optional[RulePack]:
+    """Unpack the bundled copy of the pinned release; ``None`` for other releases."""
+    if (tag, sha256, repo) != (DEFAULT_RELEASE, DEFAULT_SHA256, RULES_REPO):
+        return None
+    path = bundled_archive(tag, repo)
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return None
+    try:
+        return _install(data, tag, sha256, repo, f"bundled:{path}")
+    except RulePackError as exc:
+        logger.warning("Bundled rule pack %s is unusable: %s", path, exc)
+        return None
+
+
+def _download_pack(tag: str, sha256: str, repo: str, timeout: float,
+                   replace: bool = False) -> RulePack:
+    url = archive_url(tag, repo)
+    logger.info("Downloading rule pack %s from %s", tag, url)
+    try:
+        data = _download(url, timeout)
+    except RulePackError:
         raise
-    return _pack_from_dir(target / top, f"download:{url}", tag)
+    except Exception as exc:  # noqa: BLE001
+        raise RulePackError(f"Could not download the rule pack {tag} from {url}: {exc}") from exc
+    return _install(data, tag, sha256, repo, f"download:{url}", replace=replace)
+
+
+def fetch_pack(tag: str = DEFAULT_RELEASE, sha256: str = DEFAULT_SHA256, *, repo: str = RULES_REPO,
+               force: bool = False, timeout: float = DOWNLOAD_TIMEOUT) -> RulePack:
+    """Return a verified pack from the cache, the bundled archive or a download.
+
+    ``force`` downloads the release from GitHub even when it is cached or bundled.
+    """
+    if not force:
+        cached = _cached_pack(tag, sha256)
+        if cached is not None:
+            return cached
+        bundled = _bundled_pack(tag, sha256, repo)
+        if bundled is not None:
+            return bundled
+    return _download_pack(tag, sha256, repo, timeout, replace=force)
 
 
 def resolve_pack(*, rules_dir: Optional[str] = None, release: Optional[str] = None,
@@ -207,9 +263,12 @@ def resolve_pack(*, rules_dir: Optional[str] = None, release: Optional[str] = No
     cached = _cached_pack(tag, digest)
     if cached is not None:
         return cached
+    bundled = _bundled_pack(tag, digest)
+    if bundled is not None:
+        return bundled
     if offline:
         return None
-    return fetch_pack(tag, digest)
+    return _download_pack(tag, digest, RULES_REPO, DOWNLOAD_TIMEOUT)
 
 
 def activate(pack: RulePack) -> None:

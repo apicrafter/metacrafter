@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The pinned rule pack ships with the package.** `metacrafter/rules/bundled/` holds the
+  archive of the pinned metacrafter-rules release (`v0.0.2`, 284 KB), verified with the same
+  SHA-256. The first scan unpacks it into the cache instead of downloading it from GitHub:
+  0.07 s instead of 20–70 s. `rules_offline` works without `metacrafter rules fetch`.
+  `metacrafter rules fetch --force` and `rules_release` still download from GitHub.
+  After a release bump, run `scripts/bundle_rule_pack.py`.
 - Package metadata uses the SPDX license expression `Apache-2.0` (PEP 639); building needs
   setuptools 77 or newer.
 

@@ -17,14 +17,31 @@ from metacrafter.config import (
 
 
 def test_discover_extended_rules_path_offline_without_pack(monkeypatch, tmp_path):
-    """No rules_dir, no installed package, no cache and offline: no default pack."""
+    """No rules_dir, no installed package, no cache, a release that is not bundled, offline."""
     import metacrafter.rules.pack as pack
 
     monkeypatch.delenv("METACRAFTER_RULES_DIR", raising=False)
     monkeypatch.setenv("METACRAFTER_RULES_OFFLINE", "1")
+    monkeypatch.setenv("METACRAFTER_RULES_RELEASE", "v9.9.9")
+    monkeypatch.setenv("METACRAFTER_RULES_SHA256", "0" * 64)
     monkeypatch.setattr(pack, "_installed_pack", lambda: None)
     monkeypatch.setattr(ConfigLoader, "load_config", staticmethod(lambda: None))
     assert discover_extended_rules_path() is None
+
+
+def test_discover_extended_rules_path_offline_uses_bundled_pack(monkeypatch):
+    """Offline with an empty cache: the pinned release comes from the bundled archive."""
+    import sys
+
+    import metacrafter.rules.pack as pack
+
+    monkeypatch.setattr(sys, "path", list(sys.path))  # activate() adds the unpacked pack
+    monkeypatch.delenv("METACRAFTER_RULES_DIR", raising=False)
+    monkeypatch.setenv("METACRAFTER_RULES_OFFLINE", "1")
+    monkeypatch.setattr(pack, "_installed_pack", lambda: None)
+    monkeypatch.setattr(ConfigLoader, "load_config", staticmethod(lambda: None))
+    path = discover_extended_rules_path()
+    assert path is not None and path.startswith(str(pack.cache_root()))
 
 
 def test_build_rulepath_without_extended():

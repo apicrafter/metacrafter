@@ -60,10 +60,11 @@ Open items (Beads):
 | `--pack` once the registry implements `add-datatype-packs` | `metacrafter-utm` | metacrafter-registry |
 
 Distribution (decided 2026-11-05, `update-ecosystem-distribution`): neither
-`metacrafter-rules` nor `metacrafter-registry` is published on PyPI. The rule pack is
-downloaded from a pinned GitHub release; the registry is read from its website. Since
-`update-bundle-registry-snapshot` (2026-11-06) the package ships the registry snapshot
-recorded in `ecosystem.lock`, so the first scan does not download the registry.
+`metacrafter-rules` nor `metacrafter-registry` is published on PyPI. The rule pack is a
+pinned GitHub release; the registry is read from its website. Since
+`update-bundle-default-rule-pack` (2026-11-06) the package ships a copy of the pinned
+release archive, and since `update-bundle-registry-snapshot` (2026-11-06) the registry
+snapshot recorded in `ecosystem.lock`, so the first scan downloads neither.
 
 Blocked outside this repository:
 - **Archive the `metacrafter-llm` repository.** Owner action.

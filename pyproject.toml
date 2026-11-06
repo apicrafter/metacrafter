@@ -139,7 +139,7 @@ include-package-data = true
 zip-safe = false
 
 [tool.setuptools.package-data]
-metacrafter = ["rules/schema/*.json", "registry/bundled/*.json", "registry/bundled/*.gz"]
+metacrafter = ["rules/schema/*.json", "rules/bundled/*.tar.gz", "registry/bundled/*.json", "registry/bundled/*.gz"]
 
 [tool.ruff]
 line-length = 127

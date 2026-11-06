@@ -16,7 +16,6 @@ cd metacrafter
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -e '.[dev,llm,mongodb,duckdb,server,mcp,formats]'
-metacrafter rules fetch        # download the pinned rule pack once
 ```
 
 ## Tests
@@ -27,8 +26,8 @@ pytest --cov=metacrafter --cov-report=term-missing   # CI requires 60%
 ```
 
 Tests are hermetic:
-- `tests/conftest.py` resolves the rule pack once, from `METACRAFTER_RULES_DIR` or the cache
-  filled by `metacrafter rules fetch`;
+- `tests/conftest.py` resolves the rule pack once, from `METACRAFTER_RULES_DIR`, the cache
+  or the archive bundled in `metacrafter/rules/bundled/`;
 - each test then gets an empty home directory and no network access;
 - the registry comes from the offline snapshot in `tests/fixtures/registry_snapshot`. Tests for optional integrations skip when their extra is
 not installed. Measured on Python 3.11 with all extras: 400 passed, 10 skipped, about 71% line

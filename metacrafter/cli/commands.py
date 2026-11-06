@@ -138,9 +138,9 @@ def rules_stats(
 def rules_fetch(
     release: Optional[str] = typer.Option(None, "--release", help="metacrafter-rules release tag (default: the pinned release)"),
     sha256: Optional[str] = typer.Option(None, "--sha256", help="SHA-256 of the release archive (required with --release)"),
-    force: bool = typer.Option(False, "--force", help="Download again even when cached"),
+    force: bool = typer.Option(False, "--force", help="Download from GitHub even when the pack is cached or bundled"),
 ):
-    """Download and verify the metacrafter-rules release used as the default rule pack."""
+    """Unpack (or download) and verify the metacrafter-rules release used as the default rule pack."""
     from metacrafter.rules.pack import DEFAULT_RELEASE, DEFAULT_SHA256, RulePackError, fetch_pack
 
     if release and release != DEFAULT_RELEASE and not sha256:

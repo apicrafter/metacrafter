@@ -12,8 +12,8 @@ REGISTRY_SNAPSHOT = Path(__file__).parent / "fixtures" / "registry_snapshot"
 def _session_rule_pack():
     """Resolve the default rule pack once, before tests isolate HOME and block the network.
 
-    Uses METACRAFTER_RULES_DIR, an installed metacrafterext, or the cached release
-    (CI runs `metacrafter rules fetch` first); downloads the pinned release if needed.
+    Uses METACRAFTER_RULES_DIR, an installed metacrafterext, the cached release, or the
+    release archive bundled with the package (no network access).
     """
     from metacrafter.rules.pack import RulePackError, resolve_pack
 

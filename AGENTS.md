@@ -61,9 +61,11 @@ metacrafter/
 └── pyproject.toml
 ```
 
-Rules are not stored here and are not a Python dependency: the default pack is downloaded
-from the pinned GitHub release of metacrafter-rules (`metacrafter/rules/pack.py`, verified by
-SHA-256, cached in `~/.cache/metacrafter/rules/`). Datatypes come from the registry website
+Rules are not a Python dependency: the default pack is the pinned GitHub release of
+metacrafter-rules (`metacrafter/rules/pack.py`). A copy of its archive ships in
+`metacrafter/rules/bundled/` (refresh with `scripts/bundle_rule_pack.py` after a release
+bump); it is verified by SHA-256 and unpacked into `~/.cache/metacrafter/rules/` on first use,
+without network access. Other releases (`rules_release`) are downloaded from GitHub. Datatypes come from the registry website
 (`/api/v1/`) through `metacrafter.registry.RegistryAdapter`; the registry's Python package is
 not used. The package ships the registry snapshot recorded in `ecosystem.lock`
 (`metacrafter/registry/bundled/`, written by `scripts/bundle_registry_snapshot.py`); a cold
