@@ -141,3 +141,6 @@ docs/static/getting-started/
 docs/static/integrations/
 docs/static/license.md
 docs/static/use-cases/
+
+# Former Beads issue tracker (moved to GitHub Issues); local database files only
+.beads/

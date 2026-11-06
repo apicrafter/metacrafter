@@ -1,6 +1,6 @@
 # Metacrafter Roadmap
 
-Updated 2026-11-05. Source plan: [`devdocs/MODERNIZATION_PLAN.md`](../devdocs/MODERNIZATION_PLAN.md)
+Updated 2026-11-06. Source plan: [`devdocs/MODERNIZATION_PLAN.md`](../devdocs/MODERNIZATION_PLAN.md)
 (registry-driven modernization, target release 1.0.0). Decisions in section 6 of that plan
 were accepted on 2026-11-05.
 
@@ -13,6 +13,10 @@ This roadmap reconciles three planning rounds:
 | 2026-11-05 modernization plan | this branch, 7 changes | Registry, engine, report, agents, contract |
 
 Beads epic: `metacrafter-76s`.
+
+> **Issue tracking moved to GitHub Issues on 2026-11-06.** Beads ids (`metacrafter-…`) in
+> this file refer to the former tracker; its data is `.beads/issues.jsonl` in git history
+> before that date. Open work is listed under "Open items" with issue links.
 
 > **Uncommitted implementation.** As of 2026-11-05 the Codex worktree
 > (`~/.codex/worktrees/repository-review/metacrafter`) holds about 2000 lines of
@@ -46,18 +50,19 @@ Each step ends with a green test suite and a commit.
 **Status (2026-11-06):** steps S1–S10 and `update-ecosystem-distribution` are merged
 (apicrafter/metacrafter#29, apicrafter/metacrafter#30). Every change listed below is archived in
 `openspec/changes/archive/2026-11-06-*`; the current requirements are in `openspec/specs/`.
-The superseded `update-registry-resolution` draft was deleted. Version `1.0.0` is prepared;
-publishing it to PyPI is a maintainer action.
+The superseded `update-registry-resolution` draft was deleted. Version `1.0.0` is tagged
+and published on PyPI; the `metacrafter-llm` repository is archived.
 
-Open items (Beads):
+Open items:
 
-| Item | Beads | Owner |
+| Item | Issue | Owner |
 |---|---|---|
-| Publish metacrafter 1.0.0 to PyPI and tag the release | `metacrafter-adq` | maintainer |
-| Archive the `metacrafter-llm` repository | `metacrafter-adq` | maintainer |
-| Remove the `codex/repository-review-2026-10-01` branch and the untracked July drafts in the main checkout | `metacrafter-adq` | maintainer |
-| Fix unresolved rule keys, rules that accept negative examples, hyphenated ISBN, `esmonthbydatafiltered`; attach a release archive asset | `metacrafter-ych` | metacrafter-rules |
-| `--pack` once the registry implements `add-datatype-packs` | `metacrafter-utm` | metacrafter-registry |
+| Bump the bundled registry snapshot to include apicrafter/metacrafter-registry#115 | apicrafter/metacrafter#37 | metacrafter |
+| `--pack` once the registry implements `add-datatype-packs` | apicrafter/metacrafter#38 | metacrafter-registry, then metacrafter |
+| Registry-derived detectors from pattern records (`iso639_1`, `iso639_2`) | apicrafter/metacrafter#39 | metacrafter |
+| Opt-in LLM verifier mode (`--llm-verify`) | apicrafter/metacrafter#40 | metacrafter |
+| Fix unresolved rule keys, rules that accept negative examples, hyphenated ISBN, `esmonthbydatafiltered` | apicrafter/metacrafter#41 | metacrafter-rules |
+| Universal full-name rule; file extension field rule | apicrafter/metacrafter#42 | metacrafter-rules |
 
 Distribution (decided 2026-11-05, `update-ecosystem-distribution`): neither
 `metacrafter-rules` nor `metacrafter-registry` is published on PyPI. The rule pack is a
@@ -77,9 +82,8 @@ language suffix; registry `parent` ids count as half-weight field-name evidence;
 country check needs the type's own name with its country; `llm_max_requests` is
 configurable.
 
-Blocked outside this repository:
-- **Archive the `metacrafter-llm` repository.** Owner action.
-- **Fix the 32 unresolved rule keys** in `metacrafter-rules`.
+Blocked outside this repository: the metacrafter-rules fixes (apicrafter/metacrafter#41,
+apicrafter/metacrafter#42) and registry datatype packs (apicrafter/metacrafter#38).
 
 ## Phase 0 — Foundation and reliability
 

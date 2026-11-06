@@ -271,29 +271,14 @@ Metacrafter integrates with `metacrafter-registry` to:
 Registry is optional - Metacrafter works standalone but provides richer metadata when registry is available.
 
 
-## Landing the Plane (Session Completion)
+## Finishing a Work Session
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
-
-**MANDATORY WORKFLOW:**
-
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
-   ```bash
-   git pull --rebase
-   bd sync
-   git push
-   git status  # MUST show "up to date with origin"
-   ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
-
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
-Use 'bd' for task tracking
+1. **Track remaining work in GitHub Issues** (`gh issue create --repo apicrafter/metacrafter`);
+   work for metacrafter-rules or metacrafter-registry goes to those repositories. Close issues
+   that the change finishes (`Closes #N` in the PR).
+2. **Run quality gates** when code changed: `pytest tests/`, the CI lint selection
+   (`ruff check metacrafter tests scripts --select E9,F63,F7,F82`), `openspec validate --strict`
+   for OpenSpec changes.
+3. **Commit to a branch and push it**; changes reach `main` through a pull request. Do not push
+   to `main` directly.
+4. **Hand off**: say what is done, what is not verified and which issues remain.
