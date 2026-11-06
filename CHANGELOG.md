@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Package metadata uses the SPDX license expression `Apache-2.0` (PEP 639); building needs
+  setuptools 77 or newer.
+
 ## [1.0.0] - 2026-11-06
 
 Registry-driven modernization (see `devdocs/MODERNIZATION_PLAN.md`, `openspec/ROADMAP.md`)
