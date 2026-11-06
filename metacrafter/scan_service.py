@@ -1205,6 +1205,32 @@ class CrafterCmd(object):
         return results
 
     
+    def _apply_field_schema(self, results, datastats, field_schema) -> None:
+        """Add database key facts: tags, and an ``id`` match for database-generated keys."""
+        from metacrafter.classify.processor import RuleResult
+
+        for column in results.results:
+            info = field_schema.get(column.field)
+            if not info or column.field not in datastats:
+                continue
+            tags = datastats[column.field].setdefault("tags", [])
+            for tag in ("primary_key", "autoincrement", "foreign_key"):
+                if info.get(tag) and tag not in tags:
+                    tags.append(tag)
+            if info.get("primary_key") and info.get("autoincrement"):
+                column.add(RuleResult(
+                    ruleid="_db_autoincrement_key",
+                    dataclass="id",
+                    confidence=100.0,
+                    ruletype="schema",
+                    evidence={
+                        "scoring_model": "legacy" if self.legacy_scoring else "v1",
+                        "source": "database schema",
+                        "primary_key": True,
+                        "autoincrement": True,
+                    },
+                ))
+
     def _merge_llm_results(
         self,
         rule_results,
@@ -1283,6 +1309,7 @@ class CrafterCmd(object):
         llm_min_confidence: Optional[float] = None,
         explain: bool = False,
         strip: Optional[bool] = None,
+        field_schema: Optional[Dict[str, Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Scan data items and return classification results.
         
@@ -1302,6 +1329,8 @@ class CrafterCmd(object):
             empty_values: Override list of values treated as empty
             strip: Remove leading and trailing whitespace from string values before
                 analysis (default: the ``strip`` setting of this CrafterCmd, False)
+            field_schema: Database schema facts per field name (``primary_key``,
+                ``autoincrement``, ``foreign_key``), as ``scan sql`` reflects them
             
         Returns:
             Dictionary with keys:
@@ -1451,6 +1480,8 @@ class CrafterCmd(object):
                     contexts=contexts,
                     min_confidence=self._scan_llm_threshold,
                 )
+        if field_schema:
+            self._apply_field_schema(results, datastats_dict, field_schema)
         output = []
         outdata = []
         for res in results.results:
@@ -1501,6 +1532,8 @@ class CrafterCmd(object):
             record["tags"] = datastats_dict[res.field]["tags"]
             record["ftype"] = datastats_dict[res.field]["ftype"]
             record["stats"] = datastats_dict[res.field]
+            if field_schema and res.field in field_schema:
+                record["database"] = dict(field_schema[res.field])
 
             outdata.append(record)
         report = {
