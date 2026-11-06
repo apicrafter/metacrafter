@@ -14,13 +14,13 @@
   {
     "id": "common",
     "name": "Common",
-    "count": 187,
+    "count": 188,
     "url": "https://registry.apicrafter.io/category/common"
   },
   {
     "id": "companies",
     "name": "Companies/business/organizations",
-    "count": 236,
+    "count": 240,
     "url": "https://registry.apicrafter.io/category/companies"
   },
   {
@@ -38,7 +38,7 @@
   {
     "id": "datetime",
     "name": "Date and time",
-    "count": 79,
+    "count": 82,
     "url": "https://registry.apicrafter.io/category/datetime"
   },
   {
@@ -50,13 +50,13 @@
   {
     "id": "ecommerce",
     "name": "E-commerce",
-    "count": 18,
+    "count": 19,
     "url": "https://registry.apicrafter.io/category/ecommerce"
   },
   {
     "id": "education",
     "name": "Education",
-    "count": 18,
+    "count": 19,
     "url": "https://registry.apicrafter.io/category/education"
   },
   {
@@ -74,19 +74,19 @@
   {
     "id": "finances",
     "name": "Finances and banking",
-    "count": 233,
+    "count": 244,
     "url": "https://registry.apicrafter.io/category/finances"
   },
   {
     "id": "geo",
     "name": "Geographic identifiers",
-    "count": 361,
+    "count": 380,
     "url": "https://registry.apicrafter.io/category/geo"
   },
   {
     "id": "government",
     "name": "Government related",
-    "count": 120,
+    "count": 137,
     "url": "https://registry.apicrafter.io/category/government"
   },
   {
@@ -98,13 +98,13 @@
   {
     "id": "identifiers",
     "name": "Universal unique identifiers",
-    "count": 36,
+    "count": 43,
     "url": "https://registry.apicrafter.io/category/identifiers"
   },
   {
     "id": "industry",
     "name": "Industry",
-    "count": 44,
+    "count": 45,
     "url": "https://registry.apicrafter.io/category/industry"
   },
   {
@@ -116,7 +116,7 @@
   {
     "id": "legal",
     "name": "Legal and compliance",
-    "count": 23,
+    "count": 25,
     "url": "https://registry.apicrafter.io/category/legal"
   },
   {
@@ -128,7 +128,7 @@
   {
     "id": "medical",
     "name": "Medical/pharma identifiers",
-    "count": 84,
+    "count": 85,
     "url": "https://registry.apicrafter.io/category/medical"
   },
   {
@@ -140,13 +140,13 @@
   {
     "id": "persons",
     "name": "Person related",
-    "count": 275,
+    "count": 276,
     "url": "https://registry.apicrafter.io/category/persons"
   },
   {
     "id": "pii",
     "name": "Personally identifiable information",
-    "count": 428,
+    "count": 429,
     "url": "https://registry.apicrafter.io/category/pii"
   },
   {
@@ -176,7 +176,7 @@
   {
     "id": "shipping",
     "name": "Shipping and delivery",
-    "count": 21,
+    "count": 22,
     "url": "https://registry.apicrafter.io/category/shipping"
   },
   {
@@ -212,7 +212,7 @@
   {
     "id": "values",
     "name": "All measurable values (percentage, amount and e.t.c)",
-    "count": 15,
+    "count": 18,
     "url": "https://registry.apicrafter.io/category/values"
   }
 ]
