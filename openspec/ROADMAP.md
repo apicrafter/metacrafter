@@ -43,18 +43,21 @@ Each step ends with a green test suite and a commit.
 | S9 | Contract tests, `ecosystem.lock`, scheduled check, benchmark | `add-ecosystem-contract-tests`, July `add-ecosystem-alignment-workflow` | `metacrafter-76s.7` |
 | S10 | Docs, CHANGELOG, version, archive delivered changes | all | epic `metacrafter-76s` |
 
-**Status (2026-11-05):** steps S1–S10 are implemented on branch
-`claude/metacrafter-modernization-plan-af6f62` (PR apicrafter/metacrafter#29), version
-`1.0.0.dev0`. Open items:
+**Status (2026-11-06):** steps S1–S10 and `update-ecosystem-distribution` are merged
+(apicrafter/metacrafter#29, apicrafter/metacrafter#30). Every change listed below is archived in
+`openspec/changes/archive/2026-11-06-*`; the current requirements are in `openspec/specs/`.
+The superseded `update-registry-resolution` draft was deleted. Version `1.0.0` is prepared;
+publishing it to PyPI is a maintainer action.
 
-| Item | Change | Owner |
+Open items (Beads):
+
+| Item | Beads | Owner |
 |---|---|---|
-| ~~Publish `metacrafter-rules` and `metacrafter-registry` on PyPI~~ Not needed: rules come from GitHub releases and the registry from its website (`update-ecosystem-distribution`) | `update-ecosystem-distribution` | done in this repo |
-| Archive the `metacrafter-llm` repository | `refactor-metacrafter-foundation` 5.1 | maintainer |
-| `--pack` once the registry implements `add-datatype-packs` | `update-detection-engine` 4.3 | metacrafter-registry |
-| Hyphenated ISBN golden test after the ISBN rule fix | `update-detection-engine` 5.2 | metacrafter-rules |
-| Delete the superseded `update-registry-resolution` draft | — | this repo |
-| Archive delivered changes (`openspec archive <id>`) after the release | all | this repo |
+| Publish metacrafter 1.0.0 to PyPI and tag the release | `metacrafter-adq` | maintainer |
+| Archive the `metacrafter-llm` repository | `metacrafter-adq` | maintainer |
+| Remove the `codex/repository-review-2026-10-01` branch and the untracked July drafts in the main checkout | `metacrafter-adq` | maintainer |
+| Fix unresolved rule keys, rules that accept negative examples, hyphenated ISBN, `esmonthbydatafiltered`; attach a release archive asset | `metacrafter-ych` | metacrafter-rules |
+| `--pack` once the registry implements `add-datatype-packs` | `metacrafter-utm` | metacrafter-registry |
 
 Distribution (decided 2026-11-05, `update-ecosystem-distribution`): neither
 `metacrafter-rules` nor `metacrafter-registry` is published on PyPI. The rule pack is
