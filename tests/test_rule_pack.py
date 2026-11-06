@@ -78,7 +78,58 @@ def test_unpinned_release_refused(cache):
 
 
 def test_offline_without_cache_returns_none(cache):
+    # Only the pinned release is bundled; another release needs a cache or a download.
+    assert pack.resolve_pack(release="v9.9.9", sha256="0" * 64, offline=True) is None
+
+
+def _no_network(url, timeout):
+    raise AssertionError(f"unexpected download of {url}")
+
+
+def test_bundled_archive_matches_pin():
+    bundled = pack.bundled_archive()
+    assert bundled.is_file(), "run scripts/bundle_rule_pack.py after changing DEFAULT_RELEASE"
+    assert hashlib.sha256(bundled.read_bytes()).hexdigest() == pack.DEFAULT_SHA256
+    assert sorted(p.name for p in pack.BUNDLED_DIR.glob("*.tar.gz")) == [bundled.name]
+
+
+def test_cache_miss_uses_bundled_archive_without_network(cache, monkeypatch):
+    monkeypatch.setattr(pack, "_download", _no_network)
+    resolved = pack.resolve_pack()
+    assert resolved.source.startswith("bundled:") and resolved.release == pack.DEFAULT_RELEASE
+    assert any(resolved.rules_dir.rglob("*.yaml"))
+    assert (resolved.python_path / "metacrafterext").is_dir()
+    again = pack.resolve_pack()
+    assert again.source.startswith("cache:") and again.rules_dir == resolved.rules_dir
+
+
+def test_offline_uses_bundled_archive(cache, monkeypatch):
+    monkeypatch.setattr(pack, "_download", _no_network)
+    monkeypatch.setenv("METACRAFTER_RULES_OFFLINE", "1")
+    resolved = pack.resolve_pack()
+    assert resolved is not None and resolved.source.startswith("bundled:")
+
+
+def test_fetch_uses_bundled_archive_and_force_downloads(cache, monkeypatch):
+    data = pack.bundled_archive().read_bytes()
+    calls = []
+    monkeypatch.setattr(pack, "_download", lambda url, timeout: calls.append(url) or data)
+    assert pack.fetch_pack().source.startswith("bundled:") and calls == []
+    (pack.fetch_pack().rules_dir / "stale.yaml").write_text("name: stale\n")
+    forced = pack.fetch_pack(force=True)
+    assert forced.source.startswith("download:") and calls == [pack.archive_url(pack.DEFAULT_RELEASE)]
+    assert not (forced.rules_dir / "stale.yaml").exists()
+
+
+def test_corrupt_bundled_archive_falls_back(cache, monkeypatch, tmp_path):
+    data = pack.bundled_archive().read_bytes()
+    monkeypatch.setattr(pack, "BUNDLED_DIR", tmp_path / "bundled")
+    pack.BUNDLED_DIR.mkdir()
+    pack.bundled_archive().write_bytes(b"not an archive")
+    monkeypatch.setattr(pack, "_download", lambda url, timeout: data)
     assert pack.resolve_pack(offline=True) is None
+    assert not (cache / "metacrafter" / "rules" / pack.DEFAULT_RELEASE).exists()
+    assert pack.resolve_pack().source.startswith("download:")
 
 
 def test_rules_dir_wins_and_activates_validators(cache, tmp_path):

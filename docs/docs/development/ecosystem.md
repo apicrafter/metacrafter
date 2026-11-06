@@ -7,8 +7,8 @@ description: "How metacrafter, metacrafter-rules and metacrafter-registry are ke
 Metacrafter relies on two sibling projects, neither of which is a Python dependency:
 
 - [metacrafter-rules](https://github.com/apicrafter/metacrafter-rules): the default rule pack,
-  downloaded from a GitHub release. The tag and archive SHA-256 are pinned in
-  `metacrafter/rules/pack.py` and `ecosystem.lock`.
+  a GitHub release. The tag and archive SHA-256 are pinned in `metacrafter/rules/pack.py`
+  and `ecosystem.lock`. A copy of the archive ships in `metacrafter/rules/bundled/`.
 - [metacrafter-registry](https://github.com/apicrafter/metacrafter-registry): the datatypes
   that rule keys refer to, read from the registry website. `ecosystem.lock` records the
   registry version and git sha that the baselines in `tests/ecosystem/` were made with.
@@ -52,7 +52,8 @@ metacrafter evaluate tests/benchmark/fixture.yaml --write-baseline tests/benchma
 
 Then record the registry `version` and `git_sha` (from `/tmp/registry/index.json`) in
 `ecosystem.lock`. To move to a new rules release, update `release` and `sha256` in both
-`ecosystem.lock` and `metacrafter/rules/pack.py`. Review the diff: thresholds should only
+`ecosystem.lock` and `metacrafter/rules/pack.py`, then run
+`python scripts/bundle_rule_pack.py` to replace the bundled archive. Review the diff: thresholds should only
 rise, and exceptions should only shrink.
 
 ## Weekly check

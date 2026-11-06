@@ -1,6 +1,7 @@
 # Sibling ecosystem data that metacrafter is tested against.
-# metacrafter-rules: the default rule pack, downloaded from this GitHub release. The tag and
-#   sha256 must match metacrafter/rules/pack.py (DEFAULT_RELEASE, DEFAULT_SHA256).
+# metacrafter-rules: the default rule pack, this GitHub release. The tag and sha256 must
+#   match metacrafter/rules/pack.py (DEFAULT_RELEASE, DEFAULT_SHA256) and the archive in
+#   metacrafter/rules/bundled/ (scripts/bundle_rule_pack.py).
 # metacrafter-registry: read from its website (/api/v1/). version and git_sha are the
 #   registry the baselines in tests/ecosystem/ were recorded against; CI gates block only
 #   while the live registry still has this version.

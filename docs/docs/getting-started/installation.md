@@ -14,18 +14,18 @@ description: "Install Metacrafter with pip and optional extras"
 pip install metacrafter
 ```
 
-That is all you need. On first use, Metacrafter downloads its default rule pack from the
-pinned [metacrafter-rules](https://github.com/apicrafter/metacrafter-rules) GitHub release
-(about 280 KB). It checks the SHA-256 of the download and caches the pack in
+That is all you need. The default rule pack is the pinned
+[metacrafter-rules](https://github.com/apicrafter/metacrafter-rules) GitHub release. The
+package includes a copy of its archive (about 280 KB), so the rule pack needs no network
+access. On first use, Metacrafter checks the archive's SHA-256 and unpacks it into
 `~/.cache/metacrafter/rules/`. Registry data is read from
-[registry.apicrafter.io](https://registry.apicrafter.io) and cached the same way. Neither
-project is a Python dependency.
+[registry.apicrafter.io](https://registry.apicrafter.io) and cached. Neither project is a
+Python dependency.
 
-To prepare an offline machine, run these on a machine with network access and copy the
-cache or the snapshot directory:
+To prepare an offline machine, write a registry snapshot on a machine with network access
+and copy it:
 
 ```bash
-metacrafter rules fetch                         # download and verify the rule pack
 metacrafter registry fetch --to ./registry      # registry snapshot for registry_path
 ```
 
@@ -52,10 +52,12 @@ The default rule pack never comes from the current directory. Its sources, in or
    checkout or an unpacked pack;
 2. an installed `metacrafterext` package;
 3. the cache;
-4. a download of the pinned release.
+4. the archive bundled with the package (pinned release only);
+5. a download of the configured release.
 
 Set `rules_offline: true` to forbid downloads. `rules_release` with `rules_sha256` selects
-another release. Set `auto_rules: false` to load only the paths you list in `rulepath`.
+another release; it is downloaded from GitHub (`metacrafter rules fetch --release TAG
+--sha256 HEX`). Set `auto_rules: false` to load only the paths you list in `rulepath`.
 
 The stable public Python API is importable from the package:
 
@@ -76,7 +78,7 @@ from metacrafter import CrafterCmd
 | `llm-chroma` | Deprecated vector-index pipeline (`llm_registry_path`): OpenAI SDK, ChromaDB |
 | `datahub` | Export scan results to DataHub (`acryl-datahub`) |
 | `openmetadata` | Export scan results to OpenMetadata |
-| `rules` | No-op, kept for compatibility: the rule pack is downloaded from GitHub releases |
+| `rules` | No-op, kept for compatibility: the rule pack comes from GitHub releases |
 | `all` | Every optional feature above |
 | `dev` | pytest, coverage, ruff, mypy, build |
 
@@ -86,7 +88,6 @@ from metacrafter import CrafterCmd
 git clone https://github.com/apicrafter/metacrafter.git
 cd metacrafter
 pip install -e '.[dev,formats]'
-metacrafter rules fetch
 ```
 
 To work on rules at the same time, point `rules_dir` (or `METACRAFTER_RULES_DIR`) at a

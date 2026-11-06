@@ -28,11 +28,12 @@ Requires Python 3.10+.
 pip install metacrafter
 ```
 
-The default rule pack is downloaded on first use from the pinned
-[metacrafter-rules](https://github.com/apicrafter/metacrafter-rules) GitHub release (verified
-by SHA-256 and cached). Registry data comes from
+The default rule pack is the pinned
+[metacrafter-rules](https://github.com/apicrafter/metacrafter-rules) GitHub release. A copy
+of its archive ships with the package, so no download is needed (it is verified by SHA-256
+and unpacked into the cache on first use). Registry data comes from
 [registry.apicrafter.io](https://registry.apicrafter.io). For offline use, run
-`metacrafter rules fetch` and `metacrafter registry fetch --to DIR`.
+`metacrafter registry fetch --to DIR`.
 
 Optional extras:
 
