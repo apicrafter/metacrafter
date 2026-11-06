@@ -157,6 +157,7 @@ class MetacrafterConfig(BaseModel):
     llm_send_pii_values: bool = Field(default=False, description="Allow raw values of possible PII fields to reach a non-local LLM provider")
     llm_shortlist_size: int = Field(default=15, ge=1, le=50, description="Registry candidates offered to the LLM per field")
     llm_max_requests: Optional[int] = Field(default=None, ge=1, description="Most LLM requests per scan (default 100)")
+    llm_verify: bool = Field(default=False, description="Let the LLM keep or reject rule value matches, one request per table")
     
     @field_validator('rulepath')
     @classmethod
@@ -421,6 +422,7 @@ class ConfigLoader:
                     "llm_send_pii_values": validated_config.llm_send_pii_values,
                     "llm_shortlist_size": validated_config.llm_shortlist_size,
                     "llm_max_requests": validated_config.llm_max_requests,
+                    "llm_verify": validated_config.llm_verify,
                 }
                 # Check if any LLM-specific setting is configured (excluding defaults)
                 # Consider it configured if:
@@ -436,7 +438,8 @@ class ConfigLoader:
                     llm_config.get("llm_api_key") is not None or
                     llm_config.get("llm_base_url") is not None or
                     llm_config.get("llm_min_confidence") not in (None, 50.0) or
-                    llm_config.get("llm_max_requests") is not None
+                    llm_config.get("llm_max_requests") is not None or
+                    bool(llm_config.get("llm_verify"))
                 )
                 
                 if has_llm_config:

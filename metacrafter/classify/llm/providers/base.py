@@ -144,6 +144,36 @@ class BaseLLMProvider(ABC):
             "reason": "Max retries exceeded"
         }
     
+    def complete_json(
+        self,
+        prompt: str,
+        schema: Optional[Dict[str, Any]] = None,
+        temperature: float = 0.0,
+        max_tokens: int = 2000,
+    ) -> Dict[str, Any]:
+        """Send ``prompt`` and return the JSON object of the answer (any shape).
+
+        Retries like :meth:`classify`; raises the last error when every attempt fails.
+        """
+        for attempt in range(self.max_retries):
+            try:
+                content = (
+                    self._call_api(prompt, temperature, max_tokens, schema=schema)
+                    if schema is not None
+                    else self._call_api(prompt, temperature, max_tokens)
+                )
+                result = self._parse_response(content)
+                if not isinstance(result, dict):
+                    raise ValueError("Provider answer is not a JSON object")
+                return result
+            except Exception as e:
+                logger.error("LLM operation failed (%s)", type(e).__name__)
+                if attempt < self.max_retries - 1:
+                    time.sleep(self.retry_delay * (2 ** attempt))
+                    continue
+                raise
+        raise RuntimeError("LLM request failed")
+
     def _parse_response(self, content: str) -> Dict[str, Any]:
         """
         Parse response content to extract JSON.

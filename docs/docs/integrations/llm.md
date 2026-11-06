@@ -14,6 +14,28 @@ leave unresolved. The model never invents datatypes: it chooses from a shortlist
 | LLM | `--classification-mode llm` or `--llm-only` | LLM for every field |
 | Hybrid | `--classification-mode hybrid` or `--use-llm` | Rules first; the LLM only for fields without a match at or above `--llm-min-confidence`. Rule matches are not reviewed, so hybrid adds labels but does not remove false ones |
 
+## Verifier (`--llm-verify`)
+
+Rules and registry detectors propose datatypes from values; some proposals fit the pattern
+but not the context. `--llm-verify` (or `llm_verify: true` in `.metacrafter`) sends one
+request per table after the rules: all column paths, and for each column with value
+matches its type, distinct-value count, samples under `--sample-policy` and the candidate
+datatypes with their registry descriptions. The answer may only keep candidate ids; value
+matches it does not keep are removed (`--explain` lists them as "Rejected by the LLM
+verifier"), kept ones get `evidence.llm_verified: true`. Field-name matches are never sent
+or removed. The report gets an `llm_verifier` summary (provider, model, columns, removed,
+disclosure). Answers are cached; the request counts against `llm_max_requests`; on failure
+`--llm-fallback rules` keeps the rule matches.
+
+```bash
+metacrafter scan file data.csv --llm-verify --llm-provider openrouter \
+  --llm-model openai/gpt-5-mini --sample-policy redacted
+```
+
+On `armsis` GeoNode metadata it removed the one remaining false match (`icaoairportcode` on
+`links.name`) and kept all 44 correct ones; on the IATI catalogue it removed `uiccode`,
+`oid` and `ennationality` false matches.
+
 ## How it works
 
 1. **Shortlist.** For each field, the registry ranks candidates from the sample values

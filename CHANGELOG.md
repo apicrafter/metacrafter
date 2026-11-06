@@ -47,6 +47,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   registry marks those patterns stable (apicrafter/metacrafter#39). The background corpus
   gains two-letter codes and letter-and-digit codes (`WGS84`, `EA1`), so `^[A-Z]{2}$`-style
   and flight-number-style regexps need field-name evidence.
+- `--llm-verify` / `llm_verify: true`: after the rules, one LLM request per table keeps or
+  rejects value matches (rules and registry detectors) given the column paths, value samples
+  under `--sample-policy` and candidate descriptions; the answer is limited to the candidate
+  ids. Field-name matches are not touched. The report gets `llm_verifier`; rejected matches
+  appear in `--explain` (apicrafter/metacrafter#40).
 - `llm_max_requests` in `.metacrafter` and `--llm-max-requests` set the LLM request budget
   per scan (default 100). A scan that needs more stops with `LLM request budget of N
   requests exceeded; raise llm_max_requests (--llm-max-requests) or use --llm-fallback
