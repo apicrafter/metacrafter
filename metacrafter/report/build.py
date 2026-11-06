@@ -25,6 +25,10 @@ def finalize_report(report: Dict[str, Any]) -> Dict[str, Any]:
             {m.get("datatype") or m.get("dataclass") for m in field.get("matches", []) if m.get("is_pii")}
         )
         field["pii"] = {"is_pii": bool(pii_types), "datatypes": pii_types}
+    if report.get("data") is not None and "field_groups" not in report:
+        from metacrafter.report.groups import field_groups
+
+        report["field_groups"] = field_groups(f.get("field") for f in report["data"] if isinstance(f, dict))
     return report
 
 
