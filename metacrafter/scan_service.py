@@ -142,6 +142,7 @@ class CrafterCmd(object):
         include_deprecated: bool = False,
         include_samples: bool = False,
         strip: bool = False,
+        llm_verify: Optional[bool] = None,
     ):
         """Initialize CrafterCmd instance.
         
@@ -372,6 +373,25 @@ class CrafterCmd(object):
                     raise RuntimeError("Requested LLM mode could not initialize; configure llm_fallback='rules' to allow fallback") from error
                 self.llm_classifier = None
                 self.llm_errors.append({"code": "llm_initialization", "message": "Requested LLM unavailable; using rules"})
+
+        if llm_verify is None:
+            llm_verify = bool((llm_config or {}).get("llm_verify"))
+        self.llm_verifier = None
+        if llm_verify:
+            try:
+                from metacrafter.classify.llm.verifier import LLMVerifier
+
+                self.llm_verifier = LLMVerifier(
+                    registry=self.registry,
+                    provider=self._llm_provider(llm_provider, llm_model, llm_api_key, llm_base_url),
+                    sample_policy=sample_policy,
+                    send_pii_values=bool((llm_config or {}).get("llm_send_pii_values", False)),
+                    max_requests=llm_max_requests,
+                )
+            except Exception as error:
+                if self.llm_fallback != "rules":
+                    raise RuntimeError("LLM verifier could not initialize; configure llm_fallback='rules' to allow fallback") from error
+                self.llm_errors.append({"code": "llm_initialization", "message": "LLM verifier unavailable; rule matches are not verified"})
 
 
     def prepare(self) -> None:
@@ -1120,11 +1140,9 @@ class CrafterCmd(object):
                     time.sleep(self.retry_delay)
         raise last_exc
 
-    def _registry_llm_classifier(self, *, llm_provider, llm_model, llm_api_key, llm_base_url,
-                                 sample_policy, llm_max_requests, llm_config):
-        """Build the registry-driven LLM classifier (shortlist + constrained answer)."""
+    def _llm_provider(self, llm_provider, llm_model, llm_api_key, llm_base_url):
+        """Provider client for the registry classifier and the verifier."""
         from metacrafter.classify.llm.providers import get_provider
-        from metacrafter.classify.llm.registry_classifier import RegistryLLMClassifier
 
         kwargs = {"timeout": self.request_timeout or 30.0, "max_retries": 1}
         if llm_api_key is not None:
@@ -1133,7 +1151,14 @@ class CrafterCmd(object):
             kwargs["base_url"] = llm_base_url
         if llm_model is not None:
             kwargs["model"] = llm_model
-        provider = get_provider(llm_provider or "openai", **kwargs)
+        return get_provider(llm_provider or "openai", **kwargs)
+
+    def _registry_llm_classifier(self, *, llm_provider, llm_model, llm_api_key, llm_base_url,
+                                 sample_policy, llm_max_requests, llm_config):
+        """Build the registry-driven LLM classifier (shortlist + constrained answer)."""
+        from metacrafter.classify.llm.registry_classifier import RegistryLLMClassifier
+
+        provider = self._llm_provider(llm_provider, llm_model, llm_api_key, llm_base_url)
         return RegistryLLMClassifier(
             registry=self.registry,
             provider=provider,
@@ -1230,6 +1255,64 @@ class CrafterCmd(object):
                         "autoincrement": True,
                     },
                 ))
+
+    VERIFIED_RULETYPES = ("data", "registry")
+
+    def _verify_with_llm(self, results, items, datastats, explain: bool = False) -> Dict[str, Any]:
+        """Ask the LLM verifier which value matches to keep; remove the others."""
+        from metacrafter.exceptions import LLMBudgetExceeded
+
+        columns = dict_to_columns(items)
+        table, by_field = [], {}
+        for column in results.results:
+            if column.field not in datastats:
+                continue
+            ids = []
+            for match in column.matches:
+                if match.ruletype in self.VERIFIED_RULETYPES:
+                    datatype = self.registry.resolve(match.dataclass).canonical_id or match.dataclass
+                    if datatype not in ids:
+                        ids.append(datatype)
+            if ids:
+                stats = datastats[column.field]
+                table.append({"field": column.field, "ftype": stats.get("ftype"), "distinct": stats.get("n_uniq"),
+                              "values": columns.get(column.field, [])[:20], "candidates": ids})
+                by_field[column.field] = column
+        summary = {"provider": type(self.llm_verifier.provider).__name__,
+                   "model": getattr(self.llm_verifier.provider, "model", None),
+                   "columns": len(table), "removed": 0, "cached": False, "disclosure": None}
+        if not table:
+            return summary
+        try:
+            answer = self.llm_verifier.verify(list(datastats), table)
+        except Exception as error:
+            message = "LLM verification failed; rule matches are kept"
+            if isinstance(error, LLMBudgetExceeded):
+                message = (f"LLM request budget of {error.max_requests} requests exceeded; raise llm_max_requests "
+                           "(--llm-max-requests) or use --llm-fallback rules")
+            self.llm_errors.append({"code": type(error).__name__, "message": message})
+            if self.llm_fallback != "rules":
+                raise RuntimeError(message) from error
+            summary["error"] = type(error).__name__
+            return summary
+        summary.update(cached=answer["cached"], disclosure=answer["disclosure"])
+        for field, kept in answer["keep"].items():
+            column = by_field[field]
+            remaining = []
+            for match in column.matches:
+                datatype = self.registry.resolve(match.dataclass).canonical_id or match.dataclass
+                if match.ruletype not in self.VERIFIED_RULETYPES:
+                    remaining.append(match)
+                elif datatype in kept:
+                    match.evidence = dict(match.evidence or {}, llm_verified=True)
+                    remaining.append(match)
+                else:
+                    summary["removed"] += 1
+                    if explain and column.rejected is not None:
+                        column.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass,
+                                                "confidence": match.confidence, "reason": "Rejected by the LLM verifier"})
+            column.matches = remaining
+        return summary
 
     def _merge_llm_results(
         self,
@@ -1405,9 +1488,12 @@ class CrafterCmd(object):
             filter_langs=langs, filter_contexts=contexts, except_empty=except_empty,
             ignore_imprecise=ignore_imprecise, empty_values=empty_values, explain=explain,
             legacy_scoring=self.legacy_scoring, include_deprecated=self.include_deprecated)
-        self.llm_errors = [] if self.llm_classifier else list(self.llm_errors)
+        self.llm_errors = [] if (self.llm_classifier or self.llm_verifier) else list(self.llm_errors)
         if self.llm_classifier is not None:
             self.llm_classifier.request_count = 0
+        verifier_summary = None
+        if self.llm_verifier is not None:
+            self.llm_verifier.request_count = 0
         # Determine classification mode
         mode = classification_mode if classification_mode is not None else self.classification_mode
         if mode not in ("rules", "llm", "hybrid"):
@@ -1470,6 +1556,8 @@ class CrafterCmd(object):
                 include_deprecated=self.include_deprecated,
             )
             
+            if self.llm_verifier is not None:
+                verifier_summary = self._verify_with_llm(results, items, datastats_dict, explain=explain)
             # Merge LLM results if in hybrid mode
             if mode == "hybrid" and self.llm_classifier:
                 results = self._merge_llm_results(
@@ -1553,6 +1641,8 @@ class CrafterCmd(object):
             'scoring_model': 'legacy' if self.legacy_scoring else 'v1',
             'registry_detectors': {'mode': self.registry_detectors, 'count': self.registry_detector_count},
         }
+        if verifier_summary is not None:
+            report['llm_verifier'] = verifier_summary
         return finalize_report(report)
 
 
