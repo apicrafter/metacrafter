@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `autoincrement`, `foreign_key`, a `database` object per key column, and a schema match
   `id` (confidence 100) for single-column integer keys the database generates
   (apicrafter/metacrafter#14).
+- Registry-derived detectors are also built from registry pattern records (`kind:
+  pattern`). A match reports the pattern's `semantic_type` as the datatype and the pattern
+  id in `pattern`: a column `language` with `eng` reports `language` / `iso639_2` once the
+  registry marks those patterns stable (apicrafter/metacrafter#39). The background corpus
+  gains two-letter codes and letter-and-digit codes (`WGS84`, `EA1`), so `^[A-Z]{2}$`-style
+  and flight-number-style regexps need field-name evidence.
 - `llm_max_requests` in `.metacrafter` and `--llm-max-requests` set the LLM request budget
   per scan (default 100). A scan that needs more stops with `LLM request budget of N
   requests exceeded; raise llm_max_requests (--llm-max-requests) or use --llm-fallback

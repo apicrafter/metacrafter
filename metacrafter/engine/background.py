@@ -6,8 +6,8 @@ records. Those examples are mostly long, distinctive identifiers, so a pattern s
 matches every counter, small id, year or plain word.
 
 This module measures a pattern against classes of ordinary tokens instead: integers of
-one to six digits (one class per length), plain words, title-case words and short
-acronyms. A pattern that accepts at least ``GENERIC_THRESHOLD`` of any one class cannot
+one to six digits (one class per length), plain words, title-case words, short
+acronyms, two-letter codes and letter-and-digit codes (WGS84, MP3, A320). A pattern that accepts at least ``GENERIC_THRESHOLD`` of any one class cannot
 tell its datatype apart from ordinary data by values alone.
 """
 from __future__ import annotations
@@ -27,6 +27,13 @@ _WORDS = (
     "warning info level score rating share default custom other unknown main home page "
     "service list view open closed pending approved new old high low medium small"
 ).split()
+# Two-letter tokens: abbreviations, US state codes, units and short words.
+_CODES2 = "ok no on in id us uk eu un hr pm am tv pc mm cm kg km ny ca tx fl wa il pa oh mi ga nc".split()
+# Letter-and-digit codes: standards, formats, versions, models, grades.
+_CODES_NUM = (
+    "WGS84 UTF8 SHA1 SHA256 MD5 ISO9001 MP3 MP4 H264 B12 E10 GT500 F16 PS4 USB3 TLS12 EA1 EA2 "
+    "IPV6 X11 A320 B737 Q3 FY2020 V2 PM10 CO2 NO2 R2"
+).split()
 _ACRONYMS = (
     "PDF PNG ZIP CSV XML GIF KML API URL USA EUR GIS WMS WFS SQL CSS PHP RSS FAQ CEO "
     "JPEG JSON HTML TIFF GZIP NULL TRUE NONE DATA TEST HTTP UTF8 SHA1 YAML"
@@ -45,6 +52,8 @@ def _classes() -> Dict[str, List[str]]:
         "word": words,
         "title_word": [w.capitalize() for w in words],
         "acronym": _ACRONYMS,
+        "code2": _CODES2 + [c.upper() for c in _CODES2],
+        "code_num": _CODES_NUM,
     }
 
 
