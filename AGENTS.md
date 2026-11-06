@@ -67,7 +67,9 @@ metacrafter-rules (`metacrafter/rules/pack.py`). A copy of its archive ships in
 bump); it is verified by SHA-256 and unpacked into `~/.cache/metacrafter/rules/` on first use,
 without network access. Other releases (`rules_release`) are downloaded from GitHub. Datatypes come from the registry website
 (`/api/v1/`) through `metacrafter.registry.RegistryAdapter`; the registry's Python package is
-not used.
+not used. The package ships the registry snapshot recorded in `ecosystem.lock`
+(`metacrafter/registry/bundled/`, written by `scripts/bundle_registry_snapshot.py`); a cold
+cache is seeded from it, so the first scan does not download the registry.
 
 ## Key Components
 
@@ -94,7 +96,8 @@ builds datatype URLs.
 
 `ConfigLoader` reads `.metacrafter` from the current directory or home directory:
 `rulepath`, `auto_rules`, `registry_url`, `registry_path`, `registry_offline`,
-`registry_detectors`, LLM settings and the `mcp` section.
+`registry_cache_ttl`, `registry_fetch_timeout`, `registry_detectors`, LLM settings and the
+`mcp` section.
 
 ## Rule System
 

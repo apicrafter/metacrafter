@@ -63,7 +63,8 @@ Distribution (decided 2026-11-05, `update-ecosystem-distribution`): neither
 `metacrafter-rules` nor `metacrafter-registry` is published on PyPI. The rule pack is a
 pinned GitHub release; the registry is read from its website. Since
 `update-bundle-default-rule-pack` (2026-11-06) the package ships a copy of the pinned
-release archive, so the first scan needs no download.
+release archive, and since `update-bundle-registry-snapshot` (2026-11-06) the registry
+snapshot recorded in `ecosystem.lock`, so the first scan downloads neither.
 
 Blocked outside this repository:
 - **Archive the `metacrafter-llm` repository.** Owner action.

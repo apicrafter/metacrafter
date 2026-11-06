@@ -18,6 +18,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Package metadata uses the SPDX license expression `Apache-2.0` (PEP 639); building needs
   setuptools 77 or newer.
 
+### Performance
+
+- **Bundled registry snapshot.** The package ships the registry snapshot recorded in
+  `ecosystem.lock` (`metacrafter/registry/bundled/`, about 550 KB). With the default
+  registry URL, a cold cache is seeded from it, so the first scan downloads nothing. A
+  first `metacrafter scan file` with an empty registry cache took 97–123 s and now takes
+  1.4–2.0 s (a warm scan takes 1.4–1.7 s). `registry_offline` works on a new machine
+  without `metacrafter registry fetch`. Update it with `scripts/bundle_registry_snapshot.py`.
+- **Smaller, bounded registry downloads.** Registry requests accept gzip (3.1 MB to 561 KB
+  for `datatypes.jsonl`). A refresh during a scan stops after `registry_fetch_timeout`
+  seconds in total (new setting, default 30) and falls back to the older cache; a failed
+  refresh is retried after `registry_cache_ttl`, not on every scan. `metacrafter registry
+  fetch` has no overall time limit.
+
 ## [1.0.0] - 2026-11-06
 
 Registry-driven modernization (see `devdocs/MODERNIZATION_PLAN.md`, `openspec/ROADMAP.md`)

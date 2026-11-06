@@ -141,6 +141,7 @@ class MetacrafterConfig(BaseModel):
     registry_path: Optional[str] = Field(default=None, description="Local registry snapshot or checkout data/ directory")
     registry_offline: bool = Field(default=False, description="Never fetch registry data over the network")
     registry_cache_ttl: float = Field(default=86400, ge=0, description="Seconds a cached registry snapshot is used without checking the network")
+    registry_fetch_timeout: float = Field(default=30, gt=0, description="Overall time limit in seconds for a registry download during a scan")
     mcp: McpSettings = Field(default_factory=McpSettings)
     registry_detectors: str = Field(default="stable", pattern="^(off|stable|all)$", description="Detectors derived from registry regexps: off, stable or all")
 
@@ -364,6 +365,7 @@ class ConfigLoader:
             "registry_path": None,
             "offline": False,
             "cache_ttl": 86400.0,
+            "fetch_timeout": 30.0,
         }
         config = ConfigLoader.load_config()
         if config:
@@ -372,6 +374,7 @@ class ConfigLoader:
                 settings["registry_path"] = validated.registry_path
                 settings["offline"] = validated.registry_offline
                 settings["cache_ttl"] = validated.registry_cache_ttl
+                settings["fetch_timeout"] = validated.registry_fetch_timeout
                 settings["detectors"] = validated.registry_detectors
             except Exception as e:  # noqa: BLE001 - invalid config falls back to defaults
                 logging.debug("Registry configuration validation failed (%s)", type(e).__name__)

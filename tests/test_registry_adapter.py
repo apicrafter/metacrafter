@@ -86,6 +86,7 @@ def test_unavailable_adapter_builds_urls():
 
 
 def test_offline_without_sources_is_unavailable(tmp_path, monkeypatch):
+    monkeypatch.setattr(adapter_mod, "BUNDLED_DIR", tmp_path / "no-bundle")
     reg = RegistryAdapter.load(offline=True, cache_dir=str(tmp_path / "cache"))
     assert reg.provenance.source == "unavailable"
 
@@ -102,7 +103,7 @@ def test_fetch_verifies_hashes_and_falls_back(tmp_path, monkeypatch):
     files = {name: (SNAPSHOT / name).read_bytes() for name in ("datatypes.jsonl", "aliases.json", "categories.json")}
     manifest = json.loads((SNAPSHOT / "index.json").read_text())
 
-    def fake_get(url, timeout):
+    def fake_get(url, timeout, deadline=None):
         name = url.rsplit("/", 1)[-1]
         if name == "index.json":
             return json.dumps(manifest).encode()
@@ -122,7 +123,7 @@ def test_fresh_cache_skips_network(tmp_path, monkeypatch):
     cache = tmp_path / "cache"
     shutil.copytree(SNAPSHOT, cache)
 
-    def no_network(url, timeout):
+    def no_network(url, timeout, deadline=None):
         raise AssertionError("network must not be used with a fresh cache")
 
     monkeypatch.setattr(adapter_mod, "_http_get", no_network)

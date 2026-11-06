@@ -19,8 +19,9 @@ That is all you need. The default rule pack is the pinned
 package includes a copy of its archive (about 280 KB), so the rule pack needs no network
 access. On first use, Metacrafter checks the archive's SHA-256 and unpacks it into
 `~/.cache/metacrafter/rules/`. Registry data is read from
-[registry.apicrafter.io](https://registry.apicrafter.io) and cached. Neither project is a
-Python dependency.
+[registry.apicrafter.io](https://registry.apicrafter.io) and cached. The package ships a
+registry snapshot (about 550 KB), so the first scan does not wait for the registry download;
+the cache is refreshed after 24 hours. Neither project is a Python dependency.
 
 To prepare an offline machine, write a registry snapshot on a machine with network access
 and copy it:

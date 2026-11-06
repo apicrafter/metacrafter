@@ -51,9 +51,17 @@ metacrafter evaluate tests/benchmark/fixture.yaml --write-baseline tests/benchma
 ```
 
 Then record the registry `version` and `git_sha` (from `/tmp/registry/index.json`) in
-`ecosystem.lock`. To move to a new rules release, update `release` and `sha256` in both
-`ecosystem.lock` and `metacrafter/rules/pack.py`, then run
-`python scripts/bundle_rule_pack.py` to replace the bundled archive. Review the diff: thresholds should only
+`ecosystem.lock` and update the registry snapshot shipped in the package
+(`metacrafter/registry/bundled/`):
+
+```bash
+python scripts/bundle_registry_snapshot.py --from /tmp/registry
+```
+
+A test fails while the bundled snapshot does not match `ecosystem.lock`. To move to a new
+rules release, update `release` and `sha256` in both `ecosystem.lock` and
+`metacrafter/rules/pack.py`, then run `python scripts/bundle_rule_pack.py` to replace the
+bundled archive. Review the diff: thresholds should only
 rise, and exceptions should only shrink.
 
 ## Weekly check
