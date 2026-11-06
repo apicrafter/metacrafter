@@ -216,7 +216,8 @@ class RegistryLLMClassifier:
             self._cache[key] = result
             return result
         if self.request_count >= self.max_requests:
-            raise ValueError("LLM request budget exceeded")
+            from metacrafter.exceptions import LLMBudgetExceeded
+            raise LLMBudgetExceeded(self.max_requests)
         self.request_count += 1
         prompt = build_prompt(field_name, prompt_samples, disclosure, candidates)
         answer = self.provider.classify(prompt, temperature=0.0, max_tokens=500, schema=classification_schema(candidate_ids))

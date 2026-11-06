@@ -419,9 +419,9 @@ rules/
 
 Rules can be filtered at load time or runtime:
 
-- **Language Filtering**: `--langs en,ru` → Only load rules for English and Russian
+- **Language Filtering**: `--langs en,ru` → English and Russian rules, plus language-independent rules (`lang: common`)
 - **Context Filtering**: `--contexts pii` → Only load PII-related rules
-- **Country Filtering**: `--country-codes us,ca` → Only load US/Canada rules
+- **Country Filtering**: `--country-codes us,ca` → US and Canada rules, plus universal rules (`country_code: xx` or none)
 
 ### Rule Compilation Security
 

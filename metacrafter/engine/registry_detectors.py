@@ -41,19 +41,47 @@ def detector_name_keys(record: Dict[str, Any], aliases: Iterable[str], countries
     return keys
 
 
-def detector_name_evidence(rule: Dict[str, Any], field_name: str) -> bool:
-    """True when ``field_name`` names the detector's datatype (see :func:`detector_name_keys`).
+OWN_NAME_WEIGHT = 1.0
+PARENT_NAME_WEIGHT = 0.5
 
+
+def _keys_match(keys: Iterable[Tuple[str, ...]], present: set, joined: str) -> bool:
+    return any(all(t in present or (len(t) >= 4 and t in joined) for t in key) for key in keys)
+
+
+def detector_name_evidence(rule: Dict[str, Any], field_name: str) -> float:
+    """Field-name evidence weight for a derived detector (see :func:`detector_name_keys`).
+
+    ``1.0`` when the field name names the datatype itself (its id or an alias), ``0.5`` when
+    it names only the broader ``parent`` datatype (``language`` for ``iso639_1``), else ``0.0``.
     Every key token must be a token of the field name, or (for tokens of 4+ characters) a
     substring of the field name with separators removed: ``postal`` matches ``postalcode``.
     """
-    keys = rule.get("name_keys")
-    if not keys:
-        return False
+    own, parent = rule.get("name_keys"), rule.get("parent_name_keys")
+    if not own and not parent:
+        return 0.0
     tokens = name_tokens(field_name)
     present = set(tokens)
     joined = "".join(tokens)
-    return any(all(t in present or (len(t) >= 4 and t in joined) for t in key) for key in keys)
+    if own and _keys_match(own, present, joined):
+        return OWN_NAME_WEIGHT
+    if parent and _keys_match(parent, present, joined):
+        return PARENT_NAME_WEIGHT
+    return 0.0
+
+
+def detector_names_country_type(rule: Dict[str, Any], field_name: str) -> bool:
+    """True when ``field_name`` names a country-specific datatype including its country.
+
+    Uses the record id and aliases with their country codes kept: ``am_postal_code`` needs
+    ``am`` and ``postal`` (``am_postal_code``, ``postal_code_am``), while ``inn``, whose id
+    has no country code, needs only ``inn``.
+    """
+    keys = rule.get("country_name_keys")
+    if not keys:
+        return False
+    tokens = name_tokens(field_name)
+    return _keys_match(keys, set(tokens), "".join(tokens))
 
 
 def bind_registry_rules(processor, adapter) -> None:
@@ -103,7 +131,7 @@ def add_registry_detectors(processor, adapter, mode: str = "stable") -> int:
 
     Each detector records its background broadness (:mod:`metacrafter.engine.background`).
     A detector whose regexp is generic and has no checksum is marked ``needs_name_evidence``:
-    it reports a match only when the field name names its datatype.
+    it reports a match only when the field name names its datatype or its ``parent``.
     Returns the number of detectors added.
     """
     if mode not in DETECTOR_MODES:
@@ -177,6 +205,10 @@ def add_registry_detectors(processor, adapter, mode: str = "stable") -> int:
             "background_class": broad_class,
             "needs_name_evidence": vfunc is None and broadness >= GENERIC_THRESHOLD,
             "name_keys": detector_name_keys(record, aliases_of.get(rid, []), countries),
+            "parent_name_keys": (
+                detector_name_keys({"id": record["parent"]}, [], countries) if record.get("parent") else []
+            ),
+            "country_name_keys": detector_name_keys(record, aliases_of.get(rid, []), []) if countries else [],
         }
         if vfunc is not None:
             rule["vfunc"] = vfunc

@@ -12,7 +12,7 @@ from typing import List, Dict, Any, Optional, Union, Set, Callable
 
 import yaml
 
-from metacrafter.engine.registry_detectors import detector_name_evidence
+from metacrafter.engine.registry_detectors import detector_name_evidence, detector_names_country_type
 from metacrafter.engine.scoring import data_score, field_score, priority_weight
 from pyparsing import (
     LineEnd,
@@ -34,7 +34,7 @@ from pyparsing import (
     ParserElement,
 )
 
-from .utils import headers, dict_to_columns
+from .utils import headers, dict_to_columns, strip_language_suffix
 
 
 def _normalize_country_codes(
@@ -267,6 +267,10 @@ DEFAULT_MIN_LEN = 3
 DEFAULT_PRIORITY = 3
 REGEX_MAX_LEN = 256
 MATCH_TYPES = ("text", "ppr", "func", "regex", "registry")
+# Rule files with this country code (or none) apply in every country.
+UNIVERSAL_COUNTRY = "xx"
+# Rule files with this language are language-independent.
+COMMON_LANG = "common"
 
 RULE_TYPE_FIELD = 1
 RULE_TYPE_DATA = 2
@@ -512,15 +516,15 @@ class RulesProcessor:
             logging.error("Skipping invalid rule file %s: %s", filename, "; ".join(file_errors))
             return
 
-        # If group of rules context or lang not in allowed list, skip it
-        if self.preset_langs and ruledata["lang"] not in self.preset_langs:
+        # Language and country filters select language- and country-specific rule files;
+        # language-independent (lang: common) and universal (no country or country_code: xx)
+        # files always load.
+        if self.preset_langs and ruledata["lang"] not in self.preset_langs and ruledata["lang"] != COMMON_LANG:
             return
         if self.preset_contexts and ruledata["context"] not in self.preset_contexts:
             return
         rule_countries = _normalize_country_codes(ruledata.get("country_code"))
-        if self.preset_countries:
-            if not rule_countries:
-                return
+        if self.preset_countries and rule_countries and UNIVERSAL_COUNTRY not in rule_countries:
             if not any(code in self.preset_countries for code in rule_countries):
                 return
 
@@ -852,7 +856,7 @@ class RulesProcessor:
                         break
             if not langs:
                 in_lang = True
-            elif rule["lang"] in langs:
+            elif rule["lang"] in langs or rule["lang"] == COMMON_LANG:
                 in_lang = True
             if ignore_imprecise and rule["imprecise"]:
                 in_imprecise = True
@@ -944,13 +948,21 @@ class RulesProcessor:
             if explain:
                 m_result.rejected = []
             shortfield = field.rsplit(".", 1)[-1].strip()
-            # Match field name first
+            # Match field name first; a name with a language suffix (title_en) falls back to
+            # its base name (title) when the full name matches no field rule.
             field_found: List[Dict[str, Any]] = []
-            for rule in field_rules:
-                if not self._field_rule_matches(rule, shortfield, field):
-                    continue
-                field_found.append(rule)
-                if stop_on_match:
+            name_variants = [(shortfield, field)]
+            base = strip_language_suffix(shortfield)
+            if base != shortfield:
+                name_variants.append((base, field[: len(field) - len(shortfield)] + base))
+            for short_name, full_name in name_variants:
+                for rule in field_rules:
+                    if not self._field_rule_matches(rule, short_name, full_name):
+                        continue
+                    field_found.append(rule)
+                    if stop_on_match:
+                        break
+                if field_found:
                     break
             field_found = self._drop_country_name_variants(field_found, m_result, explain)
             field_hits: Dict[str, float] = {}
@@ -1059,9 +1071,10 @@ class RulesProcessor:
                 for rule in rules:
                     name_weight = field_hits.get(rule["key"], 0.0)
                     if rule.get("derived"):
-                        if not name_weight and detector_name_evidence(rule, shortfield):
-                            name_weight = 1.0
-                        gate = self._detector_gate(rule, name_weight)
+                        detector_weight = detector_name_evidence(rule, base) or detector_name_evidence(rule, shortfield)
+                        names_type = bool(name_weight) or detector_names_country_type(rule, shortfield)
+                        name_weight = name_weight or detector_weight
+                        gate = self._detector_gate(rule, name_weight, names_type)
                         if gate:
                             if explain:
                                 m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": 0.0, "matched_count": 0, "considered_count": 0, "reason": gate})
@@ -1254,20 +1267,20 @@ class RulesProcessor:
         """Countries a rule is specific to; empty for universal rules (``country_code: xx``)."""
         codes = rule.get("country_code") or rule.get("registry_country") or []
         codes = {str(code).lower() for code in codes if code}
-        return set() if "xx" in codes else codes
+        return set() if UNIVERSAL_COUNTRY in codes else codes
 
-    def _detector_gate(self, rule: Dict[str, Any], name_weight: float) -> Optional[str]:
+    def _detector_gate(self, rule: Dict[str, Any], name_weight: float, names_type: bool = False) -> Optional[str]:
         """Reason a registry-derived detector may not report a match on this field, or None.
 
-        Without field-name evidence a detector is skipped when its regexp is generic (it
-        accepts a large share of ordinary tokens) or when its datatype is country-specific
-        and the scan country differs, or is unknown and the record has no checksum.
+        A detector with a generic regexp (it accepts a large share of ordinary tokens) needs
+        field-name evidence for its datatype or its parent (``name_weight``). A detector for
+        a country-specific datatype needs the field name to name the datatype itself
+        (``names_type``), unless the scan country matches, or is unknown and the record has
+        a checksum.
         """
-        if name_weight:
-            return None
-        if rule.get("needs_name_evidence"):
+        if rule.get("needs_name_evidence") and not name_weight:
             return "Generic pattern without field-name evidence"
-        if rule.get("registry_country"):
+        if rule.get("registry_country") and not names_type:
             country = self._country_match(rule)
             if country is False:
                 return "Country-specific type outside the scan countries"

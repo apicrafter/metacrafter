@@ -12,8 +12,8 @@ flags.
 | Flag | Meaning |
 |------|---------|
 | `--contexts` | Comma-separated context filters (`pii`, `finance`, …) |
-| `--langs` | Comma-separated language filters (`en`, `ru`, `fr`) |
-| `--country-codes` | Restrict rules to ISO country codes |
+| `--langs` | Comma-separated language filters (`en`, `ru`, `fr`); language-independent rules (`lang: common`) always apply |
+| `--country-codes` | ISO country codes; rules of other countries are not loaded, universal rules (`country_code: xx` or none) always are |
 | `--confidence`, `-c` | Minimum confidence (0–100, default 5.0) |
 | `--stop-on-match` | Stop after the first matching rule per field |
 | `--no-dates` | Disable qddate pattern detection |

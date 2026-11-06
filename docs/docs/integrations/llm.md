@@ -12,7 +12,7 @@ leave unresolved. The model never invents datatypes: it chooses from a shortlist
 |------|------|----------|
 | Rules | `--classification-mode rules` (default) | Rules and registry detectors only |
 | LLM | `--classification-mode llm` or `--llm-only` | LLM for every field |
-| Hybrid | `--classification-mode hybrid` or `--use-llm` | Rules first; the LLM only for fields without a match at or above `--llm-min-confidence` |
+| Hybrid | `--classification-mode hybrid` or `--use-llm` | Rules first; the LLM only for fields without a match at or above `--llm-min-confidence`. Rule matches are not reviewed, so hybrid adds labels but does not remove false ones |
 
 ## How it works
 
@@ -80,7 +80,13 @@ llm_model: claude-opus-5-5
 llm_min_confidence: 60
 llm_shortlist_size: 15
 llm_send_pii_values: false
+llm_max_requests: 100            # most LLM requests per scan
 ```
+
+A scan makes at most `llm_max_requests` LLM requests (default 100; `--llm-max-requests`
+overrides it). Cached answers and fields without registry candidates do not count. When a
+scan needs more, it stops with `LLM request budget of N requests exceeded`, unless
+`--llm-fallback rules` is set: then the remaining fields use rules.
 
 ## CLI examples
 

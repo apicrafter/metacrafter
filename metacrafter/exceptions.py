@@ -33,6 +33,14 @@ class ValidationError(MetacrafterError):
 
 
 
+class LLMBudgetExceeded(MetacrafterError, ValueError):
+    """Raised when a scan needs more LLM requests than ``llm_max_requests`` allows."""
+
+    def __init__(self, max_requests: int) -> None:
+        self.max_requests = max_requests
+        super().__init__("LLM request budget exceeded")
+
+
 class MissingExtraError(MetacrafterError, ImportError):
     """Raised when a feature needs an optional dependency group that is not installed."""
 
