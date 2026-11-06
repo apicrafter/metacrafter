@@ -59,6 +59,28 @@ SQL scans add the table's keys to each key column: `"database": {"primary_key": 
 `primary_key`, `autoincrement` and `foreign_key`, and for a database-generated key a match
 `{"ruleid": "_db_autoincrement_key", "dataclass": "id", "ruletype": "schema", "confidence": 100}`.
 
+### Field groups
+
+`field_groups` lists sibling fields (same parent path) whose names share structure. Names
+are split on case changes and separators:
+
+- `prefix`: two or more fields start with the same word of three or more letters (not a
+  flag word such as `is` or `has`), as `place`, `placeURL`, `placeType`; `parts` gives the
+  rest of each name (`""`, `url`, `type`).
+- `suffix`: two or more multi-word fields end with the same word, as `reviewScore`,
+  `avgScore` (`score`) or `user_id`, `group_id` (`id`).
+- `language`: a field and its language variants, as `title`, `title_en`, `title_ru`;
+  `parts` gives the language codes. Prefix and suffix groups compare the base names.
+
+```json
+"field_groups": [
+  {"kind": "prefix", "name": "place", "parent": "", "fields": ["place", "placeType", "placeURL"], "parts": ["", "type", "url"]},
+  {"kind": "suffix", "name": "score", "parent": "", "fields": ["avgScore", "reviewScore"]}
+]
+```
+
+Markdown output lists the groups under each source.
+
 Version 3 is a superset of version 2: `data` and `fields` hold the same list, and readers
 of version 2 keep working. `metacrafter.reports.normalize_report` accepts versions 1, 2
 and 3.

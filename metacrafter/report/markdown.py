@@ -42,6 +42,14 @@ def _source_md(report: Dict[str, Any], include_samples: bool) -> List[str]:
         lines.append("")
     else:
         lines += ["No PII fields detected.", ""]
+    groups = report.get("field_groups") or []
+    if groups:
+        lines += ["**Field groups:**", ""]
+        for group in groups:
+            label = "prefix" if group.get("kind") == "prefix" else "suffix"
+            fields = ", ".join(f"`{_escape(f)}`" for f in group.get("fields") or [])
+            lines.append(f"- {label} `{_escape(group.get('name'))}`: {fields}")
+        lines.append("")
     if include_samples:
         lines += ["### Statistics", "", "```", _escape(report.get("stats")), "```", ""]
     return lines
