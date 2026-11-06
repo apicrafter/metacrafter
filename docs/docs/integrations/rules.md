@@ -180,13 +180,44 @@ at load time:
 Derived matches have rule ids `registry:<id>` and `ruletype: registry`. Set the default
 in `.metacrafter` with `registry_detectors: off|stable|all`.
 
+Values alone do not identify every datatype, so a detector reports a match only when the
+evidence supports it:
+
+- **Generic patterns need the field name.** Each regexp is tested against classes of
+  ordinary tokens: integers of 1 to 6 digits (one class per length), plain words,
+  title-case words and short acronyms. A regexp without a checksum that accepts at least
+  30% of one class (for example `\d{1,4}`, `\d{4}` or `[A-Za-z]{2,63}`) matches only when
+  the field name names the datatype. Without this a column of counters would be reported
+  as flight numbers and a column of words as top-level domains.
+- **Field-name evidence** comes from a field rule for the same datatype, or from the
+  registry id and aliases: their tokens, without the record's country codes and common
+  tokens such as `code`, `number` or `id`, must appear in the field name. `am_postal_code`
+  needs `postal` (`postal_code`, `postalCode`); `tld` needs `tld`, or the alias
+  `domain_zone`.
+- **Country-specific datatypes** (registry `country`) without field-name evidence are
+  skipped when `--country-codes` names other countries, and when no country is set and
+  the record has no checksum.
+
+`--explain` lists the skipped detectors with the reason.
+
+Curated rules follow two similar rules when `--country-codes` is not set:
+
+- a field-name match from a country-specific rule file (`country_code` other than `xx`)
+  is dropped when a universal rule matched the same field with at least its priority, or
+  any rule matched with a higher priority: a field `city` reports `city`, not also `egcity`
+  and `trcity`;
+- a value match from a country-specific rule without a validator and without field-name
+  evidence is dropped when a universal rule matched the same values with at least the
+  same confidence: GUIDs report `uuid`, not also `rufias`.
+
 ## Confidence scoring
 
 Confidence is 0–100 (`scoring_model: v1`):
 
 - **Value evidence**: the share of non-empty values that match the pattern and pass the
   validator or checksum, times the pattern specificity (1 for curated rules).
-- **Field-name bonus**: up to +10 when a field rule for the same datatype also matched.
+- **Field-name bonus**: up to +10 when a field rule for the same datatype also matched
+  (for registry detectors, also when the field name names the datatype).
 - **Country**: +5 / −10 for registry detectors when `--country-codes` is set.
 - **Draft penalty**: −5 for draft registry records.
 - **Field-name-only matches** score 60 × priority weight (1 → 60, 2 → 48, 3 → 36).
