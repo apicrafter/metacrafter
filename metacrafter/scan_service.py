@@ -1214,6 +1214,7 @@ class CrafterCmd(object):
                 registry_path=settings.get("registry_path"),
                 offline=bool(settings.get("offline")),
                 cache_ttl=float(settings.get("cache_ttl", 86400)),
+                fetch_timeout=float(settings.get("fetch_timeout", 30)),
             )
         return self._registry
 

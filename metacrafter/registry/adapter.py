@@ -6,25 +6,31 @@ through :class:`RegistryAdapter`. Metacrafter talks to the registry only through
 files its website publishes under ``/api/v1/``; it does not use the registry's Python
 package (see ``openspec/changes/update-ecosystem-distribution``).
 
-Source order (see ``openspec/changes/add-registry-integration/design.md``):
+Source order (see ``openspec/changes/update-bundle-registry-snapshot``):
 
 1. ``registry_path``: a snapshot directory with the ``/api/v1/`` files
    (``metacrafter registry fetch --to DIR`` writes one);
 2. a fresh, hash-verified local cache;
-3. a network fetch from the configured base URL (unless offline), verified
-   against the manifest SHA-256 values;
-4. a stale but verified cache.
+3. when no verified cache exists and the base URL is the one of the bundled snapshot
+   (``metacrafter/registry/bundled/``), that snapshot, copied into the cache;
+4. a network fetch from the configured base URL (unless offline), gzip-compressed,
+   limited by an overall deadline and verified against the manifest SHA-256 values;
+5. a stale but verified cache. A failed fetch marks it as checked, so the network is
+   tried again only after the cache TTL.
 
 When nothing loads, the adapter is still usable: it resolves nothing and builds
 URLs from the configured base URL, and its provenance says ``unavailable``.
 """
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import logging
 import os
 import re
+import shutil
+import tempfile
 import threading
 import time
 import urllib.request
@@ -37,7 +43,12 @@ logger = logging.getLogger(__name__)
 DEFAULT_REGISTRY_URL = "https://registry.apicrafter.io"
 DEFAULT_CACHE_TTL = 24 * 3600
 DEFAULT_TIMEOUT = 10.0
+#: Overall time limit (seconds) for a registry download on the scan path.
+DEFAULT_FETCH_TIMEOUT = 30.0
 SNAPSHOT_FILES = ("datatypes.jsonl", "aliases.json", "categories.json")
+#: Registry snapshot shipped in the package: the version recorded in ``ecosystem.lock``.
+BUNDLED_DIR = Path(__file__).parent / "bundled"
+_CHUNK = 64 * 1024
 
 #: Crosswalk systems copied from registry ``mappings`` into match enrichment.
 ENRICHMENT_MAPPINGS = ("presidio", "google_dlp", "dpv", "purview", "schema_org", "wikidata")
@@ -141,10 +152,49 @@ class SnapshotRegistry:
 _SnapshotRegistry = SnapshotRegistry
 
 
-def _http_get(url: str, timeout: float) -> bytes:
-    request = urllib.request.Request(url, headers={"User-Agent": "metacrafter"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - configured registry URL
-        return response.read()
+def _time_left(url: str, deadline: Optional[float]) -> Optional[float]:
+    if deadline is None:
+        return None
+    left = deadline - time.monotonic()
+    if left <= 0:
+        raise TimeoutError(f"download of {url} did not finish before the deadline")
+    return left
+
+
+def _set_read_timeout(response: Any, seconds: float) -> None:
+    """Best effort: shorten the socket timeout of the next read to the time left."""
+    sock = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
+    if sock is not None:
+        try:
+            sock.settimeout(seconds)
+        except OSError:
+            pass
+
+
+def _http_get(url: str, timeout: float, deadline: Optional[float] = None) -> bytes:
+    """GET ``url`` and return the (decompressed) body.
+
+    ``timeout`` limits each socket operation; ``deadline`` (a ``time.monotonic()`` value)
+    limits the whole request. gzip responses are accepted and decompressed.
+    """
+    request = urllib.request.Request(url, headers={"User-Agent": "metacrafter", "Accept-Encoding": "gzip"})
+    left = _time_left(url, deadline)
+    first_timeout = timeout if left is None else min(timeout, left)
+    with urllib.request.urlopen(request, timeout=first_timeout) as response:  # noqa: S310 - configured registry URL
+        chunks = []
+        while True:
+            left = _time_left(url, deadline)
+            if left is not None:
+                _set_read_timeout(response, min(timeout, left))
+            chunk = response.read(_CHUNK)
+            if not chunk:
+                break
+            chunks.append(chunk)
+        encoding = (response.headers.get("Content-Encoding") or "").strip().lower()
+    body = b"".join(chunks)
+    if encoding == "gzip":
+        body = gzip.decompress(body)
+    return body
 
 
 def _expected_hashes(manifest: Dict[str, Any]) -> Dict[str, str]:
@@ -174,14 +224,41 @@ def verify_snapshot(directory: Path) -> bool:
     return True
 
 
-def fetch_snapshot(base_url: str, cache_dir: Path, timeout: float = DEFAULT_TIMEOUT) -> Path:
+def _install_snapshot(cache_dir: Path, files: Dict[str, bytes]) -> Path:
+    """Write snapshot files to a staging directory, then swap them into ``cache_dir``.
+
+    ``index.json`` is replaced last, so an interrupted swap leaves a cache that fails
+    verification instead of one that looks current.
+    """
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    # One staging directory per call: concurrent first scans must not remove each other's files.
+    staging = Path(tempfile.mkdtemp(prefix=cache_dir.name + ".partial-", dir=cache_dir.parent))
+    try:
+        for name, body in files.items():
+            (staging / name).write_bytes(body)
+        names = sorted(files, key=lambda n: n == "index.json")
+        for name in names:
+            os.replace(staging / name, cache_dir / name)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    return cache_dir
+
+
+def fetch_snapshot(
+    base_url: str,
+    cache_dir: Path,
+    timeout: float = DEFAULT_TIMEOUT,
+    deadline_seconds: Optional[float] = None,
+) -> Path:
     """Download the v1 snapshot into ``cache_dir`` and verify it against the manifest.
 
-    Files are written to a temporary directory first and swapped in only after
-    every hash matches, so a failed download never corrupts a working cache.
+    Files are downloaded and verified first and swapped in only after every hash matches,
+    so a failed download never corrupts a working cache. ``deadline_seconds`` limits the
+    whole download (``None``: no overall limit).
     """
+    deadline = None if deadline_seconds is None else time.monotonic() + deadline_seconds
     base = base_url.rstrip("/")
-    manifest_bytes = _http_get(f"{base}/api/v1/index.json", timeout)
+    manifest_bytes = _http_get(f"{base}/api/v1/index.json", timeout, deadline)
     manifest = json.loads(manifest_bytes)
     cache_dir.mkdir(parents=True, exist_ok=True)
     cached_index = cache_dir / "index.json"
@@ -189,19 +266,43 @@ def fetch_snapshot(base_url: str, cache_dir: Path, timeout: float = DEFAULT_TIME
         cached_index.touch()
         return cache_dir
     hashes = _expected_hashes(manifest)
-    staging = cache_dir.with_name(cache_dir.name + ".partial")
-    staging.mkdir(parents=True, exist_ok=True)
+    files: Dict[str, bytes] = {}
     for name in SNAPSHOT_FILES:
-        body = _http_get(f"{base}/api/v1/{name}", timeout)
+        body = _http_get(f"{base}/api/v1/{name}", timeout, deadline)
         expected = hashes.get(name)
         if expected and hashlib.sha256(body).hexdigest() != expected:
             raise ValueError(f"Registry file {name}: SHA-256 does not match the manifest ({expected})")
-        (staging / name).write_bytes(body)
-    (staging / "index.json").write_bytes(manifest_bytes)
-    for path in staging.iterdir():
-        os.replace(path, cache_dir / path.name)
-    staging.rmdir()
-    return cache_dir
+        files[name] = body
+    files["index.json"] = manifest_bytes
+    return _install_snapshot(cache_dir, files)
+
+
+def bundled_manifest(directory: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Manifest (``index.json``) of the bundled registry snapshot, or None when absent."""
+    index = Path(directory or BUNDLED_DIR) / "index.json"
+    if not index.exists():
+        return None
+    return json.loads(index.read_text("utf-8"))
+
+
+def read_bundled_snapshot(directory: Optional[Path] = None) -> Dict[str, bytes]:
+    """Files of the bundled snapshot, decompressed and verified against its manifest."""
+    directory = Path(directory or BUNDLED_DIR)
+    manifest_bytes = (directory / "index.json").read_bytes()
+    hashes = _expected_hashes(json.loads(manifest_bytes))
+    files: Dict[str, bytes] = {}
+    for name in SNAPSHOT_FILES:
+        packed = directory / f"{name}.gz"
+        body = gzip.decompress(packed.read_bytes()) if packed.exists() else (directory / name).read_bytes()
+        expected = hashes.get(name)
+        if not expected:
+            raise ValueError(f"Bundled registry manifest has no SHA-256 for {name}")
+        actual = hashlib.sha256(body).hexdigest()
+        if actual != expected:
+            raise ValueError(f"Bundled registry file {name}: SHA-256 {actual} does not match the manifest ({expected})")
+        files[name] = body
+    files["index.json"] = manifest_bytes
+    return files
 
 
 def default_cache_dir(base_url: str) -> Path:
@@ -261,8 +362,12 @@ class RegistryAdapter:
         cache_dir: Optional[str] = None,
         cache_ttl: float = DEFAULT_CACHE_TTL,
         timeout: float = DEFAULT_TIMEOUT,
+        fetch_timeout: Optional[float] = DEFAULT_FETCH_TIMEOUT,
     ) -> "RegistryAdapter":
-        """Load registry data following the documented source order."""
+        """Load registry data following the documented source order.
+
+        ``fetch_timeout`` limits the whole network download (``None``: no limit).
+        """
         base = (base_url or DEFAULT_REGISTRY_URL).rstrip("/")
         if registry_path:
             try:
@@ -272,17 +377,26 @@ class RegistryAdapter:
 
         cache = Path(cache_dir) if cache_dir else default_cache_dir(base)
         index = cache / "index.json"
-        if index.exists() and time.time() - index.stat().st_mtime < cache_ttl and verify_snapshot(cache):
+        cache_valid = index.exists() and verify_snapshot(cache)
+        if cache_valid and time.time() - index.stat().st_mtime < cache_ttl:
             return cls._from_cache(cache, base, "cache")
+
+        if not cache_valid and cls._seed_from_bundle(cache, base):
+            return cls._from_cache(cache, base, "bundled")
 
         if not offline:
             try:
-                fetch_snapshot(base, cache, timeout=timeout)
+                fetch_snapshot(base, cache, timeout=timeout, deadline_seconds=fetch_timeout)
                 return cls._from_cache(cache, base, "network")
             except Exception as exc:  # noqa: BLE001 - network or hash failures fall back
-                logger.warning("Could not fetch registry from %s: %s", base, exc)
+                limit = f" (time limit {fetch_timeout:g} s)" if fetch_timeout is not None else ""
+                logger.warning("Could not fetch registry from %s%s: %s", base, limit, exc)
+                cache_valid = index.exists() and verify_snapshot(cache)
+                if cache_valid:
+                    # Checked now: retry after the TTL instead of on every scan.
+                    index.touch()
 
-        if index.exists() and verify_snapshot(cache):
+        if cache_valid:
             return cls._from_cache(cache, base, "cache (stale)")
 
         logger.warning(
@@ -292,6 +406,19 @@ class RegistryAdapter:
             base,
         )
         return cls.unavailable(base)
+
+    @staticmethod
+    def _seed_from_bundle(cache: Path, base: str) -> bool:
+        """Copy the bundled snapshot into an empty or invalid cache for its own base URL."""
+        try:
+            manifest = bundled_manifest()
+            if manifest is None or str(manifest.get("base_url") or "").rstrip("/") != base:
+                return False
+            _install_snapshot(cache, read_bundled_snapshot())
+            return True
+        except Exception as exc:  # noqa: BLE001 - a broken bundle falls back to the network
+            logger.warning("Could not use the bundled registry snapshot: %s", exc)
+            return False
 
     @classmethod
     def _from_cache(cls, cache: Path, base: str, kind: str) -> "RegistryAdapter":
@@ -483,6 +610,7 @@ def get_adapter(
     cache_dir: Optional[str] = None,
     cache_ttl: float = DEFAULT_CACHE_TTL,
     timeout: float = DEFAULT_TIMEOUT,
+    fetch_timeout: Optional[float] = DEFAULT_FETCH_TIMEOUT,
 ) -> RegistryAdapter:
     """Return a process-wide adapter for the given settings (loaded once)."""
     key = (base_url, registry_path, offline, cache_dir)
@@ -496,6 +624,7 @@ def get_adapter(
                 cache_dir=cache_dir,
                 cache_ttl=cache_ttl,
                 timeout=timeout,
+                fetch_timeout=fetch_timeout,
             )
             _CACHE[key] = adapter
         return adapter

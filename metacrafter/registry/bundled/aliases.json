@@ -1,0 +1,16 @@
+{
+  "ca_postalcode": "ca_postcode",
+  "dc_language": "dclanguage",
+  "dc_title": "dctitle",
+  "de_socialinsurance": "de_rvnr",
+  "de_steuerid": "steuerid",
+  "email_person": "email",
+  "eui48": "mac_address",
+  "guid": "uuid",
+  "md5": "md5hash",
+  "mime_type": "mimetype",
+  "ninumber": "uknino",
+  "sha1": "sha1hash",
+  "sha256": "sha256hash",
+  "ssn": "usssn"
+}
