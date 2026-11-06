@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Package metadata uses the SPDX license expression `Apache-2.0` (PEP 639); building needs
+  setuptools 77 or newer.
+
 ### Performance
 
 - **Bundled registry snapshot.** The package ships the registry snapshot recorded in
