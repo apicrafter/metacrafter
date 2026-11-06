@@ -250,3 +250,60 @@ def test_scan_report_states_scoring_model_and_detectors():
     report = CrafterCmd(quiet=True, registry_detectors="off").scan_data([{"a": "x"}], parse_dates=False)
     assert report["scoring_model"] == "v1"
     assert report["registry_detectors"] == {"mode": "off", "count": 0}
+
+
+def _scan_with_stats(processor, rows):
+    from metacrafter.classify.stats import Analyzer
+    from metacrafter.reports import statistics_dict
+
+    stats = statistics_dict(Analyzer().analyze(fromfile=None, itemlist=rows, options={}))
+    result = processor.match_dict(rows, datastats=stats, confidence=5, parse_dates=False)
+    return {r.field: r.matches for r in result.results}, stats
+
+
+THIRTEEN_DIGITS = """
+  thirteen:
+    key: thirteen
+    match: regex
+    type: data
+    rule: '\\d{13}'
+"""
+
+
+def test_whole_number_float_column_is_matched_as_integers(tmp_path):
+    # Identifiers read as floats (.xls, pandas with NaN) still match their integer rules.
+    processor = load(tmp_path, THIRTEEN_DIGITS)
+    rows = [{"x": 1027700043502.0}, {"x": 1027700132195.0}, {"x": float("nan")}]
+    matches, stats = _scan_with_stats(processor, rows)
+    assert stats["x"]["ftype"] == "float"
+    assert [m.dataclass for m in matches["x"]] == ["thirteen"]
+
+
+def test_float_text_column_of_whole_numbers_is_matched(tmp_path):
+    processor = load(tmp_path, THIRTEEN_DIGITS)
+    rows = [{"x": "1027700043502.0"}, {"x": "1027700132195.0"}]
+    matches, stats = _scan_with_stats(processor, rows)
+    assert stats["x"]["ftype"] == "float"
+    assert [m.dataclass for m in matches["x"]] == ["thirteen"]
+
+
+def test_fractional_float_column_is_not_matched(tmp_path):
+    processor = load(tmp_path, THIRTEEN_DIGITS)
+    rows = [{"x": 1027700043502.5}, {"x": 1027700132195.0}]
+    matches, _ = _scan_with_stats(processor, rows)
+    assert matches["x"] == []
+
+
+@pytest.mark.parametrize("values, expected", [
+    ([1.0, 2.0, None, float("nan"), "", 3], ["1", "2", "", "", "", "3"]),
+    (["1027700043502.0", " 5.0 ", "N/A"], ["1027700043502", "5", ""]),
+    ([1.5, 2.0], None),
+    ([2.0 ** 53], None),
+    (["abc", 1.0], None),
+    ([True, 1.0], None),
+    ([None, float("nan")], None),
+])
+def test_whole_number_texts(values, expected):
+    from metacrafter.classify.utils import whole_number_texts
+
+    assert whole_number_texts(values, empty_values=["N/A"]) == expected

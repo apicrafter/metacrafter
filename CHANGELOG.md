@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Float columns of whole numbers are matched by data rules.** A column whose values are
+  all whole numbers stored as floats (`.xls` files, pandas columns with missing values, CSV
+  text such as `1027700132195.0`) is matched as integer text (`1027700132195`). Before,
+  every float column skipped data rules, so identifiers such as OGRN or INN read from Excel
+  were found only by field name. Columns with a fractional value, or a value of 2^53 or
+  more, are still skipped.
+
 - **Bundled registry snapshot updated** to registry 1.3.0.dev0 at `2ec9d12`, which includes
   apicrafter/metacrafter-registry#115: `flightnumber` no longer accepts a bare 1–4 digit
   number, `eunuts` and `vatin` need a country prefix (no more `JPEG`, `PDF`, `BE10`), and

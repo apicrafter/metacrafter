@@ -34,7 +34,7 @@ from pyparsing import (
     ParserElement,
 )
 
-from .utils import headers, dict_to_columns, strip_language_suffix
+from .utils import headers, dict_to_columns, strip_language_suffix, whole_number_texts
 
 
 def _normalize_country_codes(
@@ -1005,10 +1005,17 @@ class RulesProcessor:
                         results.add(m_result)
                         continue
                     elif datastats[field]["ftype"] == "float":
-                        # Float fields are skipped from pattern matching
-                        # as they don't benefit from rule-based classification
-                        results.add(m_result)
-                        continue
+                        # Float fields are skipped from pattern matching as they don't
+                        # benefit from rule-based classification, unless every value is a
+                        # whole number: identifiers read as floats (.xls, pandas with NaN)
+                        # are matched as their integer text.
+                        whole = whole_number_texts(slice, empty_values)
+                        if whole is None:
+                            results.add(m_result)
+                            continue
+                        slice = data = whole
+                        lengths = [len(text) for text in whole if text]
+                        min_len, max_len = min(lengths), max(lengths)
                     elif datastats[field]["ftype"] == "datetime":
                         m_result.add(
                             RuleResult(
@@ -1031,8 +1038,9 @@ class RulesProcessor:
                         )
                         results.add(m_result)
                         continue
-                    min_len = datastats[field]["minlen"]
-                    max_len = datastats[field]["maxlen"]
+                    if not min_len:
+                        min_len = datastats[field]["minlen"]
+                        max_len = datastats[field]["maxlen"]
             if min_len == 0:
                 try:
                     min_len = len(min(data, key=len))

@@ -338,3 +338,44 @@ def strip_values(value):
     if isinstance(value, list):
         return [strip_values(item) for item in value]
     return value
+
+
+# Largest integer a float holds exactly (2**53); larger whole floats may have lost digits.
+_MAX_EXACT_FLOAT_INT = 2 ** 53
+
+
+def whole_number_texts(values, empty_values=()):
+    """Integer text of a float column's values when every value is a whole number.
+
+    Identifiers such as registration numbers reach the scanner as floats when a source
+    stores numbers as floats (``.xls`` files, pandas columns with missing values, CSV text
+    ``1027700132195.0``). Returns a list with ``str(int(value))`` for each whole number and
+    ``""`` for an empty, ``empty_values`` or NaN value, or ``None`` when any value is
+    fractional, too large to be exact, or not a number, or when no value is a number.
+    """
+    texts = []
+    for value in values:
+        if value is None or (isinstance(value, str) and (not value.strip() or value in empty_values)):
+            texts.append("")
+            continue
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            texts.append(str(value))
+            continue
+        if isinstance(value, str):
+            try:
+                value = float(value)
+            except ValueError:
+                return None
+        if not isinstance(value, float):
+            return None
+        if value != value:  # NaN
+            texts.append("")
+            continue
+        if not value.is_integer() or abs(value) >= _MAX_EXACT_FLOAT_INT:
+            return None
+        texts.append(str(int(value)))
+    if not any(texts):
+        return None
+    return texts
