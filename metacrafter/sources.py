@@ -4,10 +4,31 @@ from metacrafter.reports import validate_options
 from metacrafter.exceptions import require_extra
 
 
-def scan_items(service, items, limit, options):
+def scan_items(service, items, limit, options, field_schema=None):
     if service.remote is None:
-        return service.scan_data(items, limit=limit, **options)
+        return service.scan_data(items, limit=limit, field_schema=field_schema, **options)
     return service.scan_data_client(service.remote, items, limit=limit, **options)
+
+
+def table_key_schema(table):
+    """Primary and foreign keys of a reflected SQLAlchemy table, per column name.
+
+    A single-column integer primary key that the database generates (autoincrement, serial,
+    SQLite rowid alias) is marked ``autoincrement``. Foreign keys give the referenced
+    ``table.column``.
+    """
+    from sqlalchemy import Integer
+
+    schema = {}
+    pk_columns = list(table.primary_key.columns)
+    for column in pk_columns:
+        info = schema.setdefault(column.name, {})
+        info["primary_key"] = True
+        if len(pk_columns) == 1 and isinstance(column.type, Integer) and column.autoincrement in (True, "auto"):
+            info["autoincrement"] = True
+    for fk in sorted(table.foreign_keys, key=lambda item: (item.parent.name, item.target_fullname)):
+        schema.setdefault(fk.parent.name, {})["foreign_key"] = fk.target_fullname
+    return schema
 
 
 def scan_sql(service, connectstr, schema, limit, options, batch_size=1000, tables=None):
@@ -41,7 +62,7 @@ def scan_sql(service, connectstr, schema, limit, options, batch_size=1000, table
                         )
                         with connection.execute(select(table).limit(limit)) as result:
                             items = [dict(row) for row in result.mappings()]
-                        report = scan_items(service, items, limit, options)
+                        report = scan_items(service, items, limit, options, table_key_schema(table))
                         report.update(source=source, table=source)
                         report["sampling"].update(
                             method="database-head", population_count_known=False

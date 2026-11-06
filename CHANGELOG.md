@@ -37,6 +37,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `scan_data(strip=True)` remove leading and trailing whitespace from string values,
   nested ones included, before statistics and matching. Off by default
   (apicrafter/metacrafter#13).
+- `scan sql` reports primary and foreign keys from the table schema: tags `primary_key`,
+  `autoincrement`, `foreign_key`, a `database` object per key column, and a schema match
+  `id` (confidence 100) for single-column integer keys the database generates
+  (apicrafter/metacrafter#14).
 - `llm_max_requests` in `.metacrafter` and `--llm-max-requests` set the LLM request budget
   per scan (default 100). A scan that needs more stops with `LLM request budget of N
   requests exceeded; raise llm_max_requests (--llm-max-requests) or use --llm-fallback

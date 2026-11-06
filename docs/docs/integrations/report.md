@@ -54,6 +54,11 @@ A single source (file, table, in-memory data):
 Several sources (SQL, MongoDB, bulk) are wrapped in
 `{"report_version": 3, "sources": [...], "complete": ..., "errors": [...]}`.
 
+SQL scans add the table's keys to each key column: `"database": {"primary_key": true,
+"autoincrement": true}` or `"database": {"foreign_key": "main.parent.id"}`, the tags
+`primary_key`, `autoincrement` and `foreign_key`, and for a database-generated key a match
+`{"ruleid": "_db_autoincrement_key", "dataclass": "id", "ruletype": "schema", "confidence": 100}`.
+
 Version 3 is a superset of version 2: `data` and `fields` hold the same list, and readers
 of version 2 keep working. `metacrafter.reports.normalize_report` accepts versions 1, 2
 and 3.
