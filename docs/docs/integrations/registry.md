@@ -32,9 +32,17 @@ Metacrafter tries these sources in order:
    `metacrafter registry fetch --to DIR` writes one;
 2. a local cache in `~/.cache/metacrafter/registry/` that is younger than
    `registry_cache_ttl` (default 24 hours) and matches its manifest hashes;
-3. a download of `/api/v1/` from the configured base URL. Every file is checked against
-   the SHA-256 in `index.json` before use. Skipped when `registry_offline` is set;
-4. an older cache, if its hashes still match.
+3. the registry snapshot shipped in the package, when there is no valid cache and the base
+   URL is the default `https://registry.apicrafter.io`. It is the registry version recorded
+   in `ecosystem.lock`. It is checked against its manifest hashes and copied into the cache,
+   so the first scan downloads nothing and the next network check is after
+   `registry_cache_ttl`;
+4. a download of `/api/v1/` from the configured base URL. Every file is checked against
+   the SHA-256 in `index.json` before use. The download is gzip-compressed and stops after
+   `registry_fetch_timeout` seconds in total (default 30). Skipped when `registry_offline`
+   is set;
+5. an older cache, if its hashes still match. After a failed download the cache counts as
+   checked, so the next attempt is after `registry_cache_ttl`.
 
 If nothing loads, the scan still runs: matches keep their rule keys,
 URLs are built from the base URL, and `registry.source` is `unavailable`.
@@ -50,6 +58,7 @@ registry_url: https://registry.apicrafter.io   # base URL for links and download
 registry_path: /data/registry-snapshot          # optional local snapshot
 registry_offline: true                          # never use the network
 registry_cache_ttl: 86400                       # seconds
+registry_fetch_timeout: 30                      # seconds for a whole download during a scan
 ```
 
 Environment variables override the file: `METACRAFTER_REGISTRY_URL`,
@@ -61,7 +70,9 @@ Python package:
 - value identification, search and the qddate crosswalk run on the downloaded records;
 - the registry's checksum algorithms are vendored in `metacrafter/engine/checksum_algorithms.py`.
 
-For an offline or air-gapped machine:
+With the default base URL, `registry_offline` works on a new machine: datatypes resolve
+against the bundled snapshot. `metacrafter registry fetch` has no overall time limit. For an
+offline or air-gapped machine that needs the current registry, or a self-hosted registry:
 
 ```bash
 metacrafter registry fetch --to /data/registry-snapshot

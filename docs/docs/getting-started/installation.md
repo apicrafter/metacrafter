@@ -18,8 +18,10 @@ That is all you need. On first use, Metacrafter downloads its default rule pack 
 pinned [metacrafter-rules](https://github.com/apicrafter/metacrafter-rules) GitHub release
 (about 280 KB). It checks the SHA-256 of the download and caches the pack in
 `~/.cache/metacrafter/rules/`. Registry data is read from
-[registry.apicrafter.io](https://registry.apicrafter.io) and cached the same way. Neither
-project is a Python dependency.
+[registry.apicrafter.io](https://registry.apicrafter.io) and cached the same way. The
+package ships a registry snapshot (about 550 KB), so the first scan does not wait for the
+registry download; the cache is refreshed after 24 hours. Neither project is a Python
+dependency.
 
 To prepare an offline machine, run these on a machine with network access and copy the
 cache or the snapshot directory:
