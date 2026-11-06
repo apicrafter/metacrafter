@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Bundled registry snapshot updated** to registry 1.3.0.dev0 at `2ec9d12`, which includes
+  apicrafter/metacrafter-registry#115: `flightnumber` no longer accepts a bare 1–4 digit
+  number, `eunuts` and `vatin` need a country prefix (no more `JPEG`, `PDF`, `BE10`), and
+  `wkt` is stable, so WKT geometry columns are detected (`armsis` GeoNode metadata: 45
+  correct matches, field recall 0.86 → 0.88). Existing caches pick up the change after
+  `registry_cache_ttl`, because a refresh compares the whole manifest, not only the version.
 - **The pinned rule pack ships with the package.** `metacrafter/rules/bundled/` holds the
   archive of the pinned metacrafter-rules release (`v0.0.2`, 284 KB), verified with the same
   SHA-256. The first scan unpacks it into the cache instead of downloading it from GitHub:
