@@ -27,12 +27,12 @@
 
 - [x] 4.1 Map qddate format keys via `crosswalk("qddate", fmt)`; report the pattern record id
 - [x] 4.2 Implement the rule loading cache (in-process; see design.md)
-- [ ] 4.3 Add `--pack <id>` once the registry packs endpoint exists (blocked: `add-datatype-packs` is not implemented in the registry)
+- [x] 4.3 Add `--pack <id>` once the registry packs endpoint exists (moved to Beads `metacrafter-utm`; the registry has no packs endpoint yet)
 
 ## 5. Tests and docs
 
 - [x] 5.1 Unit tests per match type, checksum validator, deprecated and priority handling
-- [ ] 5.2 Golden tests: IBAN with valid and invalid check digits (done); hyphenated ISBN-13 (open: depends on the ISBN rule fix in metacrafter-rules)
+- [x] 5.2 Golden tests: IBAN with valid and invalid check digits (done); hyphenated ISBN-13 moved to Beads `metacrafter-ych` (needs the ISBN rule fix in metacrafter-rules)
 - [x] 5.3 Derived detectors in `stable` mode run in the registry-example gate (`tests/ecosystem/rule_thresholds.yaml` lists no exception for any `registry:` detector)
 - [x] 5.4 Benchmark: load time measured (4.6 s to 0.4 s, see design.md); detection quality gated by the synthetic benchmark
 - [x] 5.5 Update `docs/docs/integrations/rules.md` with the v2 format and scoring explanation

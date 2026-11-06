@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
+## [1.0.0] - 2026-11-06
+
+Registry-driven modernization (see `devdocs/MODERNIZATION_PLAN.md`, `openspec/ROADMAP.md`)
+together with the fixes from the 2026-10-01 repository review. Migration guide:
+`docs/docs/getting-started/migration.md`.
+
+### Distribution
+
+Neither metacrafter-rules nor metacrafter-registry is a Python dependency:
 
 - **Rule pack from GitHub releases.** The default rule pack is downloaded on first use from
   the pinned metacrafter-rules release (`v0.0.2`), verified by SHA-256 and cached.
@@ -22,18 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CI.** The ecosystem gate uses the live registry. It blocks while the registry version
   matches `ecosystem.lock` and reports otherwise.
 
-## [1.0.0.dev0] - 2026-11-05
-
-Registry-driven modernization (see `devdocs/MODERNIZATION_PLAN.md`, `openspec/ROADMAP.md`)
-together with the fixes from the 2026-10-01 repository review. Migration guide:
-`docs/docs/getting-started/migration.md`.
-
 ### Breaking
 
 - Python 3.10 or newer.
 - The in-repository `rules/` directory is removed; rules no longer load from `./rules`.
-  The default rule pack comes from metacrafter-rules (see Unreleased for how it is
-  distributed now).
+  The default rule pack comes from metacrafter-rules (see Distribution above).
 - Optional dependencies moved to extras: `mongodb`, `duckdb`, `server` (now FastAPI +
   uvicorn instead of Flask), `formats` (Parquet, ORC, Excel, XML, compression), `mcp`,
   `llm` (Anthropic SDK), `llm-chroma` (deprecated vector index). Missing extras raise

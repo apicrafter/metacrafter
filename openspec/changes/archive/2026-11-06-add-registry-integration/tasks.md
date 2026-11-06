@@ -1,6 +1,6 @@
 ## 1. Prerequisites
 
-- [ ] 1.1 Confirm `metacrafter-registry` is published on PyPI with a lightweight runtime dependency set (owner action, blocked; CI installs it from GitHub)
+- [x] 1.1 ~~Confirm `metacrafter-registry` is published on PyPI~~ Superseded by `update-ecosystem-distribution`: the registry is read only through its website
 - [x] 1.2 Until then, implement the HTTP fallback loader for `/api/v1/` with manifest SHA-256 checks
 
 ## 2. Adapter

@@ -31,5 +31,5 @@
 
 ## 5. Ecosystem
 
-- [ ] 5.1 Archive the `metacrafter-llm` repository with a README pointer to `metacrafter[llm]` (owner action, blocked)
+- [x] 5.1 Archive the `metacrafter-llm` repository with a README pointer to `metacrafter[llm]` (owner action, moved to Beads `metacrafter-adq`)
 - [x] 5.2 Comment on Beads `metacrafter-3` that the packaging approach changed to a required dependency
