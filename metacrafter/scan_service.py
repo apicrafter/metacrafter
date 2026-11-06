@@ -25,7 +25,7 @@ from metacrafter.classify.stats import Analyzer, DEFAULT_DICT_SHARE, DEFAULT_EMP
 from metacrafter.config import ConfigLoader, default_rulepath
 from metacrafter.report import finalize_report, redact_samples, render_markdown, to_legacy
 from metacrafter.reports import statistics_dict, validate_options, normalize_report, aggregate_reports, rules_fingerprint
-from metacrafter.classify.utils import dict_to_columns
+from metacrafter.classify.utils import dict_to_columns, strip_values
 from metacrafter import output as cli_output
 
 try:  # pragma: no cover - tqdm is optional at import time
@@ -141,6 +141,7 @@ class CrafterCmd(object):
         legacy_scoring: bool = False,
         include_deprecated: bool = False,
         include_samples: bool = False,
+        strip: bool = False,
     ):
         """Initialize CrafterCmd instance.
         
@@ -203,6 +204,7 @@ class CrafterCmd(object):
             self.retry_delay = retry_delay
 
         self.include_samples = bool(include_samples)
+        self.strip = bool(strip)
         self.legacy_scoring = bool(legacy_scoring)
         self.include_deprecated = bool(include_deprecated)
         self.registry_detectors = registry_detectors or self._registry_settings.get("detectors") or "stable"
@@ -1087,6 +1089,8 @@ class CrafterCmd(object):
         if empty_values is not None:
             params['empty_values'] = json.dumps(empty_values)
 
+        if self.strip:
+            items = strip_values(items)
         url = api_root + '/api/v1/scan_data'
 
         headers = {
@@ -1278,6 +1282,7 @@ class CrafterCmd(object):
         classification_mode: Optional[str] = None,
         llm_min_confidence: Optional[float] = None,
         explain: bool = False,
+        strip: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """Scan data items and return classification results.
         
@@ -1295,6 +1300,8 @@ class CrafterCmd(object):
             stats_only: Return only statistics without performing classification
             dict_share: Override dictionary share percentage
             empty_values: Override list of values treated as empty
+            strip: Remove leading and trailing whitespace from string values before
+                analysis (default: the ``strip`` setting of this CrafterCmd, False)
             
         Returns:
             Dictionary with keys:
@@ -1309,6 +1316,8 @@ class CrafterCmd(object):
             raise ValueError("items must be an array of objects")
         observed_count = len(items)
         items = items[:limit]
+        if self.strip if strip is None else strip:
+            items = strip_values(items)
         # Parse contexts and langs if they are strings
         if isinstance(contexts, str):
             contexts = [c.strip() for c in contexts.split(',') if c.strip()]

@@ -324,3 +324,17 @@ def strip_language_suffix(name):
     if match and match.group("lang").lower() in LANGUAGE_SUFFIXES:
         return match.group("base")
     return name
+
+
+def strip_values(value):
+    """Copy of ``value`` with leading and trailing whitespace removed from every string.
+
+    Dicts and lists are walked recursively; keys and non-string values are kept as they are.
+    """
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        return {key: strip_values(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [strip_values(item) for item in value]
+    return value
