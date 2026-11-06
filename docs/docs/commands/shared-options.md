@@ -19,6 +19,7 @@ flags.
 | `--no-dates` | Disable qddate pattern detection |
 | `--include-imprecise` | Include imprecise rules that are ignored by default |
 | `--include-empty` | Include empty values in statistics and confidence |
+| `--strip` | Remove leading and trailing whitespace from values before analysis (off by default) |
 | `--fields` | Process only specific fields (comma-separated) |
 | `--rulepath` | Extra YAML rule directories (comma-separated) |
 | `--limit` | Maximum records sampled per field |
@@ -37,6 +38,7 @@ flags.
 | `--llm-registry` | Path to registry JSONL |
 | `--llm-index` | Path to vector index directory |
 | `--llm-min-confidence` | Minimum LLM confidence (default 50.0) |
+| `--llm-max-requests` | Most LLM requests per scan (default `llm_max_requests` in `.metacrafter`, else 100) |
 
 ## Output
 

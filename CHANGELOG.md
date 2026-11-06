@@ -27,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--strip` (scan file, sql, mongodb, bulk) and `CrafterCmd(strip=True)` /
+  `scan_data(strip=True)` remove leading and trailing whitespace from string values,
+  nested ones included, before statistics and matching. Off by default
+  (apicrafter/metacrafter#13).
 - `llm_max_requests` in `.metacrafter` and `--llm-max-requests` set the LLM request budget
   per scan (default 100). A scan that needs more stops with `LLM request budget of N
   requests exceeded; raise llm_max_requests (--llm-max-requests) or use --llm-fallback
