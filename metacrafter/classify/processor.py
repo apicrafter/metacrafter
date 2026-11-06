@@ -1128,6 +1128,8 @@ class RulesProcessor:
                             is_pii=rule_is_pii(rule),
                             pii_source=rule_pii_source(rule),
                         )
+                        if rule.get("pattern_id"):
+                            match.pattern = rule["pattern_id"]
                         m_result.add(match)
                         data_found.append((rule, match, name_weight))
                         if stop_on_match:

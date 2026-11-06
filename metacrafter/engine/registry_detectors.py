@@ -123,7 +123,10 @@ def bind_registry_rules(processor, adapter) -> None:
 
 
 def add_registry_detectors(processor, adapter, mode: str = "stable") -> int:
-    """Add data detectors for registry datatypes that no data rule targets.
+    """Add data detectors for registry datatypes and patterns that no data rule targets.
+
+    A pattern record (``kind: pattern``) is one representation of the datatype in its
+    ``semantic_type``: its detector reports that datatype and the pattern id in ``pattern``.
 
     ``stable``: stable records with a checksum or a regexp specificity >= 0.8.
     ``all``: every record with a regexp; records outside the ``stable`` criteria are
@@ -146,7 +149,7 @@ def add_registry_detectors(processor, adapter, mode: str = "stable") -> int:
         record
         for record in adapter.registry
         if record.get("regexp")
-        and record.get("kind", "datatype") == "datatype"
+        and (record.get("kind", "datatype") == "datatype" or (record.get("kind") == "pattern" and record.get("semantic_type")))
         and record.get("status") != "deprecated"
         and record["id"] not in covered
     ]
@@ -173,9 +176,12 @@ def add_registry_detectors(processor, adapter, mode: str = "stable") -> int:
         countries = [c if isinstance(c, str) else c.get("id") for c in record.get("country") or []]
         countries = [c for c in countries if c]
         broadness, broad_class = background_broadness(record["regexp"])
+        pattern_of = record.get("semantic_type") if record.get("kind") == "pattern" else None
+        datatype = (adapter.resolve(pattern_of).canonical_id or pattern_of) if pattern_of else rid
+        labels = aliases_of.get(rid, []) + ([datatype] if pattern_of else [])
         rule = {
             "id": f"registry:{rid}",
-            "key": rid,
+            "key": datatype,
             "name": record.get("name"),
             "type": "data",
             "match": "registry",
@@ -204,12 +210,14 @@ def add_registry_detectors(processor, adapter, mode: str = "stable") -> int:
             "background_broadness": broadness,
             "background_class": broad_class,
             "needs_name_evidence": vfunc is None and broadness >= GENERIC_THRESHOLD,
-            "name_keys": detector_name_keys(record, aliases_of.get(rid, []), countries),
+            "name_keys": detector_name_keys(record, labels, countries),
             "parent_name_keys": (
                 detector_name_keys({"id": record["parent"]}, [], countries) if record.get("parent") else []
             ),
-            "country_name_keys": detector_name_keys(record, aliases_of.get(rid, []), []) if countries else [],
+            "country_name_keys": detector_name_keys(record, labels, []) if countries else [],
         }
+        if pattern_of:
+            rule["pattern_id"] = rid
         if vfunc is not None:
             rule["vfunc"] = vfunc
         processor.register_rule(rule)

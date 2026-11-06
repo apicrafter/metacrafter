@@ -180,12 +180,19 @@ at load time:
 Derived matches have rule ids `registry:<id>` and `ruletype: registry`. Set the default
 in `.metacrafter` with `registry_detectors: off|stable|all`.
 
+Registry *patterns* (`kind: pattern`) are representations of a datatype, such as
+`iso639_2` (three-letter codes) for `language` or `countrycode_alpha2` for `country`. A
+pattern detector reports the datatype in the pattern's `semantic_type` and the pattern id
+in `pattern`; the datatype id counts as field-name evidence, so a column `language` with
+`eng` reports `language` with `pattern: iso639_2`.
+
 Values alone do not identify every datatype, so a detector reports a match only when the
 evidence supports it:
 
 - **Generic patterns need the field name.** Each regexp is tested against classes of
   ordinary tokens: integers of 1 to 6 digits (one class per length), plain words,
-  title-case words and short acronyms. A regexp without a checksum that accepts at least
+  title-case words, short acronyms, two-letter codes (`ok`, `NY`) and letter-and-digit
+  codes (`WGS84`, `MP3`, `A320`). A regexp without a checksum that accepts at least
   30% of one class (for example `\d{1,4}`, `\d{4}` or `[A-Za-z]{2,63}`) matches only when
   the field name names the datatype or its broader `parent`. Without this a column of
   counters would be reported as flight numbers and a column of words as top-level domains.
