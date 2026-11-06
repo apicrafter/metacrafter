@@ -36,7 +36,7 @@ and date/time patterns.
 | Flag | Meaning |
 |------|---------|
 | `--rulepath` | Extra YAML directories |
-| `--country-codes` | Restrict the loaded set |
+| `--country-codes` | Load only these countries' rules and the universal ones (`country_code: xx` or none) |
 | `--output-format` | `table`, `json`, `yaml`, or `csv` (`list` only) |
 | `--output`, `-o` | Output file (`list` only) |
 | `--table-format` | Table renderer (`list` only) |

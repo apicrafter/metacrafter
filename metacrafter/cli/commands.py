@@ -339,6 +339,7 @@ def scan_file(
     embedding_model: Optional[str] = typer.Option(None),
     embedding_base_url: Optional[str] = typer.Option(None),
     llm_min_confidence: Optional[float] = typer.Option(None, "--llm-min-confidence", help="Minimum confidence for LLM results (default: 50.0)"),
+    llm_max_requests: Optional[int] = typer.Option(None, "--llm-max-requests", min=1, help="Most LLM requests per scan (default: llm_max_requests in .metacrafter, else 100)"),
 ):
     """Scan a single file and classify its fields."""
     # Fail fast (non-zero exit) when scanning a local file that does not exist.
@@ -437,6 +438,7 @@ def scan_file(
         sample_policy=sample_policy, llm_fallback=llm_fallback,
         embedding_provider=embedding_provider, embedding_model=embedding_model,
         embedding_base_url=embedding_base_url,
+        llm_max_requests=llm_max_requests,
     )
     acmd.scan_file(
         filename=filename,

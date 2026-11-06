@@ -196,8 +196,13 @@ rules:
             country_codes=["us"],
         )
         assert cmd.processor is not None
-        assert all("us" in r["country_code"] for r in cmd.processor.field_rules)
+        # Universal rules (no country or country_code: xx) load with any country filter.
+        assert all(
+            not r["country_code"] or "us" in r["country_code"] or "xx" in r["country_code"]
+            for r in cmd.processor.field_rules
+        )
         assert any(rule["key"] == "us_field" for rule in cmd.processor.field_rules)
+        assert not any(rule["key"] == "ca_field" for rule in cmd.processor.field_rules)
 
     def test_write_results_no_output(self):
         cmd = CrafterCmd(remote=None, debug=False)

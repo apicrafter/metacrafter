@@ -65,6 +65,7 @@ from metacrafter.reports import STATS_HEADERS
 
 LLM_CONFIDENCE_CAP = 80.0
 LLM_CONFIDENCE_WEIGHT = 0.8
+DEFAULT_LLM_MAX_REQUESTS = 100  # LLM requests per scan unless llm_max_requests is set
 
 
 DEFAULT_JSON_INDENT = 4
@@ -130,7 +131,7 @@ class CrafterCmd(object):
         embedding_provider: Optional[str] = None,
         embedding_model: Optional[str] = None,
         embedding_base_url: Optional[str] = None,
-        llm_max_requests: int = 100,
+        llm_max_requests: Optional[int] = None,
         registry_path: Optional[str] = None,
         registry_offline: Optional[bool] = None,
         categories: Optional[Union[str, List[str]]] = None,
@@ -267,6 +268,11 @@ class CrafterCmd(object):
             logging.debug("No LLM config found in .metacrafter file")
         
         llm_provider = llm_provider or "openai"
+        if llm_max_requests is None:
+            llm_max_requests = (llm_config or {}).get("llm_max_requests") or DEFAULT_LLM_MAX_REQUESTS
+        if isinstance(llm_max_requests, bool) or not isinstance(llm_max_requests, int) or llm_max_requests < 1:
+            raise ValueError("llm_max_requests must be a positive integer")
+        self.llm_max_requests = llm_max_requests
         self.llm_min_confidence = (llm_config or {}).get("llm_min_confidence", 50.0)
         if self.llm_min_confidence is None:
             self.llm_min_confidence = 50.0
@@ -1143,8 +1149,16 @@ class CrafterCmd(object):
         from metacrafter.classify.processor import TableScanResult, ColumnMatchResult, RuleResult
         from metacrafter.privacy import disclose_samples
         import math
+        from metacrafter.exceptions import LLMBudgetExceeded
         results = TableScanResult()
         columns = dict_to_columns(items)
+        limit, used = (getattr(self.llm_classifier, name, None) for name in ("max_requests", "request_count"))
+        remaining = limit - used if isinstance(limit, int) and isinstance(used, int) else None
+        if remaining is not None and len(datastats) > remaining:
+            logging.warning(
+                "%d fields may need up to %d LLM requests; %d remain under llm_max_requests (%d)",
+                len(datastats), len(datastats), max(remaining, 0), self.llm_max_requests,
+            )
         for field in datastats:
             column = ColumnMatchResult(field=field)
             results.add(column)
@@ -1172,9 +1186,15 @@ class CrafterCmd(object):
                     match.reason = llm.get("reason", "")
                     column.add(match)
             except Exception as error:
-                self.llm_errors.append({"field": field, "code": type(error).__name__, "message": "LLM classification failed"})
+                message = "LLM classification failed"
+                if isinstance(error, LLMBudgetExceeded):
+                    message = (
+                        f"LLM request budget of {error.max_requests} requests exceeded; raise llm_max_requests "
+                        "(--llm-max-requests) or use --llm-fallback rules"
+                    )
+                self.llm_errors.append({"field": field, "code": type(error).__name__, "message": message})
                 if self.llm_fallback != "rules":
-                    raise RuntimeError("LLM classification failed") from error
+                    raise RuntimeError(message) from error
                 fallback = self.processor.match_dict(items, fields=[field], datastats=datastats,
                     **self._scan_rule_options)
                 column.matches = fallback.results[0].matches

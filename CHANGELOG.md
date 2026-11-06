@@ -17,8 +17,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   After a release bump, run `scripts/bundle_rule_pack.py`.
 - Package metadata uses the SPDX license expression `Apache-2.0` (PEP 639); building needs
   setuptools 77 or newer.
+- **`--langs` and `--country-codes` keep universal rules.** Both options select language-
+  and country-specific rule files; rules with `lang: common` and rules with
+  `country_code: xx` (or no country) now always load. Before, `--country-codes am` dropped
+  the universal rules (email, URL, UUID, description, …) and cut correct matches on
+  `armsis` GeoNode metadata from 44 to 23; now it finds 45. `--langs en` also dropped every
+  registry-derived detector (`lang: common`). `rules list --country-codes` lists the
+  universal rules too.
+
+### Added
+
+- `llm_max_requests` in `.metacrafter` and `--llm-max-requests` set the LLM request budget
+  per scan (default 100). A scan that needs more stops with `LLM request budget of N
+  requests exceeded; raise llm_max_requests (--llm-max-requests) or use --llm-fallback
+  rules` instead of `LLM classification failed`, and logs a warning first when there are
+  more fields than requests left. Before, a file with more than 100 fields could not be
+  scanned with `--llm-only`.
+- Field rules try a field name without a language suffix when the full name matches
+  nothing: `abstract_en` → `abstract`, `title_ru` → `title`. Codes that are also common
+  words or abbreviations (`id`, `no`, `ms`, …) are not treated as suffixes.
+- Registry-derived detectors accept the id of the record's `parent` as field-name evidence
+  at half weight, so a generic code type with `parent: language` matches in a column
+  `language`.
 
 ### Fixed
+
+- **Country-specific detectors and broader field names.** Field-name evidence lifted the
+  country check for country-specific registry detectors even when the field name only
+  named the broader type: a column `driver_license` supported every
+  `<country>_driver_license`. The country check now needs the type's own name including
+  its country (`am_postal_code`), unless `--country-codes` includes that country.
 
 - **Fewer false positives from registry-derived detectors.** Registry specificity is
   measured against other records' examples, which are mostly long identifiers, so

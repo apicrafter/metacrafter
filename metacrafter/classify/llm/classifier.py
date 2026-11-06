@@ -212,7 +212,8 @@ class LLMClassifier:
         from metacrafter.privacy import disclose_samples
         sample_values = disclose_samples(sample_values or [], self.sample_policy)
         if self.request_count >= self.max_requests:
-            raise ValueError("LLM request budget exceeded")
+            from metacrafter.exceptions import LLMBudgetExceeded
+            raise LLMBudgetExceeded(self.max_requests)
         self.request_count += 1
         # Retrieve relevant registry entries
         retrieved = self.retriever.retrieve(

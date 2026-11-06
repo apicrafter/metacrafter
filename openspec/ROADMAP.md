@@ -71,6 +71,12 @@ generic regexps (`\d{1,4}`, `[A-Za-z]{2,63}`, ...) and country-specific detector
 field-name evidence; country-specific duplicates of universal matches are dropped when no
 scan country is set. Measured on hand-labelled GeoNode metadata: 89 false matches to 1.
 
+`update-rule-filters-and-name-evidence` (2026-11-06): `--langs`/`--country-codes` keep
+universal rules (`lang: common`, `country_code: xx`); field rules retry names without a
+language suffix; registry `parent` ids count as half-weight field-name evidence; the
+country check needs the type's own name with its country; `llm_max_requests` is
+configurable.
+
 Blocked outside this repository:
 - **Archive the `metacrafter-llm` repository.** Owner action.
 - **Fix the 32 unresolved rule keys** in `metacrafter-rules`.

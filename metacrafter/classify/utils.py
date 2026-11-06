@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Utility functions that help to work with data"""
+import re
 from collections import defaultdict, OrderedDict
 
 import chardet
@@ -303,3 +304,23 @@ def get_format_from_filename(filename):
         return (format_ext, codec)
     
     return (None, None)
+
+# ISO 639-1 codes used as column-name suffixes in multilingual data (title_en, name_ru).
+# Codes that are also common English words or abbreviations (id, no, is, am, ms, ca, hi,
+# be, to, ...) are left out, so user_id never becomes user.
+LANGUAGE_SUFFIXES = frozenset(
+    "en ru fr de es pt it nl pl uk zh ja ko ar hy ka az kk ky uz tr fa el cs sk sl hr sr bg "
+    "ro hu fi sv da et lv lt mn tg tk vi th".split()
+)
+_LANGUAGE_SUFFIX = re.compile(r"^(?P<base>.+?)[_\-.](?P<lang>[A-Za-z]{2})$")
+
+
+def strip_language_suffix(name):
+    """Field name without a trailing language code: ``title_en`` -> ``title``.
+
+    Returns ``name`` unchanged when it has no known language suffix.
+    """
+    match = _LANGUAGE_SUFFIX.match(str(name))
+    if match and match.group("lang").lower() in LANGUAGE_SUFFIXES:
+        return match.group("base")
+    return name

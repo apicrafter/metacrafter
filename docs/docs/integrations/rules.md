@@ -187,18 +187,30 @@ evidence supports it:
   ordinary tokens: integers of 1 to 6 digits (one class per length), plain words,
   title-case words and short acronyms. A regexp without a checksum that accepts at least
   30% of one class (for example `\d{1,4}`, `\d{4}` or `[A-Za-z]{2,63}`) matches only when
-  the field name names the datatype. Without this a column of counters would be reported
-  as flight numbers and a column of words as top-level domains.
+  the field name names the datatype or its broader `parent`. Without this a column of
+  counters would be reported as flight numbers and a column of words as top-level domains.
 - **Field-name evidence** comes from a field rule for the same datatype, or from the
   registry id and aliases: their tokens, without the record's country codes and common
   tokens such as `code`, `number` or `id`, must appear in the field name. `am_postal_code`
   needs `postal` (`postal_code`, `postalCode`); `tld` needs `tld`, or the alias
-  `domain_zone`.
-- **Country-specific datatypes** (registry `country`) without field-name evidence are
-  skipped when `--country-codes` names other countries, and when no country is set and
-  the record has no checksum.
+  `domain_zone`. The id of the record's `parent` counts at half weight: a field `language`
+  supports a code type whose parent is `language` (name score 0.5, bonus +5).
+- **Country-specific datatypes** (registry `country`) are skipped when `--country-codes`
+  names other countries, and when no country is set and the record has no checksum, unless
+  the field name names the type together with its country (`am_postal_code`,
+  `postal_code_am`; `inn` has no country code in its id, so `inn` is enough). A field
+  `driver_license` does not lift this for `am_driver_license`.
 
 `--explain` lists the skipped detectors with the reason.
+
+Field rules also try the field name without a language suffix: when `abstract_en` or
+`title_ru` matches no field rule, `abstract` or `title` is tried. Only common language codes
+count as suffixes (`en`, `ru`, `fr`, `de`, `es`, `hy`, …); codes that are also common words or
+abbreviations, such as `id`, `no` or `ms`, do not, so `user_id` stays `user_id`.
+
+`--langs` and `--country-codes` select language- and country-specific rule files. Rules
+with `lang: common` and rules with `country_code: xx` (or no country) apply with any filter,
+so `--country-codes ru` still detects emails, URLs and dates.
 
 Curated rules follow two similar rules when `--country-codes` is not set:
 
