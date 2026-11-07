@@ -101,6 +101,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Value rules on columns with missing nested values.** When one record lacked a nested
+  object or had an empty array (`{"details": null}`, `addresses: []`), its column held a
+  null, the length prefilter fell back to a length of 4 and dropped every rule that cannot
+  match 4 characters. In a JSON Lines file of Russian suppliers, `details.ogrn` lost `ogrn`
+  and `addresses.region` lost `rusregion` once the sample held such a record. The
+  prefilter now uses the lengths of the non-empty values.
+- **Registry detectors with digit-only patterns need field-name evidence.** Background
+  broadness measured integers of up to six digits only, so a regexp such as
+  `^[1-9]\d{9,11}$` (`scopusauthoirid`) or the `uiccode` pattern counted as distinctive
+  and labelled phone numbers, INN, OKATO and account ids at 77-96 confidence. Integers of
+  7 to 20 digits are now background classes: a stable detector without a checksum whose
+  pattern accepts most numbers of some length reports a match only when the field name
+  names its datatype.
 - **`de_iban` on columns of IBANs from several countries** (#52). Since rules v0.0.3,
   `de_pii_ibanvalue` validates check digits with the same `validate_iban` as the universal
   `iban` rule, so it was kept as country evidence and reported `de_iban` on one value in
