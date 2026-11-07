@@ -69,7 +69,7 @@ def test_registry_example_tests_on_fixture(tmp_path):
 
 def test_ecosystem_files_are_well_formed():
     allow = yaml.safe_load((ROOT / "ecosystem" / "known_unresolved_rule_keys.yaml").read_text())
-    assert isinstance(allow, dict) and allow
+    assert isinstance(allow, dict)  # empty when every rule key resolves
     thresholds = yaml.safe_load((ROOT / "ecosystem" / "rule_thresholds.yaml").read_text())
     assert thresholds["version"] == 1 and thresholds["min_recall"]
     lock = yaml.safe_load((ROOT.parent / "ecosystem.lock").read_text())

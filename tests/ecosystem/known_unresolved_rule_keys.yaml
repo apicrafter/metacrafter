@@ -3,6 +3,4 @@
 # a new unresolved key fails CI. Fix them in metacrafter-rules (or add registry aliases)
 # and remove the entries here.
 
-height_measurement: "no registry record yet"
-path_file: "no registry record yet"
-width_measurement: "no registry record yet"
+{}

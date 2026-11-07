@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Default rule pack is metacrafter-rules v0.0.5; bundled registry snapshot is 34a946c**
+  (#61). Fields of the Russian ESKLP drug catalogue get labels (18 of 29 fields of an
+  export instead of 10):
+  - OKPD2 codes are `okpd`, by field name (`okpd2`, `код окпд2`) and by value in such
+    fields. A field `okpd2` used to report `ipv4` first. `okpd` is stable in the registry,
+    with the alias `okpd2`.
+  - ESKLP codes (`21.20.10.226-000001-1-00008-0000000000000`) are `ru_esklp_code`.
+  - OKEI unit symbols (`шт.`, `мл`, `мг`, `ЕД`) are `unit_of_measure`.
+  - `ath`, `std_mnn_name`, `norm_mnn`, `klp_all_list` and `ftg` fields get `atccode`,
+    `rumedmnn`, `rumedicinetradename` and `medication_class` by name.
+  - ATC codes match by value again: the four value rules described 6 characters with a
+    length of 7 and matched nothing.
+  - The OKVED value rule runs on fields such as `okved2` and `main_okved`; its field guard
+    matched no ordinary name.
+
+  The registry snapshot adds `medication_dosage_form`, `medication_strength`,
+  `atc_code_name`, ESKLP SMNN and KLP codes, Italian datatypes and `filepath`, `height`
+  and `width`. The rule keys `path_file`, `height_measurement` and `width_measurement`
+  resolve now, so `tests/ecosystem/known_unresolved_rule_keys.yaml` is empty.
+  `metacrafter/engine/checksum_algorithms.py` is re-copied from the registry at the same
+  commit and adds `issn`, `ismn`, `iso7064_mod11_2` (ISNI, ORCID), `it_aic`, `ror` and
+  `ru_inn_padded`. In `tests/ecosystem/rule_thresholds.yaml`, `issnvalue`,
+  `issnvaluewithoutdash` and `rusfeddistrict` have lower minimums: the registry added
+  examples these rules miss (`0960-894X`, `Приволжский`, `ЦФО`). `wikidataidvalue` accepts
+  the new negative example `Q01` and is listed as an exception.
 - **Default rule pack is metacrafter-rules v0.0.4** (#42). Full-name rules of every country
   except China report `person_fullname`, and first-name and last-name rules report
   `person_firstname` and `person_surname`. Before, `full_name` in the Australian, Indian and

@@ -1,13 +1,14 @@
 # Vendored from metacrafter-registry (https://github.com/apicrafter/metacrafter-registry),
-# src/metacrafter_registry/checksums.py at commit 9caf6a8f19242f5f19f8857ecdd8a3789db3ca61,
+# src/metacrafter_registry/checksums.py at commit 34a946c379d5ac6c375661771914307099f9bd3b,
 # Apache-2.0. Metacrafter does not depend on the registry package; record ``checksum`` names
 # refer to the keys of ALGORITHMS below. The weekly ecosystem workflow checks that every
 # checksum name used by the registry exists here. Do not edit by hand: re-copy instead.
 """Check-digit algorithms referenced by the ``checksum`` field of records.
 
 Each function takes the raw value and returns True when the check digit is
-valid. Separators (spaces, hyphens, dots) are ignored; any other unexpected
-character makes the value invalid.
+valid. Unless an algorithm says otherwise, separators (spaces, hyphens,
+dots) are ignored; any other unexpected character makes the value invalid.
+Digits are ASCII digits: other Unicode digits make the value invalid.
 """
 
 from __future__ import annotations
@@ -23,9 +24,14 @@ def _compact(value: str) -> str:
     return _SEPARATORS.sub("", str(value))
 
 
+def _is_digits(text: str) -> bool:
+    """ASCII digits only: str.isdigit() also accepts superscripts, which int() rejects."""
+    return text.isascii() and text.isdigit()
+
+
 def _digits(value: str) -> list[int] | None:
     compact = _compact(value)
-    return [int(c) for c in compact] if compact.isdigit() else None
+    return [int(c) for c in compact] if _is_digits(compact) else None
 
 
 def luhn(value: str) -> bool:
@@ -125,6 +131,39 @@ def isbn10(value: str) -> bool:
     return sum(w * d for w, d in zip(range(10, 0, -1), numbers, strict=True)) % 11 == 0
 
 
+def issn(value: str) -> bool:
+    """ISSN and ISSN-L (ISO 3297): 7 digits and a check digit or X, weights 8 to 1, mod 11."""
+    compact = _compact(value).upper()
+    if not re.fullmatch(r"[0-9]{7}[0-9X]", compact):
+        return False
+    numbers = [10 if c == "X" else int(c) for c in compact]
+    return sum(w * d for w, d in zip(range(8, 0, -1), numbers, strict=True)) % 11 == 0
+
+
+def ismn(value: str) -> bool:
+    """ISMN (ISO 10957): 13 digits starting with 9790, or the former M and 9 digits.
+
+    The check digit is the GS1 mod 10 check digit of the 13-digit form; the
+    letter M of the old form stands for the prefix 979-0.
+    """
+    compact = _compact(value).upper()
+    if re.fullmatch(r"M[0-9]{9}", compact):
+        compact = "9790" + compact[1:]
+    return bool(re.fullmatch(r"9790[0-9]{9}", compact)) and gtin(compact)
+
+
+def iso7064_mod11_2(value: str) -> bool:
+    """ISO 7064 MOD 11-2: digits and a check character 0-9 or X. Used by ISNI and ORCID."""
+    compact = _compact(value).upper()
+    if not re.fullmatch(r"[0-9]+[0-9X]", compact):
+        return False
+    total = 0
+    for c in compact[:-1]:
+        total = (total + int(c)) * 2 % 11
+    check = (12 - total) % 11
+    return compact[-1] == ("X" if check == 10 else str(check))
+
+
 def ru_inn(value: str) -> bool:
     """Russian taxpayer number: 10 digits (organizations) or 12 (individuals)."""
     digits = _digits(value)
@@ -144,6 +183,15 @@ def ru_inn(value: str) -> bool:
     return False
 
 
+def ru_inn_padded(value: str) -> bool:
+    """INN of a Russian organization written as 12 digits: 00 and the 10-digit INN.
+
+    Older qualified certificates put it so in the 12-digit INN attribute
+    (OID 1.2.643.3.131.1.1)."""
+    compact = _compact(value)
+    return len(compact) == 12 and compact.startswith("00") and ru_inn(compact[2:])
+
+
 def ru_snils(value: str) -> bool:
     """Russian insurance number (SNILS): 9 digits and a 2-digit control number."""
     digits = _digits(value)
@@ -159,7 +207,7 @@ def ru_snils(value: str) -> bool:
 def ru_ogrn(value: str) -> bool:
     """Russian state registration number: OGRN (13 digits) or OGRNIP (15 digits)."""
     compact = _compact(value)
-    if not compact.isdigit():
+    if not _is_digits(compact):
         return False
     if len(compact) == 13:
         return int(compact[:12]) % 11 % 10 == int(compact[12])
@@ -208,7 +256,7 @@ def bg_vat(value: str) -> bool:
     compact = _compact(value).upper()
     if compact.startswith("BG"):
         compact = compact[2:]
-    digits = [int(c) for c in compact] if compact.isdigit() else None
+    digits = [int(c) for c in compact] if _is_digits(compact) else None
     if not digits:
         return False
 
@@ -289,6 +337,29 @@ def it_iva(value: str) -> bool:
     if not ("001" <= office <= "100" or office in ("120", "121", "888", "999")):
         return False
     return luhn(compact)
+
+
+_AIC_BASE32 = "0123456789BCDFGHJKLMNPQRSTUVWXYZ"
+
+
+def it_aic(value: str) -> bool:
+    """Italian medicine authorisation code (AIC): 9 digits, or 6 base-32 characters.
+
+    The base-32 form (digits and consonants, no A, E, I or O) is converted to
+    the 9-digit form, which starts with 0. Digits in even positions (2nd,
+    4th, ...) are doubled, the digits of all products are added, and the sum
+    modulo 10 is the last digit.
+    """
+    compact = _compact(value).upper()
+    if len(compact) == 6 and all(c in _AIC_BASE32 for c in compact):
+        number = sum(_AIC_BASE32.index(c) * 32**i for i, c in enumerate(reversed(compact)))
+        compact = str(number).zfill(9)
+    if not re.fullmatch(r"0\d{8}", compact):
+        return False
+    total = sum(
+        sum(divmod(int(c) * (1 if i % 2 == 0 else 2), 10)) for i, c in enumerate(compact[:8])
+    )
+    return total % 10 == int(compact[8])
 
 
 def fi_hetu(value: str) -> bool:
@@ -468,7 +539,33 @@ def iso7064_mod97_10(value: str) -> bool:
     compact = _compact(value).upper()
     if not re.fullmatch(r"[0-9A-Z]{3,}", compact):
         return False
-    return int("".join(str(int(c, 36)) for c in compact)) % 97 == 1
+    # Fold digit by digit: one big int() fails above 4,300 digits on Python 3.11+.
+    remainder = 0
+    for c in compact:
+        number = int(c, 36)
+        remainder = (remainder * (100 if number > 9 else 10) + number) % 97
+    return remainder == 1
+
+
+_ROR_PREFIX = re.compile(r"^(?:https?://)?ror\.org/", re.IGNORECASE)
+_CROCKFORD32 = "0123456789abcdefghjkmnpqrstvwxyz"
+
+
+def ror(value: str) -> bool:
+    """ROR identifier: 0, six Crockford base-32 characters and 2 check digits.
+
+    The check digits are ISO 7064 MOD 97-10 of the number n that the six
+    characters encode: 98 - (n * 100 mod 97). A https://ror.org/ or ror.org/
+    prefix is allowed.
+    """
+    compact = _ROR_PREFIX.sub("", str(value)).lower()
+    match = re.fullmatch(r"0([0-9a-hjkmnp-tv-z]{6})([0-9]{2})", compact)
+    if not match:
+        return False
+    number = 0
+    for c in match.group(1):
+        number = number * 32 + _CROCKFORD32.index(c)
+    return int(match.group(2)) == 98 - number * 100 % 97
 
 
 def de_ustidnr(value: str) -> bool:
@@ -806,7 +903,11 @@ ALGORITHMS: dict[str, Callable[[str], bool]] = {
     "gs1_checkpair": gs1_checkpair,
     "isbn10": isbn10,
     "isbn13": isbn13,
+    "issn": issn,
+    "ismn": ismn,
+    "iso7064_mod11_2": iso7064_mod11_2,
     "ru_inn": ru_inn,
+    "ru_inn_padded": ru_inn_padded,
     "ru_snils": ru_snils,
     "ru_ogrn": ru_ogrn,
     "fr_nir": fr_nir,
@@ -815,6 +916,7 @@ ALGORITHMS: dict[str, Callable[[str], bool]] = {
     "no_fnr": no_fnr,
     "it_codicefiscale": it_codicefiscale,
     "it_iva": it_iva,
+    "it_aic": it_aic,
     "fi_hetu": fi_hetu,
     "es_dni": es_dni,
     "pl_nip": pl_nip,
@@ -826,6 +928,7 @@ ALGORITHMS: dict[str, Callable[[str], bool]] = {
     "bech32": bech32,
     "bech32m": bech32m,
     "iso7064_mod97_10": iso7064_mod97_10,
+    "ror": ror,
     "de_ustidnr": de_ustidnr,
     "de_widnr": de_widnr,
     "de_idnr": de_idnr,
