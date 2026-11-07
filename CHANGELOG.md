@@ -9,17 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Default rule pack updated to metacrafter-rules `v0.0.3`** (bundled archive and
-  `ecosystem.lock`). OGRN and OGRNIP are detected by value in default scans: `ruogrn` is
-  no longer imprecise and accepts 15-digit OGRNIP, `ruogrnknown` reports `ogrn` and matches
-  more field names, and `rutitleknown` no longer labels `ИНН`, `КПП`, `ОКПО` and `ОГРН`
-  columns `name`. In `tests/fixtures/ru_utf8_comma.csv` the `ogrn` column gets `ogrn 100`
-  instead of only `ogrn_ogrnip 36` from its name. The release also maps rule keys to
-  registry ids (unresolved keys: 32 → 3), validates IBAN, VAT, ULID and other check digits
-  (no rule accepts the registry's negative examples any more) and matches hyphenated ISBNs.
-  The ecosystem baselines (`tests/ecosystem/`, `tests/benchmark/baseline.json`) are
-  recorded against it; the `active_boolean` false positive in the benchmark is gone, and
-  `de_iban` now matches the German value in the mixed-country `iban` column.
+- **Default rule pack is metacrafter-rules v0.0.3** (#41). Rule keys resolve to registry
+  datatypes: field-name rules report `boolean`, `latitude`, `datetime`, `address`, `orgname`,
+  `userid` and other registry ids instead of draft keys such as `active_boolean` or
+  `lat_geo`, so their matches get registry metadata and links. Value rules no longer accept
+  the registry's negative examples: IBAN, EU and French VAT, USt-IdNr., Handelsregister,
+  German plates, ASN and ULID check their check digits or format, and the IBAN print format
+  with spaces matches. ISBN rules match hyphenated ISBNs, `esmonthbydatafiltered` loads
+  again (key `month`), and the pack imports without `SyntaxWarning`. In
+  `tests/ecosystem/`, the allow-list of unresolved rule keys shrinks from 32 to 3
+  (`height_measurement`, `width_measurement`, `path_file`) and `negative_exceptions` is
+  empty. On a column of IBANs from several countries, `de_pii_ibanvalue` now also reports
+  `de_iban`: it validates check digits, so it is no longer dropped as a repeat of `iban`.
+  OGRN and OGRNIP are detected by value in default scans (#51): `ruogrn` is no longer
+  imprecise and accepts 15-digit OGRNIP, `ruogrnknown` reports `ogrn` and matches more
+  field names, and `rutitleknown` no longer labels `ИНН`, `КПП`, `ОКПО` and `ОГРН` columns
+  `name`. In `tests/fixtures/ru_utf8_comma.csv` the `ogrn` column gets `ogrn 100` instead
+  of only `ogrn_ogrnip 36` from its name.
 - **Float columns of whole numbers are matched by data rules.** A column whose values are
   all whole numbers stored as floats (`.xls` files, pandas columns with missing values, CSV
   text such as `1027700132195.0`) is matched as integer text (`1027700132195`). Before,
