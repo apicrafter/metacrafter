@@ -34,7 +34,14 @@ from pyparsing import (
     ParserElement,
 )
 
-from .utils import headers, dict_to_columns, strip_language_suffix, whole_number_texts
+from .utils import (
+    dict_to_columns,
+    headers,
+    resolve_field_names,
+    strip_language_suffix,
+    unescape_field_path,
+    whole_number_texts,
+)
 
 
 def _normalize_country_codes(
@@ -980,9 +987,7 @@ class RulesProcessor:
         )
 
         data_columns = dict_to_columns(data)
-        missing = set(fields) - set(data_columns)
-        if missing:
-            raise ValueError("Unknown selected fields: " + ", ".join(sorted(missing)))
+        fields = resolve_field_names(fields, data_columns)
         nonstr = []
         if datastats:
             for field in datastats.keys():
@@ -992,16 +997,21 @@ class RulesProcessor:
             m_result = ColumnMatchResult(field=field, matches=[])
             if explain:
                 m_result.rejected = []
-            shortfield = field.rsplit(".", 1)[-1].strip()
+            # Names are compared without the escapes of nested paths: a CSV header
+            # "Имеет привязку к физ. лицам" is the column "…физ\. лицам". The short name is
+            # the part after the last dot, escaped or not, so a flattened header
+            # "info.okoguCode" still matches a rule for "okoguCode".
+            name = unescape_field_path(field)
+            shortfield = name.rsplit(".", 1)[-1].strip()
             # Match field name first; a name with a language suffix (title_en) or a language
             # key of a nested object (title.en) falls back to its base name (title) when the
             # full name matches no field rule.
             field_found: List[Dict[str, Any]] = []
-            name_variants = [(shortfield, field)]
+            name_variants = [(shortfield, name)]
             base = shortfield
-            base_field = strip_language_suffix(field.strip())
+            base_field = strip_language_suffix(name.strip())
             base_name = base_field.rsplit(".", 1)[-1].strip()
-            if base_field != field.strip() and base_name:
+            if base_field != name.strip() and base_name:
                 base = base_name
                 name_variants.append((base, base_field))
             for short_name, full_name in name_variants:

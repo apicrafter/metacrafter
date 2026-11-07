@@ -148,3 +148,45 @@ def test_default_confidence_drops_partial_value_matches():
 
 def report_mode(service):
     return service.scan_data([{"a": "x"}], parse_dates=False)["registry_detectors"]["mode"]
+
+
+DOTTED_RULES = """
+format_version: 2
+name: t
+description: t
+context: common
+lang: common
+rules:
+  personsflag:
+    key: boolean
+    match: text
+    type: field
+    priority: 1
+    rule: имеет привязку к физ. лицам
+  okogucodename:
+    key: okogu
+    match: text
+    type: field
+    priority: 1
+    rule: okogucode
+"""
+
+
+def test_field_rules_see_names_with_dots_unescaped(tmp_path):
+    path = tmp_path / "r.yaml"
+    path.write_text(DOTTED_RULES, encoding="utf-8")
+    processor = RulesProcessor()
+    processor.import_rules(str(path))
+    rows = [{"Имеет привязку к физ. лицам": "Да", "info.okoguCode": "1327010"}] * 3
+    result = processor.match_dict(rows, confidence=MIN_CONFIDENCE_FOR_MATCH, parse_dates=False)
+    keys = {r.field: [m.dataclass for m in r.matches] for r in result.results}
+    # The whole header matches the rule; the flattened header still matches by its last part.
+    assert keys == {"Имеет привязку к физ\\. лицам": ["boolean"], "info\\.okoguCode": ["okogu"]}
+
+
+def test_fields_option_accepts_unescaped_names():
+    from metacrafter.core import CrafterCmd
+
+    rows = [{"info.recordNum": "00011056751001", "id": 1}] * 3
+    report = CrafterCmd(quiet=True).scan_data(items=rows, fields="info.recordNum")
+    assert [f["field"] for f in report["data"]] == ["info\\.recordNum"]

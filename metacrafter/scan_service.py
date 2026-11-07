@@ -26,7 +26,7 @@ from metacrafter.config import ConfigLoader, default_rulepath
 from metacrafter.engine.pii import demote_outranked_pii
 from metacrafter.report import finalize_report, redact_samples, render_markdown, to_legacy
 from metacrafter.reports import statistics_dict, validate_options, normalize_report, aggregate_reports, rules_fingerprint
-from metacrafter.classify.utils import dict_to_columns, strip_values
+from metacrafter.classify.utils import dict_to_columns, resolve_field_names, strip_values
 from metacrafter import output as cli_output
 
 try:  # pragma: no cover - tqdm is optional at import time
@@ -1450,9 +1450,7 @@ class CrafterCmd(object):
 
         available = dict_to_columns(items)
         if fields is not None:
-            missing = set(fields) - set(available)
-            if missing:
-                raise ValueError("Unknown selected fields: " + ", ".join(sorted(missing)))
+            fields = resolve_field_names(fields, available)
         analyzer = Analyzer()
         analyzer_options = {"delimiter": ",", "format_in": None, "zipfile": None}
         if dict_share is not None:
