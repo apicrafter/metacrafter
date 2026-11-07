@@ -330,3 +330,56 @@ def test_country_pattern_with_own_validator_kept_below_universal_match(tmp_path)
     processor = processor_with(tmp_path, [(NUMBERRULE, "xx"), (CARDLIKE, "de")])
     rows = [{"n": "4111111111111111"}, {"n": "5500000000000004"}, {"n": "12345"}]
     assert classes(scan(processor, rows)["n"]) == {"number", "de_cardlike"}
+
+
+# apicrafter/metacrafter#58: OKPD2 codes are valid IPv4 strings.
+IPV4RULE = """
+  ipv4value:
+    key: ipv4
+    match: regex
+    type: data
+    rule: '[0-9]{1,3}(\\.[0-9]{1,3}){3}'
+"""
+OKPDNAME = """
+  okpdknown:
+    key: okpd
+    match: text
+    type: field
+    rule: okpd,okpd2
+    priority: 1
+"""
+OKPDVALUE = """
+  okpdvalue:
+    key: okpd
+    match: regex
+    type: data
+    rule: '[0-9]{2}(\\.[0-9]{1,2}){0,2}(\\.[0-9]{1,3})?'
+    priority: 3
+"""
+OKPD_CODES = ["21.20.10.226", "21.20.10.194", "21.20.21.120", "21.20.23.190"]
+
+
+def test_rank_puts_named_match_first_on_a_tie():
+    from metacrafter.classify.processor import ColumnMatchResult, RuleResult
+
+    result = ColumnMatchResult("okpd2")
+    result.add(RuleResult(ruleid="ipv4", confidence=100.0, dataclass="ipv4", ruletype="data", evidence={"name_score": 0.0}))
+    result.add(RuleResult(ruleid="date", confidence=60.0, dataclass="date", ruletype="field", evidence={"name_score": 1.0}))
+    result.add(RuleResult(ruleid="okpd", confidence=100.0, dataclass="okpd", ruletype="data", evidence={"name_score": 1.0}))
+    result.rank()
+    assert [m.dataclass for m in result.matches] == ["okpd", "ipv4", "date"]
+
+
+def test_scan_reports_named_datatype_as_primary(tmp_path):
+    from metacrafter.core import CrafterCmd
+
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "ip.yaml").write_text(ruleset(IPV4RULE), encoding="utf-8")
+    (rules / "okpd.yaml").write_text(ruleset(OKPDVALUE + OKPDNAME.replace("okpdknown", "okpdname")), encoding="utf-8")
+    cmd = CrafterCmd(rulepath=[str(rules)], registry_detectors="off")
+    report = cmd.scan_data([{"okpd2": v} for v in OKPD_CODES], confidence=5.0)
+    field = next(f for f in report["data"] if f["field"] == "okpd2")
+    assert field["matches"][0]["dataclass"] == "okpd"
+    assert field["datatype_url"].endswith("/okpd")
+    assert {"okpd", "ipv4"} <= {m["dataclass"] for m in field["matches"]}

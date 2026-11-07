@@ -101,6 +101,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The primary match follows confidence and field-name evidence** (#58). A field's
+  `matches` list and its `datatype_url` kept rule order, so the first match was the
+  matching rule with the highest priority, not the best-scored one. Confidence is clamped
+  at 100, so a datatype that the field name names could tie with a value-only match and
+  lose: OKPD2 codes such as `21.20.10.226` are valid IPv4 strings, and a field `okpd2`
+  reported `ipv4` first even when the `okpd` detector matched with field-name evidence.
+  Matches are now ordered by confidence, then field-name evidence, then rule order; the
+  summary string uses the same order. Value-only matches are kept, so `ipv4` is still
+  listed (and marks the field as PII) after `okpd`.
 - **Value rules on columns with missing nested values.** When one record lacked a nested
   object or had an empty array (`{"details": null}`, `addresses: []`), its column held a
   null, the length prefilter fell back to a length of 4 and dropped every rule that cannot
