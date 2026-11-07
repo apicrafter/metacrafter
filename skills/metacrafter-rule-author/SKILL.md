@@ -14,8 +14,10 @@ be a registry id or alias.
    `https://registry.apicrafter.io/datatype/<id>.md`). Note `regexp`, `checksum`,
    `examples` (`valid: false` ones are negative examples), `status` and `is_pii`.
 2. **Check existing coverage.** `metacrafter rules list --output-format json` or the MCP
-   tool `list_rules(datatype="<id>")`. With `--registry-detectors stable` a stable
-   record with a checksum or a specific regexp is already detected as `registry:<id>`.
+   tool `list_rules(datatype="<id>")`. By default (`--registry-detectors checksum`) a
+   stable record with a checksum is already detected as `registry:<id>`. A stable record
+   with only a specific regexp is detected with `--registry-detectors stable`; default
+   scans need a rule for it.
 3. **Prefer `match: registry`** when the record has a good regexp. The rule adds
    heuristics only:
 

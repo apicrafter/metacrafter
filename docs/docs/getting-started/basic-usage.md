@@ -50,7 +50,8 @@ headers go to stderr so `--output-format json` stays pipe-safe.
 - `--contexts pii,finance` — only rules tagged with those contexts
 - `--langs en,ru` — language-specific rules (language-independent rules always apply)
 - `--country-codes us,ca` — ISO country codes (universal rules always apply)
-- `--confidence 20.0` — drop matches below this score (0–100)
+- `--confidence 80` — drop matches below this score (0–100, default 50; `5` also reports
+  weak candidates)
 - `--fields email,phone` — classify only named columns
 
 ## Empty values and dictionaries

@@ -31,7 +31,7 @@ Set `METACRAFTER_API_TOKEN` to require `Authorization: Bearer <token>` on scan r
 ```json
 {
   "records": [{"name": "John", "email": "john@example.com"}],
-  "options": {"limit": 1000, "confidence": 20, "contexts": "pii", "parse_dates": true}
+  "options": {"limit": 1000, "confidence": 80, "contexts": "pii", "parse_dates": true}
 }
 ```
 

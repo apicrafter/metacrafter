@@ -34,6 +34,8 @@ For each field:
 - **`confidence`** is heuristic, not a probability:
   - 90-100 with data evidence is strong;
   - field-name-only matches score at most 60, so check the values before relying on them;
+  - scans report matches from confidence 50 by default; pass `confidence: 5` (CLI
+    `--confidence 5`) to see weaker candidates, which include chance checksum matches;
   - matches with `evidence.checksum_rate` 1.0 (IBAN, INN, card numbers) are near-certain.
 - **`is_pii`** with `pii_source`: `rule` (the rule says so), `registry` (the
   datatype is PII in the registry) or `context` (the rule file is a PII pack).

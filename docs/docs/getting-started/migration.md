@@ -42,3 +42,16 @@ description: "Breaking changes from 0.0.x and how to adapt"
   rules are skipped with a diagnostic. Check them with `metacrafter rules validate`.
 - `priority: 1` is the strongest priority. Rules are sorted by priority, ascending.
 - Check rule keys against the registry with `metacrafter rules check --registry`.
+
+## After 1.0.0: precise defaults
+
+Releases after 1.0.0 change two defaults so that a plain scan reports fewer wrong matches:
+
+- **Minimum confidence 50** (1.0.0: 5). Partial value matches, chance checksum matches and
+  field-name-only matches of priority 2 and 3 rules (48 and 36) are no longer reported.
+- **Registry detectors `checksum`** (1.0.0: `stable`). Only registry records with a checksum
+  get a derived detector. Records with a specific regexp but no checksum need
+  `--registry-detectors stable`.
+
+For 1.0.0 results, pass `--confidence 5 --registry-detectors stable`, or set
+`registry_detectors: stable` in `.metacrafter` and pass `--confidence 5`.

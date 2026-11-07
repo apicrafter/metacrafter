@@ -12,8 +12,10 @@ For a first pass on unknown data, scan a sample with default rules:
 metacrafter scan file data.csv --limit 200 --format full
 ```
 
-Then restrict to the contexts you care about (`pii`, `finance`, `geo`) and raise
-`--confidence` so reports stay actionable.
+Then restrict to the contexts you care about (`pii`, `finance`, `geo`). The defaults
+report matches from confidence 50 and only registry detectors with a checksum. For an
+exploratory scan that also lists weak candidates, use
+`--confidence 5 --registry-detectors stable` and review the extra matches by hand.
 
 ## Prefer inspectable rules for known types
 

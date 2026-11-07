@@ -10,7 +10,7 @@ from metacrafter.engine.checksums import checksum_validator
 
 logger = logging.getLogger(__name__)
 
-DETECTOR_MODES = ("off", "stable", "all")
+DETECTOR_MODES = ("off", "checksum", "stable", "all")
 MIN_SPECIFICITY = 0.8
 DERIVED_MAX_LEN = 256
 # Tokens too common in field names to count as evidence for a datatype on their own.
@@ -122,12 +122,13 @@ def bind_registry_rules(processor, adapter) -> None:
         rules[:] = kept
 
 
-def add_registry_detectors(processor, adapter, mode: str = "stable") -> int:
+def add_registry_detectors(processor, adapter, mode: str = "checksum") -> int:
     """Add data detectors for registry datatypes and patterns that no data rule targets.
 
     A pattern record (``kind: pattern``) is one representation of the datatype in its
     ``semantic_type``: its detector reports that datatype and the pattern id in ``pattern``.
 
+    ``checksum`` (the default): stable records with a checksum that metacrafter can validate.
     ``stable``: stable records with a checksum or a regexp specificity >= 0.8.
     ``all``: every record with a regexp; records outside the ``stable`` criteria are
     imprecise (skipped unless imprecise rules are included).
@@ -153,8 +154,10 @@ def add_registry_detectors(processor, adapter, mode: str = "stable") -> int:
         and record.get("status") != "deprecated"
         and record["id"] not in covered
     ]
-    if mode == "stable":
+    if mode in ("checksum", "stable"):
         candidates = [r for r in candidates if r.get("status") == "stable"]
+    if mode == "checksum":
+        candidates = [r for r in candidates if r.get("checksum")]
     need_specificity = [r["id"] for r in candidates if not r.get("checksum") or mode == "all"]
     specificity = adapter.specificities(need_specificity)
     version = adapter.provenance.version or "unknown"
@@ -168,6 +171,8 @@ def add_registry_detectors(processor, adapter, mode: str = "stable") -> int:
         spec = specificity.get(rid, 1.0)
         qualifies = record.get("status") == "stable" and (vfunc is not None or spec >= MIN_SPECIFICITY)
         if mode == "stable" and not qualifies:
+            continue
+        if mode == "checksum" and vfunc is None:
             continue
         try:
             compiled = re.compile(record["regexp"])

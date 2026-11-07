@@ -58,7 +58,12 @@ BINARY_DATA_FORMATS = ["bson", "parquet", "avro", "orc", "pickle", "pkl", "xls",
 # Configuration constants
 DEFAULT_CONFIDENCE_THRESHOLD = 95.0  # Default confidence threshold for rule matching
 DEFAULT_SCAN_LIMIT = 1000  # Default number of records to scan per field
-MIN_CONFIDENCE_FOR_MATCH = 5.0  # Minimum confidence percentage for a match
+# Minimum confidence of a reported match unless a scan sets ``confidence``. 50 drops
+# chance checksum collisions and partial value matches, and field-name-only matches of
+# priority 2 and 3 rules (48 and 36); ``confidence=5`` gives the 1.0 behaviour.
+MIN_CONFIDENCE_FOR_MATCH = 50.0
+# Registry-derived detectors unless ``registry_detectors`` is set (argument or .metacrafter).
+DEFAULT_REGISTRY_DETECTORS = "checksum"
 DEFAULT_BATCH_SIZE = 1000  # Default batch size for database queries
 
 RESULT_HEADERS = ["key", "ftype", "tags", "matches", "datatype_url"]
@@ -209,7 +214,7 @@ class CrafterCmd(object):
         self.strip = bool(strip)
         self.legacy_scoring = bool(legacy_scoring)
         self.include_deprecated = bool(include_deprecated)
-        self.registry_detectors = registry_detectors or self._registry_settings.get("detectors") or "stable"
+        self.registry_detectors = registry_detectors or self._registry_settings.get("detectors") or DEFAULT_REGISTRY_DETECTORS
         self.registry_detector_count = 0
         self.processor = None
         if remote is None:
@@ -1704,7 +1709,7 @@ class CrafterCmd(object):
             output: Optional output file path. If None, results printed to stdout.
                 Use '-' or 'stdout' to explicitly write to stdout.
             confidence: Minimum confidence threshold (0-100). Rules with lower
-                confidence will be ignored. Defaults to 5.0.
+                confidence will be ignored. Defaults to 50.0 (MIN_CONFIDENCE_FOR_MATCH).
             stop_on_match: If True, stop after first rule match per field.
                 Defaults to False.
             parse_dates: Enable automatic date/time pattern detection. Defaults to True.

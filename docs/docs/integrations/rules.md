@@ -174,11 +174,14 @@ at load time:
 | `--registry-detectors` | Detectors added |
 |---|---|
 | `off` | none |
-| `stable` (default) | stable records with a checksum, or with a regexp that matches at most 20% of other records' examples |
+| `checksum` (default) | stable records with a checksum metacrafter validates (bank cards, Belgian IBAN and VAT, Italian codice fiscale, …) |
+| `stable` | stable records with a checksum, or with a regexp that matches at most 20% of other records' examples |
 | `all` | every record with a regexp; those outside the `stable` criteria are imprecise |
 
 Derived matches have rule ids `registry:<id>` and `ruletype: registry`. Set the default
-in `.metacrafter` with `registry_detectors: off|stable|all`.
+in `.metacrafter` with `registry_detectors: off|checksum|stable|all`. Detectors without a
+checksum find more datatypes but also report format look-alikes, such as `cficode` on a
+column of six-letter status codes; use them for exploratory scans.
 
 Registry *patterns* (`kind: pattern`) are representations of a datatype, such as
 `iso639_2` (three-letter codes) for `language` or `countrycode_alpha2` for `country`. A
@@ -248,6 +251,12 @@ Each match has an `evidence` object with `hit_rate`, `checksum_rate`, `specifici
 (share of matching values; 100 for field-name matches).
 
 Confidence is a heuristic, not a calibrated probability.
+
+Scans report matches with a confidence of at least 50 (`--confidence`, default 50). This
+drops partial value matches and chance checksum matches: about one value in ten passes a
+mod-10 or mod-11 check by chance, so a column of Russian INNs also scores 6–12 for ISBN-10,
+NHS and NPI numbers. It also drops field-name-only matches of priority 2 and 3 rules.
+`--confidence 5` reports them.
 
 ## Inspect
 
