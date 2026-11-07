@@ -6,9 +6,11 @@ records. Those examples are mostly long, distinctive identifiers, so a pattern s
 matches every counter, small id, year or plain word.
 
 This module measures a pattern against classes of ordinary tokens instead: integers of
-one to six digits (one class per length), plain words, title-case words, short
+one to twenty digits (one class per length), plain words, title-case words, short
 acronyms, two-letter codes and letter-and-digit codes (WGS84, MP3, A320). A pattern that accepts at least ``GENERIC_THRESHOLD`` of any one class cannot
-tell its datatype apart from ordinary data by values alone.
+tell its datatype apart from ordinary data by values alone. Long integers are ordinary
+too: phone numbers, tax and registration numbers, bank accounts and record ids, so a
+pattern such as ``[1-9]\\d{9,11}`` is generic.
 """
 from __future__ import annotations
 
@@ -40,6 +42,18 @@ _ACRONYMS = (
 ).split()
 
 
+# Integer classes longer than six digits: ``LONG_INT_SAMPLES`` numbers per length, spread
+# over the whole range so that every leading digit occurs.
+LONG_INT_DIGITS = range(7, 21)
+LONG_INT_SAMPLES = 100
+
+
+def _long_ints(digits: int) -> List[str]:
+    low = 10 ** (digits - 1)
+    step = 9 * low // LONG_INT_SAMPLES
+    return [str(low + i * step + (i * 7919) % step) for i in range(LONG_INT_SAMPLES)]
+
+
 def _classes() -> Dict[str, List[str]]:
     words = sorted(set(_WORDS))
     return {
@@ -49,6 +63,7 @@ def _classes() -> Dict[str, List[str]]:
         "int4": [str(i) for i in range(1000, 10000, 29)],
         "int5": [str(i) for i in range(10000, 100000, 293)],
         "int6": [str(i) for i in range(100000, 1000000, 2999)],
+        **{f"int{digits}": _long_ints(digits) for digits in LONG_INT_DIGITS},
         "word": words,
         "title_word": [w.capitalize() for w in words],
         "acronym": _ACRONYMS,

@@ -1042,12 +1042,14 @@ class RulesProcessor:
                         min_len = datastats[field]["minlen"]
                         max_len = datastats[field]["maxlen"]
             if min_len == 0:
-                try:
-                    min_len = len(min(data, key=len))
-                    max_len = len(max(data, key=len))
-                except (TypeError, ValueError):
-                    min_len = 4
-                    max_len = 4
+                # Lengths of the values rules will see: a column with empty values (a
+                # record without the nested object, an empty array) must not narrow the
+                # length prefilter, or every rule whose length range excludes the
+                # placeholder is dropped.
+                lengths = [len(str(value)) for value in data if value not in empty_values]
+                lengths = [length for length in lengths if length]
+                if lengths:
+                    min_len, max_len = min(lengths), max(lengths)
 
             #            if field not in nonstr:
 
