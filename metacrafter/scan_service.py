@@ -23,6 +23,7 @@ from metacrafter.classify.processor import RulesProcessor, BASE_URL, match_rank_
 from metacrafter.classify.stats import Analyzer, DEFAULT_DICT_SHARE, DEFAULT_EMPTY_VALUES
 
 from metacrafter.config import ConfigLoader, default_rulepath
+from metacrafter.engine.pii import demote_outranked_pii
 from metacrafter.report import finalize_report, redact_samples, render_markdown, to_legacy
 from metacrafter.reports import statistics_dict, validate_options, normalize_report, aggregate_reports, rules_fingerprint
 from metacrafter.classify.utils import dict_to_columns, strip_values
@@ -1366,6 +1367,10 @@ class CrafterCmd(object):
         """Resolve and enrich every match of a field record, then apply registry filters."""
         registry = self.registry
         matches = [registry.enrich_match(m) for m in record.get("matches", [])]
+        # A value-only PII match outranked by a non-PII datatype the field name names is
+        # secondary: okpd2 codes that also read as IPv4 (apicrafter/metacrafter#62).
+        # Before the filters, so --pii-only sees the demoted flag.
+        demote_outranked_pii(matches, ancestors=registry.ancestors)
         record["matches"] = [m for m in matches if self._registry_filter_allows(m)]
         if record["matches"]:
             record["datatype_url"] = record["matches"][0].get("classurl", "")

@@ -383,3 +383,105 @@ def test_scan_reports_named_datatype_as_primary(tmp_path):
     assert field["matches"][0]["dataclass"] == "okpd"
     assert field["datatype_url"].endswith("/okpd")
     assert {"okpd", "ipv4"} <= {m["dataclass"] for m in field["matches"]}
+
+
+# apicrafter/metacrafter#62: a value-only PII match outranked by a named non-PII datatype.
+def value_match(dataclass, confidence, name_score=0.0, is_pii=False, ruletype="data"):
+    return {
+        "ruleid": dataclass, "dataclass": dataclass, "datatype": dataclass, "ruletype": ruletype,
+        "confidence": confidence, "is_pii": is_pii, "pii_source": "registry" if is_pii else None,
+        "evidence": {"name_score": name_score},
+    }
+
+
+def test_named_datatype_demotes_value_only_pii_match():
+    from metacrafter.engine.pii import demote_outranked_pii
+
+    okpd = value_match("okpd", 100.0, name_score=1.0)
+    ipv4 = value_match("ipv4", 99.0, is_pii=True)
+    ipaddr = value_match("ipaddr", 98.7, is_pii=True)
+    demote_outranked_pii([okpd, ipv4, ipaddr])
+    for match in (ipv4, ipaddr):
+        assert match["is_pii"] is False
+        assert match["pii_source"] is None
+        assert match["pii_outranked_by"] == "okpd"
+    assert "pii_outranked_by" not in okpd
+
+
+@pytest.mark.parametrize(
+    "matches",
+    [
+        # Field-name-only match: a field login with email values stays PII.
+        [value_match("login", 60.0, name_score=1.0, ruletype="field"), value_match("email", 100.0, is_pii=True)],
+        # The named datatype scores lower than the value match.
+        [value_match("ipv4", 100.0, is_pii=True), value_match("okpd", 90.0, name_score=1.0)],
+        # The named datatype is PII itself.
+        [value_match("username", 100.0, name_score=1.0, is_pii=True), value_match("email", 100.0, is_pii=True)],
+        # The field name also names the PII datatype.
+        [value_match("okpd", 100.0, name_score=1.0), value_match("ipv4", 99.0, is_pii=True),
+         value_match("ipv4", 60.0, name_score=1.0, is_pii=True, ruletype="field")],
+        # LLM matches are not value matches.
+        [value_match("okpd", 100.0, name_score=1.0), value_match("ipv4", 99.0, is_pii=True, ruletype="llm")],
+    ],
+)
+def test_pii_match_kept(matches):
+    from metacrafter.engine.pii import demote_outranked_pii
+
+    demote_outranked_pii(matches)
+    assert any(m["is_pii"] for m in matches)
+    assert not any("pii_outranked_by" in m for m in matches)
+
+
+def test_related_datatypes_keep_pii():
+    from metacrafter.engine.pii import demote_outranked_pii
+
+    parents = {"corporate_email": ["email"]}
+    email = value_match("email", 100.0, is_pii=True)
+    demote_outranked_pii([value_match("corporate_email", 100.0, name_score=1.0), email],
+                         ancestors=lambda d: parents.get(d, []))
+    assert email["is_pii"] is True
+
+
+def test_registry_ancestors():
+    records = [
+        {"id": "ipaddr", "status": "stable", "kind": "datatype"},
+        {"id": "ipv4", "status": "stable", "kind": "datatype", "parent": "ipaddr"},
+        {"id": "loop", "status": "stable", "kind": "datatype", "parent": {"id": "loop"}},
+    ]
+    registry = SnapshotRegistry(datatypes=records, aliases={"ip4": "ipv4"}, manifest={}, source="test")
+    adapter = RegistryAdapter._wrap(registry, None, "test")
+    assert adapter.ancestors("ip4") == ["ipaddr"]
+    assert adapter.ancestors("ipaddr") == []
+    assert adapter.ancestors("loop") == []
+    assert adapter.ancestors("unknown") == []
+
+
+def okpd_scan(tmp_path, **kwargs):
+    from metacrafter.core import CrafterCmd
+
+    rules = tmp_path / "rules"
+    rules.mkdir()
+    (rules / "ip.yaml").write_text(ruleset(IPV4RULE + "    is_pii: true\n"), encoding="utf-8")
+    (rules / "okpd.yaml").write_text(ruleset(OKPDVALUE + OKPDNAME.replace("okpdknown", "okpdname")), encoding="utf-8")
+    cmd = CrafterCmd(rulepath=[str(rules)], registry_detectors="off", **kwargs)
+    rows = [{"okpd2": v, "ip": v} for v in OKPD_CODES]
+    report = cmd.scan_data(rows, confidence=5.0)
+    return {f["field"]: f for f in report["data"]}
+
+
+def test_scan_does_not_report_named_non_pii_field_as_pii(tmp_path):
+    fields = okpd_scan(tmp_path)
+    okpd2 = fields["okpd2"]
+    assert okpd2["matches"][0]["dataclass"] == "okpd"
+    ipv4 = next(m for m in okpd2["matches"] if m["dataclass"] == "ipv4")
+    assert ipv4["is_pii"] is False and ipv4["pii_outranked_by"] == "okpd"
+    assert okpd2["pii"] == {"is_pii": False, "datatypes": []}
+    # Without field-name evidence for okpd the same values stay PII.
+    assert fields["ip"]["pii"]["is_pii"] is True
+    assert all("pii_outranked_by" not in m for m in fields["ip"]["matches"])
+
+
+def test_pii_only_drops_outranked_matches(tmp_path):
+    fields = okpd_scan(tmp_path, pii_only=True)
+    assert fields["okpd2"]["matches"] == []
+    assert {m["dataclass"] for m in fields["ip"]["matches"]} == {"ipv4"}

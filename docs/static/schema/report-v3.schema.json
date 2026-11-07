@@ -303,6 +303,19 @@
           "description": "Registry pattern record of a date format",
           "title": "Pattern"
         },
+        "pii_outranked_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Datatype named by the field that outranks this value-only match; the match is then not PII for this field (registry.is_pii keeps the datatype's flag)",
+          "title": "Pii Outranked By"
+        },
         "pii_source": {
           "anyOf": [
             {
