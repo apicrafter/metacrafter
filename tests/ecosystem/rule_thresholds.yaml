@@ -41,16 +41,16 @@ min_recall:
   crc32: 1.0
   cusipvalue: 1.0
   datasizebyvalue: 0.0
-  de_pii_ibanvalue: 0.5
+  de_pii_ibanvalue: 1.0
   de_pii_steueridvalue: 0.6667
   deatcvalue: 0.0
   decountrynamebyvalue: 1.0
-  dehrbvalue: 0.0
+  dehrbvalue: 1.0
   deicd10value: 1.0
   deopsvalue: 0.0
   detaxidvalue: 0.6667
   deustvalue: 1.0
-  devehicleplatevalue: 0.5
+  devehicleplatevalue: 1.0
   doibydata: 0.5
   doivalue: 1.0
   dunsvalue: 1.0
@@ -86,10 +86,11 @@ min_recall:
   esvatvalue: 0.3333
   esyearbydatafiltered: 1.0
   ethereum_address: 1.0
-  eu_tax_ibanvalue: 0.6667
+  eu_tax_ibanvalue: 1.0
   eui48: 0.3333
   euidvalue: 1.0
   figivalue: 1.0
+  fileextensionbyvalue: 1.0
   filenamebyvalue: 1.0
   filesizebyvalue: 0.0
   fqdnbyvalidators: 1.0
@@ -98,7 +99,7 @@ min_recall:
   fricd10value: 1.0
   frsirenvalue: 1.0
   frsiretvalue: 1.0
-  frvatvalue: 0.0
+  frvatvalue: 1.0
   glnvalue: 1.0
   gridbyvalue: 0.5
   gs1_glnvalue: 1.0
@@ -109,7 +110,7 @@ min_recall:
   gtinvalue: 0.0
   gtinwithai01value: 0.0
   guid: 0.25
-  ibanvalue: 0.6667
+  ibanvalue: 1.0
   icaoairportcodevalue: 1.0
   iccidvalue: 0.6667
   id_pii_iddriverlicvalue: 1.0
@@ -132,13 +133,13 @@ min_recall:
   inreplytovalue: 1.0
   ipv4: 1.0
   ipv6: 0.25
-  isbn10: 0.0
+  isbn10: 1.0
   isbn10value: 0.0
-  isbn10valuewithdashes: 0.0
-  isbn13: 0.0
+  isbn10valuewithdashes: 1.0
+  isbn13: 1.0
   isbn13value: 0.0
-  isbn13valuewithdashes: 0.5
-  isbnvalue: 0.3333
+  isbn13valuewithdashes: 1.0
+  isbnvalue: 1.0
   isinvalue: 1.0
   isnivalue: 0.0
   isnivaluewithspaces: 0.0
@@ -229,6 +230,7 @@ min_recall:
   registry:molformula: 1.0
   registry:naicscode: 1.0
   registry:nl_brin: 1.0
+  registry:nl_municipality_code: 0.0
   registry:nl_onderwijsnummer: 1.0
   registry:nl_postcode: 1.0
   registry:okato: 1.0
@@ -245,16 +247,17 @@ min_recall:
   registry:siretcode: 1.0
   registry:tld: 1.0
   registry:toid: 1.0
-  registry:udkindex: 0.5
+  registry:udkindex: 1.0
   registry:uiccode: 1.0
   registry:ukgsscode: 1.0
   registry:unclass: 1.0
   registry:unm49: 1.0
   registry:unpkggroup: 1.0
-  registry:usfain: 0.5
+  registry:usfain: 1.0
   registry:uspiid: 1.0
   registry:vatin: 1.0
   registry:what3words: 1.0
+  registry:wkt: 1.0
   richpeheaderhashbyvalue: 1.0
   ripemd160hash: 1.0
   roridbyvalue: 1.0
@@ -310,7 +313,7 @@ min_recall:
   useruuidvalue: 1.0
   usnpivalue: 1.0
   uuidbyvalue: 0.75
-  vatvalue: 0.9
+  vatvalue: 1.0
   vhashbyvalue: 0.0
   vimeovideoidvalue: 1.0
   wbregionbyvalue: 1.0
@@ -320,13 +323,4 @@ min_recall:
   winregkeybyvalue: 0.0
   yearbydatafiltered: 1.0
   yearbydataimprecise: 0.5
-negative_exceptions:
-  asnbyprefixname: accepts registry negative examples; fix in metacrafter-rules
-  de_pii_ibanvalue: accepts registry negative examples; fix in metacrafter-rules
-  dehrbvalue: accepts registry negative examples; fix in metacrafter-rules
-  deustvalue: accepts registry negative examples; fix in metacrafter-rules
-  devehicleplatevalue: accepts registry negative examples; fix in metacrafter-rules
-  eu_tax_ibanvalue: accepts registry negative examples; fix in metacrafter-rules
-  frvatvalue: accepts registry negative examples; fix in metacrafter-rules
-  ulidvalue: accepts registry negative examples; fix in metacrafter-rules
-  vatvalue: accepts registry negative examples; fix in metacrafter-rules
+negative_exceptions: {}
