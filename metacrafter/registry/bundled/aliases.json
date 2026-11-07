@@ -7,10 +7,15 @@
   "email_person": "email",
   "eui48": "mac_address",
   "guid": "uuid",
+  "height_measurement": "height",
   "md5": "md5hash",
   "mime_type": "mimetype",
   "ninumber": "uknino",
+  "ogrn_ogrnip": "ogrn",
+  "okpd2": "okpd",
+  "path_file": "filepath",
   "sha1": "sha1hash",
   "sha256": "sha256hash",
-  "ssn": "usssn"
+  "ssn": "usssn",
+  "width_measurement": "width"
 }

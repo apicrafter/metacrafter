@@ -8,7 +8,7 @@ import logging
 import warnings
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Union, Set, Callable
+from typing import List, Dict, Any, Optional, Union, Set, Callable, Tuple
 
 import yaml
 
@@ -349,6 +349,16 @@ class ColumnMatchResult:
         """
         return len(self.matches) == 0
 
+    def rank(self) -> None:
+        """Order matches by confidence, then field-name evidence, then rule order.
+
+        The first match is the field's primary datatype (``datatype_url``). Confidence is
+        clamped at 100, so a match whose datatype the field name names can tie with a
+        value-only match: ``okpd`` (field ``okpd2``) and ``ipv4`` both reach 100 on OKPD2
+        codes, and the name decides.
+        """
+        self.matches.sort(key=match_rank_key)
+
     def asdict(self) -> Dict[str, Any]:
         """Convert column match result to dictionary format.
         
@@ -362,6 +372,20 @@ class ColumnMatchResult:
         if self.rejected is not None:
             result["rejected_candidates"] = self.rejected
         return result
+
+
+def match_name_score(match: "RuleResult") -> float:
+    """Field-name evidence of a match (``evidence.name_score``), 0 when it has none."""
+    evidence = getattr(match, "evidence", None) or {}
+    try:
+        return float(evidence.get("name_score") or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def match_rank_key(match: "RuleResult") -> Tuple[float, float]:
+    """Sort key: higher confidence first, then higher field-name evidence; stable otherwise."""
+    return (-float(match.confidence or 0.0), -match_name_score(match))
 
 
 def rule_pii_source(rule: Dict[str, Any]) -> Optional[str]:

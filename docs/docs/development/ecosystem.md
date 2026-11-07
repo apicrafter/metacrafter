@@ -47,8 +47,13 @@ metacrafter registry fetch --to /tmp/registry
 metacrafter rules check --registry --registry-path /tmp/registry --output-format json
 metacrafter rules test --registry-examples --registry-path /tmp/registry \
   --write-thresholds tests/ecosystem/rule_thresholds.yaml -o /dev/null
-metacrafter evaluate tests/benchmark/fixture.yaml --write-baseline tests/benchmark/baseline.json
+METACRAFTER_REGISTRY_PATH=tests/fixtures/registry_snapshot METACRAFTER_REGISTRY_OFFLINE=1 \
+  metacrafter evaluate tests/benchmark/fixture.yaml --write-baseline tests/benchmark/baseline.json
 ```
+
+The benchmark runs against the offline registry fixture, as `tests/conftest.py` sets it.
+Without the two variables, `evaluate` uses the full registry, whose derived detectors add
+labels (for example `ipaddr` on the `ip` field) that the test does not produce.
 
 Then record the registry `version` and `git_sha` (from `/tmp/registry/index.json`) in
 `ecosystem.lock` and update the registry snapshot shipped in the package

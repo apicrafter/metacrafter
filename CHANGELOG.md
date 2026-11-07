@@ -9,6 +9,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Default rule pack is metacrafter-rules v0.0.6; bundled registry snapshot is 3e99a78.**
+  Fields of museum and cultural heritage data get labels: on an export of the
+  ar.culture.ru "Артефакт" API (16077 objects, 193 fields) a full scan labels 125 fields
+  instead of 100.
+  - Goskatalog registration numbers (`goskatalogNumber`) are `ru_goskatalog_regnum`, by
+    field name and by value in such fields.
+  - Surnames with initials (`Иванов И.И.`, `И.И. Иванов`) are `rus_initials_surname`;
+    fields named `author` or `автор` are `dc_creator`.
+  - Historical dating (`XIX век`, `конец XIX века`, `19th century`, `1950s`) is
+    `ru_historical_dating` and `historical_dating`.
+  - URL slugs are `slug`, artwork technique and material fields are `art_medium`, and
+    dimensions as text (`30х40 см`, `68 x 82 cm`) are `object_dimensions`.
+  - `fqdn` no longer matches Japanese and Chinese text with the ideographic full stop `。`.
+  - `oid` no longer matches decimal fractions such as `0.1`.
+  - The `languagetag` value rule runs on fields such as `lang`, `language_code` and
+    `locale`; its field guard matched no field name.
+
+  The registry snapshot adds `slug`, `art_medium`, `object_dimensions` and
+  `historical_dating`, which v0.0.6 rule keys use, and makes `ogrn` cover OGRNIP (15
+  digits), with `ogrn_ogrnip` as an alias. All rule keys resolve. In
+  `tests/ecosystem/rule_thresholds.yaml` the new value rules start at recall 1.0, and
+  `ruogrn` goes down to 0.6667: it rejects the new registry example `385768585948949`,
+  whose year digits `85` are not a year in which OGRNIP numbers were issued (the check
+  digit is valid). The benchmark baseline is unchanged.
+- **Default rule pack is metacrafter-rules v0.0.5; bundled registry snapshot is 34a946c**
+  (#61). Fields of the Russian ESKLP drug catalogue get labels (18 of 29 fields of an
+  export instead of 10):
+  - OKPD2 codes are `okpd`, by field name (`okpd2`, `код окпд2`) and by value in such
+    fields. A field `okpd2` used to report `ipv4` first. `okpd` is stable in the registry,
+    with the alias `okpd2`.
+  - ESKLP codes (`21.20.10.226-000001-1-00008-0000000000000`) are `ru_esklp_code`.
+  - OKEI unit symbols (`шт.`, `мл`, `мг`, `ЕД`) are `unit_of_measure`.
+  - `ath`, `std_mnn_name`, `norm_mnn`, `klp_all_list` and `ftg` fields get `atccode`,
+    `rumedmnn`, `rumedicinetradename` and `medication_class` by name.
+  - ATC codes match by value again: the four value rules described 6 characters with a
+    length of 7 and matched nothing.
+  - The OKVED value rule runs on fields such as `okved2` and `main_okved`; its field guard
+    matched no ordinary name.
+
+  The registry snapshot adds `medication_dosage_form`, `medication_strength`,
+  `atc_code_name`, ESKLP SMNN and KLP codes, Italian datatypes and `filepath`, `height`
+  and `width`. The rule keys `path_file`, `height_measurement` and `width_measurement`
+  resolve now, so `tests/ecosystem/known_unresolved_rule_keys.yaml` is empty.
+  `metacrafter/engine/checksum_algorithms.py` is re-copied from the registry at the same
+  commit and adds `issn`, `ismn`, `iso7064_mod11_2` (ISNI, ORCID), `it_aic`, `ror` and
+  `ru_inn_padded`. In `tests/ecosystem/rule_thresholds.yaml`, `issnvalue`,
+  `issnvaluewithoutdash` and `rusfeddistrict` have lower minimums: the registry added
+  examples these rules miss (`0960-894X`, `Приволжский`, `ЦФО`). `wikidataidvalue` accepts
+  the new negative example `Q01` and is listed as an exception.
 - **Default rule pack is metacrafter-rules v0.0.4** (#42). Full-name rules of every country
   except China report `person_fullname`, and first-name and last-name rules report
   `person_firstname` and `person_surname`. Before, `full_name` in the Australian, Indian and
@@ -108,6 +157,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tries `title`, and the base name is also the field-name evidence for registry-derived
   detectors. On a JSON Lines export of museum objects (193 fields) labelled fields rose
   from 80 to 99 (`title.*`, `description.*`, `createdDate.*`) with no match lost.
+- **Value-only PII matches no longer make a field PII when the field names a non-PII
+  datatype that outranks them** (#62). OKPD2 codes are valid IPv4 strings, so a field
+  `okpd2` listed `ipv4` and `ipaddr` after `okpd`, and its PII summary, Markdown report,
+  `report pii`, `check` and catalog exports marked it PII. A PII match without field-name
+  evidence is now demoted when another value match with field-name evidence is not PII, is
+  a different datatype that is not its registry parent or child, and has the same or a
+  higher confidence. The match stays in `matches` with `is_pii: false`,
+  `pii_source: null` and `pii_outranked_by: okpd`; `registry.is_pii` keeps the datatype's
+  flag. `--pii-only` drops it. Field-name-only matches never outrank a value match, so a
+  field `login` with email values stays PII.
+- **The primary match follows confidence and field-name evidence** (#58). A field's
+  `matches` list and its `datatype_url` kept rule order, so the first match was the
+  matching rule with the highest priority, not the best-scored one. Confidence is clamped
+  at 100, so a datatype that the field name names could tie with a value-only match and
+  lose: OKPD2 codes such as `21.20.10.226` are valid IPv4 strings, and a field `okpd2`
+  reported `ipv4` first even when the `okpd` detector matched with field-name evidence.
+  Matches are now ordered by confidence, then field-name evidence, then rule order; the
+  summary string uses the same order. Value-only matches are kept, so `ipv4` is still
+  listed after `okpd` (since #62 without marking the field as PII).
 - **Value rules on columns with missing nested values.** When one record lacked a nested
   object or had an empty array (`{"details": null}`, `addresses: []`), its column held a
   null, the length prefilter fell back to a length of 4 and dropped every rule that cannot

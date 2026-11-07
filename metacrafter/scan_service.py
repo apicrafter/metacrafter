@@ -19,10 +19,11 @@ import qddate.patterns
 
 from iterable.helpers.detect import open_iterable
 
-from metacrafter.classify.processor import RulesProcessor, BASE_URL
+from metacrafter.classify.processor import RulesProcessor, BASE_URL, match_rank_key
 from metacrafter.classify.stats import Analyzer, DEFAULT_DICT_SHARE, DEFAULT_EMPTY_VALUES
 
 from metacrafter.config import ConfigLoader, default_rulepath
+from metacrafter.engine.pii import demote_outranked_pii
 from metacrafter.report import finalize_report, redact_samples, render_markdown, to_legacy
 from metacrafter.reports import statistics_dict, validate_options, normalize_report, aggregate_reports, rules_fingerprint
 from metacrafter.classify.utils import dict_to_columns, strip_values
@@ -1366,6 +1367,10 @@ class CrafterCmd(object):
         """Resolve and enrich every match of a field record, then apply registry filters."""
         registry = self.registry
         matches = [registry.enrich_match(m) for m in record.get("matches", [])]
+        # A value-only PII match outranked by a non-PII datatype the field name names is
+        # secondary: okpd2 codes that also read as IPv4 (apicrafter/metacrafter#62).
+        # Before the filters, so --pii-only sees the demoted flag.
+        demote_outranked_pii(matches, ancestors=registry.ancestors)
         record["matches"] = [m for m in matches if self._registry_filter_allows(m)]
         if record["matches"]:
             record["datatype_url"] = record["matches"][0].get("classurl", "")
@@ -1573,6 +1578,9 @@ class CrafterCmd(object):
         output = []
         outdata = []
         for res in results.results:
+            # The first match is the primary datatype (datatype_url): highest confidence,
+            # then field-name evidence (apicrafter/metacrafter#58).
+            res.rank()
             # Collapse duplicate dataclasses (multiple rules can match the same
             # type), keeping the highest-confidence occurrence of each, ordered
             # by confidence descending for a cleaner summary string.
@@ -1589,11 +1597,7 @@ class CrafterCmd(object):
                     if match.confidence > existing.confidence:
                         best_by_class[match.dataclass] = match
                     best_by_class[match.dataclass].is_pii = pii
-            deduped = sorted(
-                (best_by_class[name] for name in order),
-                key=lambda m: m.confidence,
-                reverse=True,
-            )
+            deduped = sorted((best_by_class[name] for name in order), key=match_rank_key)
             matches = []
             for match in deduped:
                 s = "%s %0.2f" % (match.dataclass, match.confidence)

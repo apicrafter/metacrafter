@@ -37,8 +37,8 @@ logger = logging.getLogger(__name__)
 
 RULES_REPO = "apicrafter/metacrafter-rules"
 #: Release pinned by this version of metacrafter.
-DEFAULT_RELEASE = "v0.0.4"
-DEFAULT_SHA256 = "a15140c019d16f3e79b4644a0fe079339e22d2c259c7203f7df7745640401d5c"
+DEFAULT_RELEASE = "v0.0.6"
+DEFAULT_SHA256 = "2f1dca3773b80c9c3cd10c35464eea39e3ca63c22484a26f5620130a061861fb"
 MARKER = ".metacrafter-pack.json"
 DOWNLOAD_TIMEOUT = 60.0
 MAX_ARCHIVE_BYTES = 50 * 1024 * 1024
