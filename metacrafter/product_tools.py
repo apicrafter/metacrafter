@@ -287,6 +287,46 @@ def lint_rules(path):
     return processor, diagnostics
 
 
+def field_rule_warnings(path, confidence=None):
+    """Field rules that cannot report a name-only match at ``confidence``.
+
+    A field rule without ``priority`` scores ``field_score(None)`` (36) when only
+    the field name matches, below the default confidence of 50: it then reports
+    only together with a value match of the same key. Rules with an explicit
+    ``priority`` are left alone, since a low priority is a choice.
+    """
+    from metacrafter.engine.scoring import field_score
+    from metacrafter.scan_service import MIN_CONFIDENCE_FOR_MATCH
+
+    confidence = MIN_CONFIDENCE_FOR_MATCH if confidence is None else confidence
+    score = field_score(None)
+    if score >= confidence:
+        return []
+    files = sorted(Path(path).rglob("*.yaml")) if Path(path).is_dir() else [Path(path)]
+    warnings = []
+    for filename in files:
+        try:
+            document = load_document(filename)
+        except (ValueError, OSError, yaml.YAMLError):
+            continue
+        rules = document.get("rules") if isinstance(document, dict) else None
+        for identifier, rule in (rules or {}).items():
+            if not isinstance(rule, dict) or rule.get("type") != "field" or "priority" in rule:
+                continue
+            warnings.append(
+                {
+                    "ruleid": identifier,
+                    "source": str(filename),
+                    "warning": (
+                        f"Field rule without priority scores {score:g} on a name-only match, "
+                        f"below the default confidence {confidence:g}; set priority: 1 to "
+                        "report it without a value match"
+                    ),
+                }
+            )
+    return warnings
+
+
 def test_rule_examples(path, examples):
     processor, diagnostics = lint_rules(path)
     if not isinstance(examples, list):
@@ -526,16 +566,24 @@ def register_product_commands(app, rules_app, scan_app, export_app):
             raise typer.Exit(1)
 
     @rules_app.command("lint")
-    def rules_lint(path: Path):
+    def rules_lint(
+        path: Path,
+        strict: bool = typer.Option(
+            False, "--strict", help="Fail on warnings too (field rules below the default confidence)"
+        ),
+    ):
         processor, diagnostics = lint_rules(path)
+        warnings = field_rule_warnings(path)
+        passed = not diagnostics and not (strict and warnings)
         emit(
             {
-                "passed": not diagnostics,
+                "passed": passed,
                 "rules_loaded": len(processor.field_rules) + len(processor.data_rules),
                 "diagnostics": diagnostics,
+                "warnings": warnings,
             }
         )
-        if diagnostics:
+        if not passed:
             raise typer.Exit(1)
 
     @rules_app.command("test")
