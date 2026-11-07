@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-07
+
+Precise scan defaults (breaking: minimum confidence 50, registry detectors `checksum`), the
+default rule pack metacrafter-rules v0.0.8 and the registry snapshot 1.3.0. Migration guide:
+`docs/docs/getting-started/migration.md` ("1.0 to 2.0").
+
 ### Changed
 
 - **BREAKING: precise scan defaults.** A scan without options reports fewer wrong matches;

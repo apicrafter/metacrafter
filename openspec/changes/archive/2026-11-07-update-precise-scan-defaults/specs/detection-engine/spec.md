@@ -35,7 +35,7 @@ A detector SHALL NOT report a match when:
 
 With `--explain` each skipped detector SHALL be listed with its reason.
 
-#### Scenario: Checksum detector finds an uncovered type by default
+#### Scenario: Stable detector finds an uncovered type
 
 - **WHEN** a stable registry record with a checksum has no rule
 - **AND** a column contains values that match its regexp and pass its checksum

@@ -30,7 +30,7 @@ and the skills in the repository's skills/ directory. Report schema: https://api
 - [Best practices](https://apicrafter.github.io/metacrafter/getting-started/best-practices.md): Recommended scan settings, rule hygiene, and production use
 - [Cookbook](https://apicrafter.github.io/metacrafter/getting-started/cookbook.md): Task-oriented index by role and goal
 - [Installation](https://apicrafter.github.io/metacrafter/getting-started/installation.md): Install Metacrafter with pip and optional extras
-- [Migrating to 1.0](https://apicrafter.github.io/metacrafter/getting-started/migration.md): Breaking changes from 0.0.x and how to adapt
+- [Migration guide](https://apicrafter.github.io/metacrafter/getting-started/migration.md): Breaking changes in 2.0 and 1.0 and how to adapt
 - [Quick Start](https://apicrafter.github.io/metacrafter/getting-started/quick-start.md): Task-oriented first success paths for Metacrafter
 - [Troubleshooting](https://apicrafter.github.io/metacrafter/getting-started/troubleshooting.md): Common errors, exit codes, and how to debug scans
 - [When to use Metacrafter](https://apicrafter.github.io/metacrafter/getting-started/when-to-use.md): Metacrafter vs Presidio, YData Profiling, DataProfiler, and similar tools

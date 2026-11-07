@@ -127,3 +127,50 @@ set. The report SHALL record the disclosure mode for each field.
 - **THEN** the prompt contains masked shapes and no raw values
 - **AND** `evidence.disclosure` is `masked`
 
+### Requirement: LLM Verification of Value Matches
+
+When LLM verification is enabled (`--llm-verify`, `llm_verify: true`), Metacrafter SHALL send one LLM
+request per table after rule matching. The request SHALL list all column paths and, for each column with
+value matches from rules or registry detectors, its type, distinct-value count, value samples under the
+sample policy and the candidate datatypes with their registry descriptions. The answer schema SHALL allow
+only each column's candidate ids. Value matches whose datatype the answer does not keep SHALL be removed;
+kept matches SHALL carry `evidence.llm_verified: true`; a column missing from the answer SHALL keep its
+matches. Field-name matches SHALL NOT be sent or removed. Answers SHALL be cached, requests SHALL count
+against `llm_max_requests`, and failures SHALL follow `llm_fallback`.
+
+#### Scenario: Rejected value match
+
+- **WHEN** a column `package_id` of GUIDs has a `uuid` value match and the verifier does not keep `uuid`
+- **THEN** the report has no `uuid` match for the column
+- **AND** with `--explain` the rejected candidates give the reason "Rejected by the LLM verifier"
+
+#### Scenario: Names-only policy
+
+- **WHEN** verification runs with `--sample-policy names-only`
+- **THEN** the request contains column paths and candidates but no values
+
+#### Scenario: Failure with rules fallback
+
+- **WHEN** the verification request fails and `llm_fallback` is `rules`
+- **THEN** the rule matches are kept and the report is marked incomplete
+
+### Requirement: LLM Request Budget
+
+A scan SHALL make at most `llm_max_requests` LLM requests (default 100), set in
+`.metacrafter` or with `--llm-max-requests`. Cached answers and fields without registry
+candidates SHALL NOT count. When the fields to classify exceed the remaining budget, the
+scan SHALL log a warning. When the budget is exhausted, a scan with `llm_fallback: error`
+SHALL fail with a message that names the budget, `llm_max_requests` and
+`--llm-fallback rules`; a scan with `llm_fallback: rules` SHALL classify the remaining
+fields with rules.
+
+#### Scenario: More fields than the budget
+
+- **WHEN** a scan with `--llm-only` and `--llm-max-requests 1` needs two LLM requests
+- **THEN** it fails with "LLM request budget of 1 requests exceeded"
+
+#### Scenario: Budget from configuration
+
+- **WHEN** `.metacrafter` sets `llm_max_requests: 250`
+- **THEN** the scan allows 250 LLM requests unless `--llm-max-requests` is given
+

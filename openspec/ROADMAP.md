@@ -1,6 +1,6 @@
 # Metacrafter Roadmap
 
-Updated 2026-11-06. Source plan: [`devdocs/MODERNIZATION_PLAN.md`](../devdocs/MODERNIZATION_PLAN.md)
+Updated 2026-11-07. Source plan: [`devdocs/MODERNIZATION_PLAN.md`](../devdocs/MODERNIZATION_PLAN.md)
 (registry-driven modernization, target release 1.0.0). Decisions in section 6 of that plan
 were accepted on 2026-11-05.
 
@@ -53,14 +53,27 @@ Each step ends with a green test suite and a commit.
 The superseded `update-registry-resolution` draft was deleted. Version `1.0.0` is tagged
 and published on PyPI; the `metacrafter-llm` repository is archived.
 
+**Status (2026-11-07):** release 2.0.0 is prepared. The changes merged after 1.0.0 are
+archived in `openspec/changes/archive/2026-11-07-*` (`add-database-key-detection`,
+`add-field-groups`, `add-llm-verifier`, `add-pattern-detectors`, `add-strip-option`,
+`update-bundle-default-rule-pack`, `update-bundle-registry-snapshot`,
+`update-pii-outranked-matches`, `update-precise-scan-defaults`,
+`update-rule-filters-and-name-evidence`). 2.0.0 is a major release because
+`update-precise-scan-defaults` changes the scan defaults. It pins metacrafter-rules v0.0.8
+and registry 1.3.0 (9a2898d). No OpenSpec change is open.
+
+The 1.0.0 open items are closed: registry snapshot bump (apicrafter/metacrafter#37),
+pattern-record detectors (apicrafter/metacrafter#39) and `--llm-verify`
+(apicrafter/metacrafter#40) are implemented; apicrafter/metacrafter#38 (`--pack`) was closed
+without a `--pack` option.
+
 Open items:
 
 | Item | Issue | Owner |
 |---|---|---|
-| Bump the bundled registry snapshot to include apicrafter/metacrafter-registry#115 | apicrafter/metacrafter#37 | metacrafter |
-| `--pack` once the registry implements `add-datatype-packs` | apicrafter/metacrafter#38 | metacrafter-registry, then metacrafter |
-| Registry-derived detectors from pattern records (`iso639_1`, `iso639_2`) | apicrafter/metacrafter#39 | metacrafter |
-| Opt-in LLM verifier mode (`--llm-verify`) | apicrafter/metacrafter#40 | metacrafter |
+| Named entity recognition | apicrafter/metacrafter#1 | metacrafter |
+| `latitudevalue` and `longitudevalue` miss negative, one-digit and >= 100 coordinates | apicrafter/metacrafter-rules#34 | metacrafter-rules |
+| `isrcvalue` can never match (14-character pattern, maxlen 12) | apicrafter/metacrafter-rules#37 | metacrafter-rules |
 
 Distribution (decided 2026-11-05, `update-ecosystem-distribution`): neither
 `metacrafter-rules` nor `metacrafter-registry` is published on PyPI. The rule pack is a
@@ -90,9 +103,8 @@ a higher confidence (`okpd2` codes that read as IPv4); the match stays listed wi
 checksum`, was `stable`); qddate runs on fields with only field-name matches. On 10 sample
 files of Russian open data: 238 matches to 135, fields with a match 116 to 106.
 
-Blocked outside this repository: registry datatype packs (apicrafter/metacrafter#38). The
-metacrafter-rules fixes shipped in v0.0.3 (apicrafter/metacrafter#41) and v0.0.4
-(apicrafter/metacrafter#42); v0.0.4 is the pinned rule pack since 2026-11-07.
+The metacrafter-rules fixes shipped in v0.0.3 (apicrafter/metacrafter#41) through v0.0.8
+(apicrafter/metacrafter#71); v0.0.8 is the pinned rule pack since 2026-11-07.
 
 ## Phase 0 — Foundation and reliability
 
@@ -146,6 +158,7 @@ metacrafter-rules fixes shipped in v0.0.3 (apicrafter/metacrafter#41) and v0.0.4
 | 0.2.0 | Phase 1 + key resolution gate |
 | 0.3.0 | Phase 2 + example-based rule tests |
 | 1.0.0 | Phases 3–4; report v2 by default |
+| 2.0.0 | Precise scan defaults (confidence 50, `checksum` registry detectors); rule pack v0.0.8 |
 
 ## Cross-repository prerequisites
 

@@ -16,6 +16,13 @@ SHALL be unpacked without writing outside the cache directory.
 - **AND** nothing is downloaded
 - **AND** the rules from its `rules/` directory are loaded
 
+#### Scenario: First scan downloads the pinned release
+
+- **WHEN** a user runs `metacrafter scan file data.csv` with an empty cache and network access
+- **AND** the installation has no bundled archive of the pinned release
+- **THEN** the pinned release archive is downloaded and its SHA-256 is verified
+- **AND** the rules from its `rules/` directory are loaded
+
 #### Scenario: Corrupted archive
 
 - **WHEN** the downloaded archive does not match the pinned SHA-256
