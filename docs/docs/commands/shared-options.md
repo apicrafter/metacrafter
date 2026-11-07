@@ -14,7 +14,7 @@ flags.
 | `--contexts` | Comma-separated context filters (`pii`, `finance`, …) |
 | `--langs` | Comma-separated language filters (`en`, `ru`, `fr`); language-independent rules (`lang: common`) always apply |
 | `--country-codes` | ISO country codes; rules of other countries are not loaded, universal rules (`country_code: xx` or none) always are |
-| `--confidence`, `-c` | Minimum confidence (0–100, default 5.0) |
+| `--confidence`, `-c` | Minimum confidence (0–100, default 50.0; `5` for a broad scan) |
 | `--stop-on-match` | Stop after the first matching rule per field |
 | `--no-dates` | Disable qddate pattern detection |
 | `--include-imprecise` | Include imprecise rules that are ignored by default |

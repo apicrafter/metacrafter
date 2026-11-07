@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **BREAKING: precise scan defaults.** A scan without options reports fewer wrong matches;
+  broader detection is opt-in.
+  - `--confidence` defaults to 50 instead of 5 (CLI, SDK, HTTP API, MCP server). Partial
+    value matches and chance checksum matches are no longer reported: about one value in
+    ten passes a mod-10 or mod-11 check by chance, so a column of Russian INNs used to list
+    ISBN-10, NHS, NPI, Turkish and Polish tax numbers at 6–12. Field-name-only matches of
+    priority 2 and 3 rules (48 and 36) are no longer reported either.
+  - `--registry-detectors` and `registry_detectors` in `.metacrafter` default to the new
+    mode `checksum`: only stable registry records with a checksum get a derived detector
+    (11 records, such as `bankcard`, `be_iban`, `it_codicefiscale`, `kz_bin`). Detectors
+    without a checksum reported format look-alikes such as `cficode` at 98 on a column of
+    six-letter status codes; they run with `--registry-detectors stable`.
+  - Date patterns (qddate) also run on fields whose only matches are field-name matches:
+    an ISO date column `created` reports `datetime` from its values, not only from its name.
+
+  On 10 sample files of Russian open data (209 fields), a default scan reports 135 matches
+  on 106 fields instead of 238 on 116. In the benchmark (`tests/benchmark/baseline.json`)
+  the false `userid` match is gone, and the ISO date column `created` no longer reports
+  `date`, which came from a registry detector without a checksum. For 1.0.0 results, pass
+  `--confidence 5 --registry-detectors stable`.
 - **Default rule pack is metacrafter-rules v0.0.6; bundled registry snapshot is 3e99a78.**
   Fields of museum and cultural heritage data get labels: on an export of the
   ar.culture.ru "Артефакт" API (16077 objects, 193 fields) a full scan labels 125 fields

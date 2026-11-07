@@ -21,7 +21,7 @@ A single source (file, table, in-memory data):
   "errors": [],
   "registry": {"source": "cache:…", "base_url": "https://registry.apicrafter.io", "version": "1.3.0.dev0"},
   "scoring_model": "v1",
-  "registry_detectors": {"mode": "stable", "count": 99},
+  "registry_detectors": {"mode": "checksum", "count": 11},
   "sampling": {"method": "head", "retained_count": 1000},
   "data": [
     {

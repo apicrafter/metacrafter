@@ -546,7 +546,7 @@ def register_product_commands(app, rules_app, scan_app, export_app):
         rule: Optional[List[str]] = typer.Option(None, "--rule", help="Only these rule ids (repeatable)"),
         rulepath: Optional[str] = typer.Option(None, "--rulepath", help="Extra rule paths, comma-separated"),
         registry_path: Optional[str] = typer.Option(None, "--registry-path", help="Registry snapshot or checkout data/ directory"),
-        registry_detectors: str = typer.Option("stable", "--registry-detectors", help="off, stable or all"),
+        registry_detectors: str = typer.Option("stable", "--registry-detectors", help="off, checksum, stable or all (default: stable, to test registry coverage)"),
         thresholds: Optional[Path] = typer.Option(None, "--thresholds", help="Fail on regressions against this thresholds file"),
         write_thresholds: Optional[Path] = typer.Option(None, "--write-thresholds", help="Write current results as the thresholds baseline"),
         output: Optional[Path] = typer.Option(None, "--output", "-o"),

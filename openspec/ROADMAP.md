@@ -85,6 +85,11 @@ PII when a non-PII datatype that the field name names matches the values with th
 a higher confidence (`okpd2` codes that read as IPv4); the match stays listed with
 `pii_outranked_by` (apicrafter/metacrafter#62).
 
+`update-precise-scan-defaults` (2026-11-07): scans report matches from confidence 50 (was
+5) and build registry detectors only for records with a checksum (`--registry-detectors
+checksum`, was `stable`); qddate runs on fields with only field-name matches. On 10 sample
+files of Russian open data: 238 matches to 135, fields with a match 116 to 106.
+
 Blocked outside this repository: registry datatype packs (apicrafter/metacrafter#38). The
 metacrafter-rules fixes shipped in v0.0.3 (apicrafter/metacrafter#41) and v0.0.4
 (apicrafter/metacrafter#42); v0.0.4 is the pinned rule pack since 2026-11-07.

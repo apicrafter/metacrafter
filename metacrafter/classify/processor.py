@@ -756,7 +756,7 @@ class RulesProcessor:
             self.contexts[context] = self.contexts.get(context, 0) + 1
         self.countries[None] = self.countries.get(None, 0) + 1
 
-    def bind_registry(self, adapter, detectors: str = "stable") -> int:
+    def bind_registry(self, adapter, detectors: str = "checksum") -> int:
         """Attach registry data: compile ``match: registry`` rules and add derived detectors.
 
         Returns the number of registry-derived detectors added.
@@ -1177,7 +1177,10 @@ class RulesProcessor:
                         m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": result, "matched_count": success, "considered_count": considered, "reason": "No matching values" if not success else "Below confidence threshold"})
                 self._drop_shadowed_country_matches(data_found, m_result, explain)
 
-            if m_result.is_empty() and parse_dates and field not in nonstr and dateparser is not None:
+            # Date patterns run when no value rule matched. A field-name match alone
+            # (``created``, ``birth_date``) does not skip them: the values then add evidence.
+            only_name_matches = all(match.ruletype == "field" for match in m_result.matches)
+            if only_name_matches and parse_dates and field not in nonstr and dateparser is not None:
                 total = len(slice)
                 success = 0
                 empty = 0

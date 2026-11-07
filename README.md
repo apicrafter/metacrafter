@@ -75,7 +75,6 @@ metacrafter scan file somefile.csv --format short
 metacrafter scan file users.csv \
   --contexts pii \
   --langs en \
-  --confidence 20.0 \
   --format full \
   -o pii_scan.json
 

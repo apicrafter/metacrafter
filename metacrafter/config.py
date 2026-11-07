@@ -143,7 +143,7 @@ class MetacrafterConfig(BaseModel):
     registry_cache_ttl: float = Field(default=86400, ge=0, description="Seconds a cached registry snapshot is used without checking the network")
     registry_fetch_timeout: float = Field(default=30, gt=0, description="Overall time limit in seconds for a registry download during a scan")
     mcp: McpSettings = Field(default_factory=McpSettings)
-    registry_detectors: str = Field(default="stable", pattern="^(off|stable|all)$", description="Detectors derived from registry regexps: off, stable or all")
+    registry_detectors: str = Field(default="checksum", pattern="^(off|checksum|stable|all)$", description="Detectors derived from registry regexps: off, checksum (default), stable or all")
 
     # LLM configuration fields
     classification_mode: Optional[str] = Field(default="rules", description="Classification mode: rules, llm, or hybrid")
