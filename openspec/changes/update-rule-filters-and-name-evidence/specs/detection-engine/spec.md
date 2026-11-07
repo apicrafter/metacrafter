@@ -93,6 +93,12 @@ trailing language code separated by `_`, `-` or `.`. Only codes from an allowlis
 - **WHEN** a column `abstract_en` contains text and a field rule matches `abstract`
 - **THEN** the column reports that rule's datatype
 
+#### Scenario: Language key of a nested object
+
+- **WHEN** records hold an object `title` keyed by language (`{"title": {"ru": ..., "en": ...}}`)
+  and a field rule matches `title`
+- **THEN** the fields `title.ru` and `title.en` report that rule's datatype
+
 #### Scenario: Identifier column
 
 - **WHEN** a column is named `user_id`

@@ -211,7 +211,9 @@ evidence supports it:
 `--explain` lists the skipped detectors with the reason.
 
 Field rules also try the field name without a language suffix: when `abstract_en` or
-`title_ru` matches no field rule, `abstract` or `title` is tried. Only common language codes
+`title_ru` matches no field rule, `abstract` or `title` is tried. The language keys of a
+nested object work the same way: `title.ru` and `title.en` (from `{"title": {"ru": …, "en": …}}`)
+try `title`. Only common language codes
 count as suffixes (`en`, `ru`, `fr`, `de`, `es`, `hy`, …); codes that are also common words or
 abbreviations, such as `id`, `no` or `ms`, do not, so `user_id` stays `user_id`.
 

@@ -56,6 +56,7 @@ def test_match_time_language_filter_keeps_common_rules(tmp_path):
 
 @pytest.mark.parametrize("name,base", [
     ("title_en", "title"), ("abstract_EN", "abstract"), ("name-ru", "name"), ("description.hy", "description"),
+    ("item.title.ru", "item.title"), ("meta.id", "meta.id"),
     ("user_id", "user_id"), ("is_no", "is_no"), ("time_ms", "time_ms"), ("title", "title"), ("en", "en"),
 ])
 def test_strip_language_suffix(name, base):
@@ -71,6 +72,20 @@ def test_field_rule_matches_name_without_language_suffix(tmp_path):
     assert found["abstract_en"] == {"description"}
     assert found["category.description_en"] == {"description"}
     assert found["user_id"] == set()
+
+
+def test_field_rule_matches_parent_of_language_key(tmp_path):
+    processor = RulesProcessor()
+    processor.import_rules(write(tmp_path, "t", field_rule("descriptionfield", "description", "abstract,description")))
+    rows = [{"description": {"ru": "Текст", "en": "Text"}, "item": {"abstract": {"de": "Text"}},
+             "meta": {"id": "1"}, "en": "Text"}]
+    result = processor.match_dict(rows, confidence=5, parse_dates=False)
+    found = {r.field: {m.dataclass for m in r.matches} for r in result.results}
+    assert found["description.ru"] == {"description"}
+    assert found["description.en"] == {"description"}
+    assert found["item.abstract.de"] == {"description"}
+    assert found["meta.id"] == set()
+    assert found["en"] == set()
 
 
 # --- parent name evidence -------------------------------------------------------
@@ -103,6 +118,13 @@ def test_parent_name_counts_for_generic_pattern(processor):
     found = classes(processor, [{"language": "eng", "workspace": "geo"}, {"language": "rus", "workspace": "dev"}])
     assert "iso639_2" in found["language"]
     assert "iso639_2" not in found["workspace"]
+
+
+def test_parent_name_of_language_key_counts_for_generic_pattern(processor):
+    found = classes(processor, [{"language": {"en": "eng"}, "workspace": {"en": "geo"}},
+                                {"language": {"en": "rus"}, "workspace": {"en": "dev"}}])
+    assert "iso639_2" in found["language.en"]
+    assert "iso639_2" not in found["workspace.en"]
 
 
 def test_parent_name_scores_half_bonus(processor):
