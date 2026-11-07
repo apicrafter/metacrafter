@@ -21,8 +21,8 @@
       "recall": 0.0
     },
     "date": {
-      "precision": null,
-      "recall": 0.0
+      "precision": 1.0,
+      "recall": 1.0
     },
     "datetime": {
       "precision": 0.0,
