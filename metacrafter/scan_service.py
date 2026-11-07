@@ -19,7 +19,7 @@ import qddate.patterns
 
 from iterable.helpers.detect import open_iterable
 
-from metacrafter.classify.processor import RulesProcessor, BASE_URL
+from metacrafter.classify.processor import RulesProcessor, BASE_URL, match_rank_key
 from metacrafter.classify.stats import Analyzer, DEFAULT_DICT_SHARE, DEFAULT_EMPTY_VALUES
 
 from metacrafter.config import ConfigLoader, default_rulepath
@@ -1573,6 +1573,9 @@ class CrafterCmd(object):
         output = []
         outdata = []
         for res in results.results:
+            # The first match is the primary datatype (datatype_url): highest confidence,
+            # then field-name evidence (apicrafter/metacrafter#58).
+            res.rank()
             # Collapse duplicate dataclasses (multiple rules can match the same
             # type), keeping the highest-confidence occurrence of each, ordered
             # by confidence descending for a cleaner summary string.
@@ -1589,11 +1592,7 @@ class CrafterCmd(object):
                     if match.confidence > existing.confidence:
                         best_by_class[match.dataclass] = match
                     best_by_class[match.dataclass].is_pii = pii
-            deduped = sorted(
-                (best_by_class[name] for name in order),
-                key=lambda m: m.confidence,
-                reverse=True,
-            )
+            deduped = sorted((best_by_class[name] for name in order), key=match_rank_key)
             matches = []
             for match in deduped:
                 s = "%s %0.2f" % (match.dataclass, match.confidence)
