@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Default rule pack updated to metacrafter-rules `v0.0.3`** (bundled archive and
+  `ecosystem.lock`). OGRN and OGRNIP are detected by value in default scans: `ruogrn` is
+  no longer imprecise and accepts 15-digit OGRNIP, `ruogrnknown` reports `ogrn` and matches
+  more field names, and `rutitleknown` no longer labels `ИНН`, `КПП`, `ОКПО` and `ОГРН`
+  columns `name`. In `tests/fixtures/ru_utf8_comma.csv` the `ogrn` column gets `ogrn 100`
+  instead of only `ogrn_ogrnip 36` from its name. The release also maps rule keys to
+  registry ids (unresolved keys: 32 → 3), validates IBAN, VAT, ULID and other check digits
+  (no rule accepts the registry's negative examples any more) and matches hyphenated ISBNs.
+  The ecosystem baselines (`tests/ecosystem/`, `tests/benchmark/baseline.json`) are
+  recorded against it; the `active_boolean` false positive in the benchmark is gone, and
+  `de_iban` now matches the German value in the mixed-country `iban` column.
 - **Float columns of whole numbers are matched by data rules.** A column whose values are
   all whole numbers stored as floats (`.xls` files, pandas columns with missing values, CSV
   text such as `1027700132195.0`) is matched as integer text (`1027700132195`). Before,

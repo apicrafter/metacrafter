@@ -152,3 +152,20 @@ def test_default_pin_matches_ecosystem_lock():
     lock = yaml.safe_load((Path(__file__).parent.parent / "ecosystem.lock").read_text())
     assert lock["metacrafter-rules"]["release"] == pack.DEFAULT_RELEASE
     assert lock["metacrafter-rules"]["sha256"] == pack.DEFAULT_SHA256
+
+
+def test_pinned_pack_detects_ogrn_by_value():
+    # metacrafter-rules v0.0.3 runs `ruogrn` in default scans (it was imprecise before), so
+    # OGRN values are matched, not only the column name (apicrafter/metacrafter#51).
+    import json
+    from pathlib import Path
+
+    from metacrafter.scan_service import CrafterCmd
+
+    fixture = Path(__file__).parent / "fixtures" / "ru_utf8_comma.csv"
+    out = io.StringIO()
+    CrafterCmd(quiet=True).scan_file(str(fixture), output=out, output_format="json")
+    fields = {f["field"]: f for f in json.loads(out.getvalue())["fields"]}
+    by_value = [m for m in fields["ogrn"]["matches"] if m["ruletype"] == "data"]
+    assert [(m["dataclass"], m["ruleid"], m["confidence"]) for m in by_value] == [("ogrn", "ruogrn", 100.0)]
+    assert "name" not in {m["dataclass"] for m in fields["ogrn"]["matches"]}
