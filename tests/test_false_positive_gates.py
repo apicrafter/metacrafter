@@ -227,3 +227,60 @@ def test_country_pattern_repeating_universal_match_is_dropped(tmp_path):
 def test_country_pattern_kept_when_scan_country_matches(tmp_path):
     processor = processor_with(tmp_path, [(FIAS, "ru")], countries=["ru"])
     assert "rufias" in classes(scan(processor, [{"id": g} for g in GUIDS])["id"])
+
+
+IBANRULE = """
+  ibanvalue:
+    key: iban
+    match: regex
+    type: data
+    rule: '[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}'
+    validator: checksum:iban_mod97
+"""
+DEIBAN = """
+  deibanvalue:
+    key: de_iban
+    match: regex
+    type: data
+    rule: 'DE[0-9]{20}'
+    validator: checksum:iban_mod97
+"""
+MIXED_IBANS = ["GB82WEST12345698765432", "DE89370400440532013000", "FR1420041010050500013M02606"]
+
+
+def test_country_pattern_with_shared_validator_dropped_on_mixed_values(tmp_path):
+    processor = processor_with(tmp_path, [(IBANRULE, "xx"), (DEIBAN, "de")])
+    columns = scan(processor, [{"account": v} for v in MIXED_IBANS], explain=True)
+    assert classes(columns["account"]) == {"iban"}
+    assert any(
+        r["ruleid"] == "deibanvalue" and "same validator" in r["reason"] for r in columns["account"].rejected
+    )
+
+
+def test_country_pattern_with_shared_validator_kept_when_it_covers_all_values(tmp_path):
+    processor = processor_with(tmp_path, [(IBANRULE, "xx"), (DEIBAN, "de")])
+    rows = [{"account": "DE89370400440532013000"}, {"account": "DE75512108001245126199"}]
+    assert classes(scan(processor, rows)["account"]) == {"iban", "de_iban"}
+
+
+NUMBERRULE = """
+  numbervalue:
+    key: number
+    match: regex
+    type: data
+    rule: '[0-9]+'
+"""
+CARDLIKE = """
+  cardlikevalue:
+    key: de_cardlike
+    match: regex
+    type: data
+    rule: '[0-9]{16}'
+    validator: checksum:luhn
+"""
+
+
+def test_country_pattern_with_own_validator_kept_below_universal_match(tmp_path):
+    processor = processor_with(tmp_path, [(NUMBERRULE, "xx"), (CARDLIKE, "de")])
+    rows = [{"n": "4111111111111111"}, {"n": "5500000000000004"}, {"n": "12345"}]
+    assert classes(scan(processor, rows)["n"]) == {"number", "de_cardlike"}

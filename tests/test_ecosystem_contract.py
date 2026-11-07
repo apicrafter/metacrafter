@@ -24,6 +24,8 @@ def test_benchmark_has_no_regressions():
     result = evaluate_fixture(CrafterCmd(quiet=True), fixture)
     assert compare_benchmark(result, baseline) == []
     assert result["datatypes"]["email"]["recall"] == 1.0
+    # The mixed-country IBAN column shares only the generic IBAN check with de_iban.
+    assert "de_iban" not in result["datatypes"]
 
 
 def test_compare_benchmark_detects_drop():
