@@ -972,13 +972,17 @@ class RulesProcessor:
             if explain:
                 m_result.rejected = []
             shortfield = field.rsplit(".", 1)[-1].strip()
-            # Match field name first; a name with a language suffix (title_en) falls back to
-            # its base name (title) when the full name matches no field rule.
+            # Match field name first; a name with a language suffix (title_en) or a language
+            # key of a nested object (title.en) falls back to its base name (title) when the
+            # full name matches no field rule.
             field_found: List[Dict[str, Any]] = []
             name_variants = [(shortfield, field)]
-            base = strip_language_suffix(shortfield)
-            if base != shortfield:
-                name_variants.append((base, field[: len(field) - len(shortfield)] + base))
+            base = shortfield
+            base_field = strip_language_suffix(field.strip())
+            base_name = base_field.rsplit(".", 1)[-1].strip()
+            if base_field != field.strip() and base_name:
+                base = base_name
+                name_variants.append((base, base_field))
             for short_name, full_name in name_variants:
                 for rule in field_rules:
                     if not self._field_rule_matches(rule, short_name, full_name):
