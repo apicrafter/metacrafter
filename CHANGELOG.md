@@ -9,24 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Rule pack v0.0.4** (metacrafter-rules release `v0.0.4`, bundled with the package; it
-  includes `v0.0.3`, the rules side of #41). Fixes #42:
-  - Full-name rules of every country except China report `person_fullname`, and first-name
-    and last-name rules report `person_firstname` and `person_surname`. Before, `full_name`
-    in Australian, Indian or Singapore rules was labelled `person_name`, which in the
-    registry is a Chinese datatype, and Indian first and last names used the Indian
-    `firstname` and `lastname`. The universal rules also match `full_name`, `person_name`,
-    `given_name`, `family_name` and `Last Name` (a surname, no longer a middle name).
-  - New datatype label `file_extension`: fields named `file_extension`, `file_ext` and the
-    like, and `extension`/`ext` fields whose values are extensions (`pdf`, `.docx`), such as
-    GeoNode `links.extension`.
-  - Rule keys resolve to registry datatypes: only `height_measurement`, `width_measurement`
-    and `path_file` are still unknown (32 before). Data rules no longer accept the registry's
-    negative examples (IBAN, VAT, ULID, German HRB, USt and vehicle plates, ASN), ISBN rules
-    match hyphenated forms and Russian OGRN is detected by value.
-  - `tests/ecosystem/` baselines are updated: rule thresholds only rose and the negative
-    example exceptions are empty. The benchmark labels the `iban` column with mixed
-    countries `de_iban` as well as `iban`.
+- **Default rule pack is metacrafter-rules v0.0.4** (#42). Full-name rules of every country
+  except China report `person_fullname`, and first-name and last-name rules report
+  `person_firstname` and `person_surname`. Before, `full_name` in the Australian, Indian and
+  Singapore rules was labelled `person_name`, which in the registry is a Chinese datatype, and
+  Indian first and last names used the Indian `firstname` and `lastname`. The universal rules
+  also match `full_name`, `person_name`, `given_name`, `family_name` and `Last Name` (a
+  surname, no longer a middle name). New label `file_extension`: fields named
+  `file_extension`, `file_ext` and the like, and `extension` or `ext` fields whose values are
+  extensions (`pdf`, `.docx`), such as GeoNode `links.extension`.
+- **Default rule pack is metacrafter-rules v0.0.3** (#41). Rule keys resolve to registry
+  datatypes: field-name rules report `boolean`, `latitude`, `datetime`, `address`, `orgname`,
+  `userid` and other registry ids instead of draft keys such as `active_boolean` or
+  `lat_geo`, so their matches get registry metadata and links. Value rules no longer accept
+  the registry's negative examples: IBAN, EU and French VAT, USt-IdNr., Handelsregister,
+  German plates, ASN and ULID check their check digits or format, and the IBAN print format
+  with spaces matches. ISBN rules match hyphenated ISBNs, `esmonthbydatafiltered` loads
+  again (key `month`), and the pack imports without `SyntaxWarning`. In
+  `tests/ecosystem/`, the allow-list of unresolved rule keys shrinks from 32 to 3
+  (`height_measurement`, `width_measurement`, `path_file`) and `negative_exceptions` is
+  empty. On a column of IBANs from several countries, `de_pii_ibanvalue` now also reports
+  `de_iban`: it validates check digits, so it is no longer dropped as a repeat of `iban`.
 - **Float columns of whole numbers are matched by data rules.** A column whose values are
   all whole numbers stored as floats (`.xls` files, pandas columns with missing values, CSV
   text such as `1027700132195.0`) is matched as integer text (`1027700132195`). Before,
