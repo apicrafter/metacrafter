@@ -29,6 +29,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the false `userid` match is gone, and the ISO date column `created` no longer reports
   `date`, which came from a registry detector without a checksum. For 1.0.0 results, pass
   `--confidence 5 --registry-detectors stable`.
+- **Default rule pack is metacrafter-rules v0.0.8.** The registry snapshot stays 1.3.0
+  (9a2898d).
+  - ISO 8601 date values (`2025-05-15`) report `date` again: `isodatevalue` is a curated
+    rule on the registry record `date`, which no longer has a default derived detector
+    (apicrafter/metacrafter-rules#27). In the benchmark, `date` goes from recall 0 to
+    precision and recall 1.0.
+  - ISNI and ORCID values with a correct ISO 7064 MOD 11-2 check character are accepted,
+    and wrong ones rejected; `orcidbyvalue` matched no ORCID before. ISRC country codes and
+    BCP 47 language tags are checked (apicrafter/metacrafter-rules#23).
+  - Field-name rules such as `user_phone`, `birth_year`, `geo_latitude` and
+    `user_firstname` match; ppr field-name rules that ended with `lineEnd` or started with
+    `Word(printables)` matched no ordinary name. Numbers in fields such as `peer_asn` are
+    `asn`, and 5-digit or ZIP+4 values in fields such as `zip` or `billing_zip` are
+    `uszipcode` (apicrafter/metacrafter-rules#25). Field-name-only matches of these
+    priority 2 rules score 48, below the default confidence.
+
+  In `tests/ecosystem/rule_thresholds.yaml` thresholds only rise: `orcidbyvalue` and
+  `isnivaluewithspaces` go to 1.0, `science_isnivalue` to 0.5, `isnivalue` to 0.25, and the
+  new `isodatevalue` starts at 1.0 in place of the derived detector `registry:date`.
 - **Default rule pack is metacrafter-rules v0.0.7; bundled registry snapshot is 1.3.0
   (9a2898d).** Fewer wrong labels on numbers and codes:
   - `frcni` (French national identity card) no longer labels every column of 12-digit

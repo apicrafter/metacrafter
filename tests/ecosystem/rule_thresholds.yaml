@@ -139,12 +139,13 @@ min_recall:
   isbn13valuewithdashes: 1.0
   isbnvalue: 1.0
   isinvalue: 1.0
-  isnivalue: 0.0
-  isnivaluewithspaces: 0.0
+  isnivalue: 0.25
+  isnivaluewithspaces: 1.0
   iso3166-alpha2: 0.0
   iso3166-alpha2imprecise: 0.0
   iso3166-alpha3: 1.0
   iso3166-alpha3imprecise: 1.0
+  isodatevalue: 1.0
   isrcvalue: 0.0
   issnvalue: 1.0
   issnvaluewithoutdash: 1.0
@@ -175,7 +176,7 @@ min_recall:
   oidvalue: 1.0
   ojreferencevalue: 0.75
   openalexidbyvalue: 0.25
-  orcidbyvalue: 0.0
+  orcidbyvalue: 1.0
   p2pkhaddr: 0.0
   p2shaddr: 1.0
   p2wpkhaddr: 0.0
@@ -200,7 +201,6 @@ min_recall:
   registry:cpvcode: 1.0
   registry:crossref_funder_id: 1.0
   registry:cz_ico: 1.0
-  registry:date: 1.0
   registry:de_ags: 1.0
   registry:de_ars: 1.0
   registry:de_kreisschluessel: 1.0
@@ -300,7 +300,7 @@ min_recall:
   russianswiftcode: 0.0
   rustimerangebypat: 0.5
   ruvehicleplatevalue: 0.0
-  science_isnivalue: 0.0
+  science_isnivalue: 0.5
   semverbyvalue: 1.0
   seorgnumbervalue: 1.0
   sha1hash: 1.0
