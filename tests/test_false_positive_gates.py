@@ -80,6 +80,52 @@ def test_background_broadness_reports_class():
     assert background_broadness("(") == (0.0, None)
 
 
+@pytest.mark.parametrize("regexp,cls", [
+    # Scopus author id: any 10-12 digit number (phones, tax ids, account numbers).
+    ("^[1-9]\\d{9,11}$", "int10"),
+    # UIC station code: most 7-8 digit numbers.
+    ("^(?:10|2\\d|3[0-3]|4[01249]|5\\d|6[0125678]|7\\d|8[0-8]|9\\d)\\d{5,6}$", "int7"),
+    ("^\\d{20}$", "int20"),
+])
+def test_long_digit_patterns_are_generic(regexp, cls):
+    share, name = background_broadness(regexp)
+    assert share >= 0.3 and name == cls
+
+
+def test_long_digit_detector_needs_field_name_evidence(tmp_path):
+    record = {"id": "author_number", "status": "stable", "kind": "datatype", "name": "Author number",
+              "regexp": "^[1-9]\\d{9,11}$"}
+    registry = SnapshotRegistry(datatypes=[record], aliases={}, manifest={"version": "test"}, source="test")
+    processor = processor_with(tmp_path, [(PLACEHOLDER, None)], RegistryAdapter._wrap(registry, None, "test"))
+    detector = next(r for r in processor.data_rules if r["id"] == "registry:author_number")
+    assert detector["needs_name_evidence"]
+    rows = [{"phone": str(79107866363 + n), "author_number": str(7004212771 + n)} for n in range(20)]
+    columns = scan(processor, rows)
+    assert "author_number" not in classes(columns["phone"])
+    assert "author_number" in classes(columns["author_number"])
+
+
+# --- length prefilter -------------------------------------------------------
+
+LONGCODE = """
+  longcode:
+    key: longcode
+    match: regex
+    type: data
+    rule: '\\d{13}'
+    minlen: 13
+    maxlen: 13
+"""
+
+
+def test_missing_nested_value_keeps_long_rules(tmp_path):
+    """A record without the nested object (a null in the column) keeps rules longer than 4."""
+    processor = processor_with(tmp_path, [(LONGCODE, None)])
+    rows = [{"org": {"code": "1027700132195"}}, {"org": {"code": "1037739010891"}}, {"org": {"code": ""}}]
+    assert "longcode" in classes(scan(processor, rows)["org.code"])
+    assert "longcode" in classes(scan(processor, rows + [{"other": 1}])["org.code"])
+
+
 # --- generic registry detectors ---------------------------------------------
 
 def test_generic_detector_needs_field_name_evidence(tmp_path, adapter):
