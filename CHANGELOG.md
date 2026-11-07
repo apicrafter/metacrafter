@@ -101,6 +101,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Field rules on objects keyed by language.** Field-name rules saw only the last
+  segment of a nested path, so in `{"title": {"ru": …, "en": …}}` the fields `title.ru`
+  and `title.en` were matched as `ru` and `en`, and the language-suffix fallback never
+  applied. The fallback now strips the language code from the whole path: `title.ru`
+  tries `title`, and the base name is also the field-name evidence for registry-derived
+  detectors. On a JSON Lines export of museum objects (193 fields) labelled fields rose
+  from 80 to 99 (`title.*`, `description.*`, `createdDate.*`) with no match lost.
 - **Value rules on columns with missing nested values.** When one record lacked a nested
   object or had an empty array (`{"details": null}`, `addresses: []`), its column held a
   null, the length prefilter fell back to a length of 4 and dropped every rule that cannot
