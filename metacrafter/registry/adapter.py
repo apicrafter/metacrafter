@@ -496,6 +496,22 @@ class RegistryAdapter:
         record = self.record(datatype_id)
         return None if record is None else bool(record.get("is_pii"))
 
+    def ancestors(self, datatype_id: str) -> List[str]:
+        """Canonical ids of the ``parent`` chain of a datatype, nearest first."""
+        chain: List[str] = []
+        record = self.record(datatype_id)
+        seen = {record["id"]} if record else set()
+        while record is not None:
+            parent = record.get("parent")
+            if isinstance(parent, dict):
+                parent = parent.get("id")
+            record = self.record(parent) if parent else None
+            if record is None or record["id"] in seen:
+                break
+            seen.add(record["id"])
+            chain.append(record["id"])
+        return chain
+
     def iter_records(
         self,
         *,

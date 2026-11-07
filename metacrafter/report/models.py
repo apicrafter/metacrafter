@@ -61,6 +61,13 @@ class Match(_Open):
     classurl: Optional[str] = None
     is_pii: bool = False
     pii_source: Optional[Literal["rule", "registry", "context"]] = None
+    pii_outranked_by: Optional[str] = Field(
+        default=None,
+        description=(
+            "Datatype named by the field that outranks this value-only match; the match is "
+            "then not PII for this field (registry.is_pii keeps the datatype's flag)"
+        ),
+    )
     replaced_by: Optional[str] = None
     evidence: Optional[Evidence] = None
     registry: Optional[RegistryRef] = None

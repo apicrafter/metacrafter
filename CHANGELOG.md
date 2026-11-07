@@ -126,6 +126,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Value-only PII matches no longer make a field PII when the field names a non-PII
+  datatype that outranks them** (#62). OKPD2 codes are valid IPv4 strings, so a field
+  `okpd2` listed `ipv4` and `ipaddr` after `okpd`, and its PII summary, Markdown report,
+  `report pii`, `check` and catalog exports marked it PII. A PII match without field-name
+  evidence is now demoted when another value match with field-name evidence is not PII, is
+  a different datatype that is not its registry parent or child, and has the same or a
+  higher confidence. The match stays in `matches` with `is_pii: false`,
+  `pii_source: null` and `pii_outranked_by: okpd`; `registry.is_pii` keeps the datatype's
+  flag. `--pii-only` drops it. Field-name-only matches never outrank a value match, so a
+  field `login` with email values stays PII.
 - **The primary match follows confidence and field-name evidence** (#58). A field's
   `matches` list and its `datatype_url` kept rule order, so the first match was the
   matching rule with the highest priority, not the best-scored one. Confidence is clamped
@@ -134,7 +144,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reported `ipv4` first even when the `okpd` detector matched with field-name evidence.
   Matches are now ordered by confidence, then field-name evidence, then rule order; the
   summary string uses the same order. Value-only matches are kept, so `ipv4` is still
-  listed (and marks the field as PII) after `okpd`.
+  listed after `okpd` (since #62 without marking the field as PII).
 - **Value rules on columns with missing nested values.** When one record lacked a nested
   object or had an empty array (`{"details": null}`, `addresses: []`), its column held a
   null, the length prefilter fell back to a length of 4 and dropped every rule that cannot

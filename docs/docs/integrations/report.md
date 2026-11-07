@@ -59,6 +59,25 @@ SQL scans add the table's keys to each key column: `"database": {"primary_key": 
 `primary_key`, `autoincrement` and `foreign_key`, and for a database-generated key a match
 `{"ruleid": "_db_autoincrement_key", "dataclass": "id", "ruletype": "schema", "confidence": 100}`.
 
+### PII flags of secondary matches
+
+Matches are ordered by confidence, then field-name evidence. Values of one datatype can be
+valid values of another: OKPD2 codes such as `21.20.10.226` are also IPv4 addresses. A
+value match of a PII datatype without field-name evidence does not make the field PII when
+another value match:
+
+- has field-name evidence (`evidence.name_score` above 0),
+- is not PII,
+- is a different datatype that is not the PII datatype's registry parent or child,
+- has the same or a higher confidence.
+
+The match stays in `matches` with `is_pii: false`, `pii_source: null` and
+`pii_outranked_by` set to the datatype that outranks it; `registry.is_pii` keeps the
+datatype's own flag. `--pii-only` drops such matches. A field `okpd2` with OKPD2 codes
+reports `okpd` first, then `ipv4` with `"pii_outranked_by": "okpd"`, and its PII summary is
+false. A field-name-only match (`ruletype: field`) never outranks a value match: a field
+`login` with email values stays PII.
+
 ### Field groups
 
 `field_groups` lists sibling fields (same parent path) whose names share structure. Names

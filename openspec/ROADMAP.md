@@ -80,6 +80,11 @@ language suffix; registry `parent` ids count as half-weight field-name evidence;
 country check needs the type's own name with its country; `llm_max_requests` is
 configurable.
 
+`update-pii-outranked-matches` (2026-11-07): a value-only PII match does not mark a field
+PII when a non-PII datatype that the field name names matches the values with the same or
+a higher confidence (`okpd2` codes that read as IPv4); the match stays listed with
+`pii_outranked_by` (apicrafter/metacrafter#62).
+
 Blocked outside this repository: registry datatype packs (apicrafter/metacrafter#38). The
 metacrafter-rules fixes shipped in v0.0.3 (apicrafter/metacrafter#41) and v0.0.4
 (apicrafter/metacrafter#42); v0.0.4 is the pinned rule pack since 2026-11-07.
