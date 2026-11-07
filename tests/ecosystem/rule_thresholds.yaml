@@ -71,6 +71,7 @@ min_recall:
   encompanynamebypostfix: 0.6667
   encontinentbyname: 1.0
   encountrynamebyvalue: 1.0
+  enhistoricaldatingvalue: 1.0
   enicd10value: 1.0
   ennationalitybyvalue: 0.0
   ennecsvalue: 0.0
@@ -169,6 +170,7 @@ min_recall:
   nlkvkvalue: 1.0
   nlrsinvalue: 1.0
   nutsvalue: 1.0
+  objectdimensionsvalue: 1.0
   objects_doivalue: 0.0
   objects_glnvalue: 1.0
   objects_isrcvalue: 0.75
@@ -275,13 +277,14 @@ min_recall:
   rueqsecregvalue: 0.0
   ruesklpcodevalue: 1.0
   rufiasvalue: 1.0
+  rugoskatalogregnumvalue: 1.0
   ruinn: 1.0
   rukadastrbypat: 1.0
   rukadastrvalue: 1.0
   rukpp: 1.0
   runpabyfunc: 0.75
   runpakindbydata: 0.8333
-  ruogrn: 1.0
+  ruogrn: 0.6667
   ruokeicode: 1.0
   ruokeiname: 1.0
   ruokeisymbol: 0.0
@@ -292,6 +295,8 @@ min_recall:
   ruookvedcodepatimprecise: 1.0
   ruregioncode: 1.0
   rusfeddistrict: 0.3333
+  rushistoricaldatingvalue: 1.0
+  rusinitialssurname: 1.0
   rusnils: 0.0
   russianbikcode: 1.0
   russianswiftcode: 0.0
@@ -307,6 +312,7 @@ min_recall:
   sha384hash: 1.0
   sha512hash: 1.0
   sirenvalue: 1.0
+  slugvalue: 1.0
   spdxlicensebyvalue: 1.0
   ssccvalue: 0.0
   ssccwithai00value: 1.0

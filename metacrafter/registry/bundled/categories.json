@@ -14,13 +14,13 @@
   {
     "id": "common",
     "name": "Common",
-    "count": 193,
+    "count": 195,
     "url": "https://registry.apicrafter.io/category/common"
   },
   {
     "id": "companies",
     "name": "Companies/business/organizations",
-    "count": 250,
+    "count": 249,
     "url": "https://registry.apicrafter.io/category/companies"
   },
   {
@@ -38,7 +38,7 @@
   {
     "id": "datetime",
     "name": "Date and time",
-    "count": 82,
+    "count": 83,
     "url": "https://registry.apicrafter.io/category/datetime"
   },
   {
@@ -98,7 +98,7 @@
   {
     "id": "identifiers",
     "name": "Universal unique identifiers",
-    "count": 45,
+    "count": 46,
     "url": "https://registry.apicrafter.io/category/identifiers"
   },
   {
@@ -110,7 +110,7 @@
   {
     "id": "internet",
     "name": "Internet",
-    "count": 48,
+    "count": 49,
     "url": "https://registry.apicrafter.io/category/internet"
   },
   {
@@ -122,7 +122,7 @@
   {
     "id": "media",
     "name": "Media and entertainment",
-    "count": 58,
+    "count": 59,
     "url": "https://registry.apicrafter.io/category/media"
   },
   {
@@ -212,7 +212,7 @@
   {
     "id": "values",
     "name": "All measurable values (percentage, amount and e.t.c)",
-    "count": 21,
+    "count": 22,
     "url": "https://registry.apicrafter.io/category/values"
   }
 ]

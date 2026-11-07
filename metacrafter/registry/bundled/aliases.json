@@ -11,6 +11,7 @@
   "md5": "md5hash",
   "mime_type": "mimetype",
   "ninumber": "uknino",
+  "ogrn_ogrnip": "ogrn",
   "okpd2": "okpd",
   "path_file": "filepath",
   "sha1": "sha1hash",
