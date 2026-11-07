@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Default rule pack is metacrafter-rules v0.0.3** (#41). Rule keys resolve to registry
+  datatypes: field-name rules report `boolean`, `latitude`, `datetime`, `address`, `orgname`,
+  `userid` and other registry ids instead of draft keys such as `active_boolean` or
+  `lat_geo`, so their matches get registry metadata and links. Value rules no longer accept
+  the registry's negative examples: IBAN, EU and French VAT, USt-IdNr., Handelsregister,
+  German plates, ASN and ULID check their check digits or format, and the IBAN print format
+  with spaces matches. ISBN rules match hyphenated ISBNs, `esmonthbydatafiltered` loads
+  again (key `month`), and the pack imports without `SyntaxWarning`. In
+  `tests/ecosystem/`, the allow-list of unresolved rule keys shrinks from 32 to 3
+  (`height_measurement`, `width_measurement`, `path_file`) and `negative_exceptions` is
+  empty. On a column of IBANs from several countries, `de_pii_ibanvalue` now also reports
+  `de_iban`: it validates check digits, so it is no longer dropped as a repeat of `iban`.
 - **Float columns of whole numbers are matched by data rules.** A column whose values are
   all whole numbers stored as floats (`.xls` files, pandas columns with missing values, CSV
   text such as `1027700132195.0`) is matched as integer text (`1027700132195`). Before,

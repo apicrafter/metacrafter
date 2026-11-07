@@ -1,9 +1,5 @@
 {
   "datatypes": {
-    "active_boolean": {
-      "precision": 0.0,
-      "recall": null
-    },
     "bankaccount": {
       "precision": 0.0,
       "recall": null
@@ -29,6 +25,10 @@
       "recall": 1.0
     },
     "datetime": {
+      "precision": 0.0,
+      "recall": null
+    },
+    "de_iban": {
       "precision": 0.0,
       "recall": null
     },
