@@ -104,7 +104,8 @@ checksum`, was `stable`); qddate runs on fields with only field-name matches. On
 files of Russian open data: 238 matches to 135, fields with a match 116 to 106.
 
 The metacrafter-rules fixes shipped in v0.0.3 (apicrafter/metacrafter#41) through v0.0.8
-(apicrafter/metacrafter#71); v0.0.8 is the pinned rule pack since 2026-11-07.
+(apicrafter/metacrafter#71). v0.0.9 (trade and customs rules, apicrafter/metacrafter-rules#39)
+is the pinned rule pack since 2026-11-07.
 
 ## Phase 0 — Foundation and reliability
 

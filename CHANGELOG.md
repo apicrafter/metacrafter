@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Default rule pack is metacrafter-rules v0.0.9.** The registry snapshot stays 1.3.0
+  (9a2898d).
+  - Foreign trade and customs data (apicrafter/metacrafter-rules#39): `incoterms`,
+    `hs_code` in HS code fields, ISO 4217 currency codes (`iso4217curcode`) in currency
+    fields and UN/ECE Recommendation 20 unit codes in unit fields by value; weights,
+    prices, invoice and customs values, duties, costs, quantities, trade party names and
+    addresses and goods descriptions by field name. The field-name rules are regular
+    expressions, so `HS CODE`, `hs_code` and `HsCode` all match. On a customs import export
+    with 40 columns, 28 columns get a label instead of 5.
+  - In the benchmark, the `currency` column reports `currency` and `iso4217curcode`
+    (precision and recall 1.0) instead of the false `okvalpha`.
+
 ### Fixed
 
 - `scan file` detects the CSV delimiter again. iterabledata 1.1 reads CSV with a comma
