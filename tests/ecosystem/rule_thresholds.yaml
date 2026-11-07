@@ -90,6 +90,7 @@ min_recall:
   eui48: 0.3333
   euidvalue: 1.0
   figivalue: 1.0
+  fileextensionbyvalue: 1.0
   filenamebyvalue: 1.0
   filesizebyvalue: 0.0
   fqdnbyvalidators: 1.0

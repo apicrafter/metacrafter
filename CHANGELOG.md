@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Default rule pack is metacrafter-rules v0.0.4** (#42). Full-name rules of every country
+  except China report `person_fullname`, and first-name and last-name rules report
+  `person_firstname` and `person_surname`. Before, `full_name` in the Australian, Indian and
+  Singapore rules was labelled `person_name`, which in the registry is a Chinese datatype, and
+  Indian first and last names used the Indian `firstname` and `lastname`. The universal rules
+  also match `full_name`, `person_name`, `given_name`, `family_name` and `Last Name` (a
+  surname, no longer a middle name). New label `file_extension`: fields named
+  `file_extension`, `file_ext` and the like, and `extension` or `ext` fields whose values are
+  extensions (`pdf`, `.docx`), such as GeoNode `links.extension`.
 - **Default rule pack is metacrafter-rules v0.0.3** (#41). Rule keys resolve to registry
   datatypes: field-name rules report `boolean`, `latitude`, `datetime`, `address`, `orgname`,
   `userid` and other registry ids instead of draft keys such as `active_boolean` or
@@ -19,7 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   again (key `month`), and the pack imports without `SyntaxWarning`. In
   `tests/ecosystem/`, the allow-list of unresolved rule keys shrinks from 32 to 3
   (`height_measurement`, `width_measurement`, `path_file`) and `negative_exceptions` is
-  empty.
+  empty. OGRN and OGRNIP are detected by value in default scans (#51): `ruogrn` is no longer
+  imprecise and accepts 15-digit OGRNIP, `ruogrnknown` reports `ogrn` and matches more
+  field names, and `rutitleknown` no longer labels `ИНН`, `КПП`, `ОКПО` and `ОГРН` columns
+  `name`. In `tests/fixtures/ru_utf8_comma.csv` the `ogrn` column gets `ogrn 100` instead
+  of only `ogrn_ogrnip 36` from its name.
 - **Float columns of whole numbers are matched by data rules.** A column whose values are
   all whole numbers stored as floats (`.xls` files, pandas columns with missing values, CSV
   text such as `1027700132195.0`) is matched as integer text (`1027700132195`). Before,
