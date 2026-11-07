@@ -336,3 +336,87 @@ class TestFormatDetection:
             )
             assert isinstance(result, dict) and result["report_version"] == 3
 
+
+
+def _field_names(report):
+    return [field["field"] for field in report["data"]]
+
+
+def _datatypes(report, name):
+    for field in report["data"]:
+        if field["field"] == name:
+            return {match["dataclass"] for match in field["matches"]}
+    raise KeyError(name)
+
+
+class TestCsvDialectDetection:
+    """CSV files are read with their own delimiter and without a byte order mark."""
+
+    FIXTURES = os.path.join(os.path.dirname(__file__), "fixtures")
+
+    @staticmethod
+    def _write_emails(path, delimiter, bom=False):
+        lines = [delimiter.join(["email", "name"])]
+        lines += [
+            delimiter.join([f"user{i}@example.com", f"User {i}"]) for i in range(20)
+        ]
+        prefix = "\ufeff" if bom else ""
+        path.write_text(prefix + "\n".join(lines) + "\n", encoding="utf-8")
+        return path
+
+    def test_semicolon_delimiter_is_detected(self):
+        cmd = CrafterCmd(remote=None, debug=False, quiet=True)
+        fixture = os.path.join(self.FIXTURES, "ru_utf8_semicolon.csv")
+        report = cmd.scan_file(fixture, limit=10, output_format="json")
+        names = _field_names(report)
+        assert len(names) == 10
+        assert "Идентификационный номер налогоплательщика" in names
+        assert "inn" in _datatypes(report, "Идентификационный номер налогоплательщика")
+
+    def test_tab_delimiter_is_detected_in_csv_file(self):
+        cmd = CrafterCmd(remote=None, debug=False, quiet=True)
+        fixture = os.path.join(self.FIXTURES, "ru_utf8_tab.csv")
+        with_detection = cmd.scan_file(fixture, limit=10, output_format="json")
+        explicit = cmd.scan_file(fixture, delimiter="\t", limit=10, output_format="json")
+        assert _field_names(with_detection) == _field_names(explicit)
+        assert len(_field_names(with_detection)) > 1
+
+    def test_explicit_delimiter_wins(self, tmp_path):
+        cmd = CrafterCmd(remote=None, debug=False, quiet=True)
+        path = self._write_emails(tmp_path / "emails.csv", ";")
+        report = cmd.scan_file(str(path), delimiter=",", limit=10, output_format="json")
+        assert _field_names(report) == ["email;name"]
+
+    def test_semicolon_delimiter_in_compressed_file(self, tmp_path):
+        import gzip
+
+        cmd = CrafterCmd(remote=None, debug=False, quiet=True)
+        plain = self._write_emails(tmp_path / "emails.csv", ";")
+        packed = tmp_path / "emails.csv.gz"
+        packed.write_bytes(gzip.compress(plain.read_bytes()))
+        report = cmd.scan_file(str(packed), limit=10, output_format="json")
+        assert _field_names(report) == ["email", "name"]
+        assert "email" in _datatypes(report, "email")
+
+    @pytest.mark.parametrize("delimiter", [",", ";"])
+    def test_byte_order_mark_is_removed_from_first_field(self, tmp_path, delimiter):
+        cmd = CrafterCmd(remote=None, debug=False, quiet=True)
+        path = self._write_emails(tmp_path / "emails.csv", delimiter, bom=True)
+        report = cmd.scan_file(str(path), limit=10, output_format="json")
+        assert _field_names(report) == ["email", "name"]
+        assert "email" in _datatypes(report, "email")
+
+    def test_fields_option_uses_name_without_byte_order_mark(self, tmp_path):
+        cmd = CrafterCmd(remote=None, debug=False, quiet=True)
+        path = self._write_emails(tmp_path / "emails.csv", ",", bom=True)
+        report = cmd.scan_file(str(path), limit=10, fields="email", output_format="json")
+        assert _field_names(report) == ["email"]
+
+
+def test_strip_bom_from_keys():
+    from metacrafter.cmd.helpers import strip_bom_from_keys
+
+    items = [{"\ufeffid": 1, "name": "a"}, {"id": 2, "name": "b"}, ["not", "a", "dict"]]
+    assert strip_bom_from_keys(items) is items
+    assert items == [{"id": 1, "name": "a"}, {"id": 2, "name": "b"}, ["not", "a", "dict"]]
+    assert list(items[0]) == ["id", "name"]

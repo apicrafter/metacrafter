@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `scan file` detects the CSV delimiter again. iterabledata 1.1 reads CSV with a comma
+  unless detection is requested, so semicolon- and pipe-separated files were scanned as
+  one column and no field got a label. A `--delimiter` option still wins; `.csv.zst` files
+  are read with a comma, since a zstandard stream cannot be rewound for detection.
+- A UTF-8 byte order mark is removed from the first field name (`\ufeffid` became `id`).
+  It stayed when the rest of the file decoded as plain UTF-8, so field-name rules and
+  `--fields` did not match the first column.
+
 ## [2.0.0] - 2026-11-07
 
 Precise scan defaults (breaking: minimum confidence 50, registry detectors `checksum`), the
