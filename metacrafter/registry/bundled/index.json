@@ -1,8 +1,8 @@
 {
   "name": "metacrafter-registry",
-  "version": "1.3.0.dev0",
-  "git_sha": "3e99a787e5d230ecfc1ed1261914967e567afd27",
-  "generated_at": "2026-11-07T06:36:45+00:00",
+  "version": "1.3.0",
+  "git_sha": "9a2898d6702057ea1fcdba4e261160d4a4bbf4f4",
+  "generated_at": "2026-11-07T08:47:01+00:00",
   "license": "Apache-2.0",
   "base_url": "https://registry.apicrafter.io",
   "datatype_url_template": "https://registry.apicrafter.io/datatype/{id}",
@@ -11,8 +11,8 @@
   "llms_txt": "https://registry.apicrafter.io/llms.txt",
   "rag_template_version": "1",
   "counts": {
-    "datatypes": 1793,
-    "draft": 1662,
+    "datatypes": 1794,
+    "draft": 1663,
     "aliases": 19,
     "patterns": 324,
     "tools": 51,
@@ -22,48 +22,48 @@
   "files": {
     "registry.json": {
       "path": "/registry.json",
-      "bytes": 3044053,
-      "sha256": "f2af7a85487f3308586ca263c7243530933723abb1195e34fc250975527192c7"
+      "bytes": 3047399,
+      "sha256": "207aa2f4a87190a21d90f00922a8389e12c279a4b70e0db2c7b30be9945b7306"
     },
     "tools.json": {
       "path": "/tools.json",
-      "bytes": 79131,
-      "sha256": "ef312fce641f8f40cc04f06640e6d168e225535ca4390acde0ae180c001f5322"
+      "bytes": 79259,
+      "sha256": "72c1b2a46f13339fcd6be95e119c568cc2cfa372d7cd4ca7d4770e304ce1b8e5"
     },
     "datatypes.jsonl": {
       "path": "/datatypes.jsonl",
-      "bytes": 3009070,
-      "sha256": "9b5520474112a744a2a09a7fc4dba5156db85d9300c78f3f111d2a98cc9e2625"
+      "bytes": 3012403,
+      "sha256": "c6335966c4bcbc08a54ba00470aaeefd55478a449333efe52aae7ebfa61bb898"
     },
     "api/v1/datatypes.json": {
       "path": "/api/v1/datatypes.json",
-      "bytes": 3757191,
-      "sha256": "7634accf99b04bc0fea098e3f08d5dd87230bca85a21b33dfca0ecd2a10d140a"
+      "bytes": 3760706,
+      "sha256": "bbd0216589100e39edf366b49959ffcb0551eb2c04a83f4d80fdf75cbf60b695"
     },
     "api/v1/datatypes.jsonl": {
       "path": "/api/v1/datatypes.jsonl",
-      "bytes": 3755074,
-      "sha256": "0819316b429505c34d96c4b83eea06c46ba3e9fef3283b00ecb753fafb77bddf"
+      "bytes": 3758588,
+      "sha256": "639991d0a1534a73a42a295460295369e678e6e0686fa3cd214d07cb889142f3"
     },
     "api/v1/datatypes.csv": {
       "path": "/api/v1/datatypes.csv",
-      "bytes": 960798,
-      "sha256": "954941cf1ee43e6bad62e53882a6cb38ef477879635f38c8a1460195ebb626d0"
+      "bytes": 961641,
+      "sha256": "f7cb5d8c5950895729198583c9223f27dee134460bd7b6d13e44912ba8e9c625"
     },
     "api/v1/tools.json": {
       "path": "/api/v1/tools.json",
-      "bytes": 98907,
-      "sha256": "51599be82d297c4fe99453ebc2a39a796e5e9c97eaa76d6c3251f9ed1cda9ca0"
+      "bytes": 99035,
+      "sha256": "9d3dcb5b2845e63a14e09f11a13e4714f9b87eda331d0bf3b5a91411ba5f73be"
     },
     "api/v1/tools.jsonl": {
       "path": "/api/v1/tools.jsonl",
-      "bytes": 98856,
-      "sha256": "c8164bfa5e22e368991ad6847c257b4be848b559bfc4cc57eece161bf26af2b9"
+      "bytes": 98984,
+      "sha256": "fef3ee5fa7f945a899c0801168e2db62ff345deadb85771240e420d0e960fc34"
     },
     "api/v1/openapi.json": {
       "path": "/api/v1/openapi.json",
-      "bytes": 20641,
-      "sha256": "660809e48b3d29dd1f8c63a83edfb3fe5e2752ac295e3ffb7208877e9ff0f0c0"
+      "bytes": 20636,
+      "sha256": "1983f49a44367c4266980070a17a7ad1ed6a3860f92fafae0cf9a56799100f6b"
     },
     "api/v1/aliases.json": {
       "path": "/api/v1/aliases.json",
@@ -73,7 +73,7 @@
     "api/v1/categories.json": {
       "path": "/api/v1/categories.json",
       "bytes": 5348,
-      "sha256": "5af6a9f7868af6177f124b420c8871ea8216e5fed2df347ddf4e6092910b4af0"
+      "sha256": "d76502fc9a9f81cea0dab9ee98ca255ed16806fbf73d5662fe208ffd88d81245"
     },
     "api/v1/countries.json": {
       "path": "/api/v1/countries.json",
@@ -83,27 +83,32 @@
     "api/v1/languages.json": {
       "path": "/api/v1/languages.json",
       "bytes": 6595,
-      "sha256": "fccbae99245f31bd5db929e41105b30e0b1a08a09891331433fc7fbb4aa5d94b"
+      "sha256": "08c79b77c70f12f4c5313e80b7a6b662cc4e43a9f37306ab61f1146d5c15334b"
     },
     "api/v1/rag/corpus.jsonl": {
       "path": "/api/v1/rag/corpus.jsonl",
-      "bytes": 1674582,
-      "sha256": "a599e1738aadaef434b02de1636695f432d15ea566e283470d770b0c373ebb07"
+      "bytes": 1675774,
+      "sha256": "be58b5fd5f7d78feb4388a920f40456293d0da3834ededdfdb0b1eca1c157848"
     },
     "llms-full.txt": {
       "path": "/llms-full.txt",
-      "bytes": 1114564,
-      "sha256": "951ebcd32c24021b068849631a42ee07009b32d096b4ccb860ede4fbcd6523a9"
+      "bytes": 1115451,
+      "sha256": "f94b8fe86a8b71fd6668af59ea0649e6070bec4941bcd02df76d4f2442d42aa5"
     },
     "registry.ttl": {
       "path": "/registry.ttl",
-      "bytes": 1449754,
-      "sha256": "02a14bf93dabf9c5bd6b43a25fdfe0a084de0fa1c8dbb3246bd57edf6ac22815"
+      "bytes": 2600986,
+      "sha256": "f6b5a41ff1fca059fd482b8b8aa8e12aaf46a529eed6fc9bcda590882bd1481d"
+    },
+    "vocab.ttl": {
+      "path": "/vocab.ttl",
+      "bytes": 3074,
+      "sha256": "a09b8c5da8ebc1ebe34911e2c770003750e55e97addb0f286a60481e4efa21c6"
     },
     "datahub-glossary.yml": {
       "path": "/datahub-glossary.yml",
-      "bytes": 2456035,
-      "sha256": "4ca866d1b7829abf119cf8d120289d0dee287b372021278a667cdb7cfa44b817"
+      "bytes": 2458069,
+      "sha256": "9e79e8e2547cf9b1b219d2a6fb6d97b7ff61207c0728a7de9b70414a81d6ca4c"
     }
   }
 }

@@ -29,6 +29,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the false `userid` match is gone, and the ISO date column `created` no longer reports
   `date`, which came from a registry detector without a checksum. For 1.0.0 results, pass
   `--confidence 5 --registry-detectors stable`.
+- **Default rule pack is metacrafter-rules v0.0.7; bundled registry snapshot is 1.3.0
+  (9a2898d).** Fewer wrong labels on numbers and codes:
+  - `frcni` (French national identity card) no longer labels every column of 12-digit
+    numbers at 100: the year and month of issue in the first four digits are checked
+    (apicrafter/metacrafter-rules#30). Columns of random 12-digit numbers, Aadhaar numbers
+    and 12-digit INNs no longer report it at the default confidence.
+  - `imsi` and `aeemiratesid` no longer label any 15-digit number
+    (apicrafter/metacrafter-rules#3).
+  - Integer `uid` fields are no longer Aadhaar numbers, a `pan` field is an Indian PAN
+    only when its values have the PAN format, and status codes such as `ACTI` are no
+    longer ICAO airport codes (apicrafter/metacrafter-rules#28).
+  - The value rules for country codes, years, latitude and longitude, and Russian post
+    indexes run on fields such as `country_code`, `birth_year` and `geo_lat`; their field
+    guards matched no such name (apicrafter/metacrafter-rules#17). An ATC code column
+    reports `atccode` once instead of four times.
+  - ISSN without the hyphen, Wikidata ids and Russian federal district abbreviations
+    (`ЦФО`) are handled as in the registry examples (apicrafter/metacrafter-rules#19).
+
+  The registry snapshot replaces the OGRNIP example with an impossible year and the
+  Emirates ID examples, and maps the Presidio NER entities `LOCATION`, `ORGANIZATION` and
+  `NRP`. `metacrafter/engine/checksum_algorithms.py` is re-copied from the registry at
+  9a2898d: the `ogrn` checksum also checks the sign digit, the registration year and the
+  region code. In `tests/ecosystem/rule_thresholds.yaml` thresholds only rise: `ruogrn`
+  goes back to 1.0, `issnvalue` and `issnvaluewithoutdash` to 1.0, `rusfeddistrict` to
+  0.8333, and the new `atcvalue` and `rusfeddistrictbyfield` start at 1.0. No rule accepts
+  registry negative examples any more (`wikidataidvalue` did). In the benchmark the
+  `country` field now reports `countrycode_alpha2` (recall 0 before).
 - **Default rule pack is metacrafter-rules v0.0.6; bundled registry snapshot is 3e99a78.**
   Fields of museum and cultural heritage data get labels: on an export of the
   ar.culture.ru "Артефакт" API (16077 objects, 193 fields) a full scan labels 125 fields

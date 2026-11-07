@@ -13,8 +13,8 @@
       "recall": null
     },
     "countrycode_alpha2": {
-      "precision": null,
-      "recall": 0.0
+      "precision": 1.0,
+      "recall": 1.0
     },
     "currency": {
       "precision": null,
