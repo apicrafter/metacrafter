@@ -17,6 +17,7 @@ min_recall:
   asnbyprefixname: 0.25
   asnbyvalue: 0.75
   asnbyvalueandpostfix: 0.75
+  atcvalue: 1.0
   authentihashbyvalue: 1.0
   bikcodepat: 0.0
   bip32addr_xprv: 0.5
@@ -43,7 +44,6 @@ min_recall:
   datasizebyvalue: 0.0
   de_pii_ibanvalue: 1.0
   de_pii_steueridvalue: 0.6667
-  deatcvalue: 1.0
   decountrynamebyvalue: 1.0
   dehrbvalue: 1.0
   deicd10value: 1.0
@@ -67,7 +67,6 @@ min_recall:
   egtaxnumbervalue: 1.0
   eidrvalue: 0.3333
   email: 1.0
-  enatcvalue: 1.0
   encompanynamebypostfix: 0.6667
   encontinentbyname: 1.0
   encountrynamebyvalue: 1.0
@@ -80,7 +79,6 @@ min_recall:
   enukprnvalue: 1.0
   enukurnvalue: 1.0
   es_tax_esnifvalue: 0.6667
-  esatcvalue: 1.0
   escifvalue: 1.0
   escupvalue: 0.6667
   esicd10value: 1.0
@@ -95,7 +93,6 @@ min_recall:
   filenamebyvalue: 1.0
   filesizebyvalue: 0.0
   fqdnbyvalidators: 1.0
-  fratcvalue: 1.0
   frccamvalue: 0.0
   fricd10value: 1.0
   frsirenvalue: 1.0
@@ -149,8 +146,8 @@ min_recall:
   iso3166-alpha3: 1.0
   iso3166-alpha3imprecise: 1.0
   isrcvalue: 0.0
-  issnvalue: 0.6
-  issnvaluewithoutdash: 0.2
+  issnvalue: 1.0
+  issnvaluewithoutdash: 1.0
   keccak256hash: 1.0
   keccak512hash: 1.0
   languagetag: 1.0
@@ -284,7 +281,7 @@ min_recall:
   rukpp: 1.0
   runpabyfunc: 0.75
   runpakindbydata: 0.8333
-  ruogrn: 0.6667
+  ruogrn: 1.0
   ruokeicode: 1.0
   ruokeiname: 1.0
   ruokeisymbol: 0.0
@@ -294,7 +291,8 @@ min_recall:
   ruookvedcodepat: 1.0
   ruookvedcodepatimprecise: 1.0
   ruregioncode: 1.0
-  rusfeddistrict: 0.3333
+  rusfeddistrict: 0.8333
+  rusfeddistrictbyfield: 1.0
   rushistoricaldatingvalue: 1.0
   rusinitialssurname: 1.0
   rusnils: 0.0
@@ -345,5 +343,4 @@ min_recall:
   winregkeybyvalue: 0.0
   yearbydatafiltered: 1.0
   yearbydataimprecise: 0.5
-negative_exceptions:
-  wikidataidvalue: accepts registry negative examples; fix in metacrafter-rules
+negative_exceptions: {}

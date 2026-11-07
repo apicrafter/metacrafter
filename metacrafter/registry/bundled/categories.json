@@ -80,7 +80,7 @@
   {
     "id": "geo",
     "name": "Geographic identifiers",
-    "count": 411,
+    "count": 412,
     "url": "https://registry.apicrafter.io/category/geo"
   },
   {
@@ -146,7 +146,7 @@
   {
     "id": "pii",
     "name": "Personally identifiable information",
-    "count": 430,
+    "count": 431,
     "url": "https://registry.apicrafter.io/category/pii"
   },
   {
