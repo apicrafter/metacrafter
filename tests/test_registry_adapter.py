@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import shutil
 from pathlib import Path
 
@@ -122,6 +123,8 @@ def test_fetch_verifies_hashes_and_falls_back(tmp_path, monkeypatch):
 def test_fresh_cache_skips_network(tmp_path, monkeypatch):
     cache = tmp_path / "cache"
     shutil.copytree(SNAPSHOT, cache)
+    # copytree keeps the fixture mtimes; make the cache fresh whatever the checkout age.
+    os.utime(cache / "index.json")
 
     def no_network(url, timeout, deadline=None):
         raise AssertionError("network must not be used with a fresh cache")
