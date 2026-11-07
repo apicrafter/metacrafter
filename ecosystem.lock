@@ -7,9 +7,9 @@
 #   while the live registry still has this version.
 metacrafter-rules:
   repo: apicrafter/metacrafter-rules
-  release: v0.0.4
-  sha256: a15140c019d16f3e79b4644a0fe079339e22d2c259c7203f7df7745640401d5c
+  release: v0.0.5
+  sha256: a1271fcf724dbbe5a8d81c36eda021d305468829645b3bb51cf46e792d9b38a4
 metacrafter-registry:
   base_url: https://registry.apicrafter.io
   version: 1.3.0.dev0
-  git_sha: 2ec9d1253765185cc3efabbbabe41edcd2a87383
+  git_sha: 34a946c379d5ac6c375661771914307099f9bd3b

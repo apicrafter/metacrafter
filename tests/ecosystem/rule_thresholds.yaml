@@ -43,7 +43,7 @@ min_recall:
   datasizebyvalue: 0.0
   de_pii_ibanvalue: 1.0
   de_pii_steueridvalue: 0.6667
-  deatcvalue: 0.0
+  deatcvalue: 1.0
   decountrynamebyvalue: 1.0
   dehrbvalue: 1.0
   deicd10value: 1.0
@@ -51,7 +51,7 @@ min_recall:
   detaxidvalue: 0.6667
   deustvalue: 1.0
   devehicleplatevalue: 1.0
-  doibydata: 0.5
+  doibydata: 0.6667
   doivalue: 1.0
   dunsvalue: 1.0
   ean13value: 1.0
@@ -67,7 +67,7 @@ min_recall:
   egtaxnumbervalue: 1.0
   eidrvalue: 0.3333
   email: 1.0
-  enatcvalue: 0.0
+  enatcvalue: 1.0
   encompanynamebypostfix: 0.6667
   encontinentbyname: 1.0
   encountrynamebyvalue: 1.0
@@ -79,7 +79,7 @@ min_recall:
   enukprnvalue: 1.0
   enukurnvalue: 1.0
   es_tax_esnifvalue: 0.6667
-  esatcvalue: 0.0
+  esatcvalue: 1.0
   escifvalue: 1.0
   escupvalue: 0.6667
   esicd10value: 1.0
@@ -94,7 +94,7 @@ min_recall:
   filenamebyvalue: 1.0
   filesizebyvalue: 0.0
   fqdnbyvalidators: 1.0
-  fratcvalue: 0.0
+  fratcvalue: 1.0
   frccamvalue: 0.0
   fricd10value: 1.0
   frsirenvalue: 1.0
@@ -148,8 +148,8 @@ min_recall:
   iso3166-alpha3: 1.0
   iso3166-alpha3imprecise: 1.0
   isrcvalue: 0.0
-  issnvalue: 0.6667
-  issnvaluewithoutdash: 0.3333
+  issnvalue: 0.6
+  issnvaluewithoutdash: 0.2
   keccak256hash: 1.0
   keccak512hash: 1.0
   languagetag: 1.0
@@ -199,6 +199,7 @@ min_recall:
   registry:cnpj: 1.0
   registry:companyhouseid: 1.0
   registry:cpvcode: 1.0
+  registry:crossref_funder_id: 1.0
   registry:cz_ico: 1.0
   registry:date: 1.0
   registry:de_ags: 1.0
@@ -224,6 +225,11 @@ min_recall:
   registry:ipv6subnet: 1.0
   registry:isicrev4: 1.0
   registry:iso3166code: 1.0
+  registry:it_aic: 1.0
+  registry:it_codice_catastale: 1.0
+  registry:it_codicefiscale: 1.0
+  registry:it_istat_comune: 1.0
+  registry:it_iva: 1.0
   registry:kz_bin: 1.0
   registry:kz_kato: 1.0
   registry:miccode: 1.0
@@ -241,6 +247,8 @@ min_recall:
   registry:openlibid: 1.0
   registry:quarter: 1.0
   registry:references: 1.0
+  registry:ru_esklp_klp_code: 1.0
+  registry:ru_esklp_smnn_code: 1.0
   registry:rusecreg: 1.0
   registry:sctcrypto: 1.0
   registry:sedol: 1.0
@@ -265,18 +273,26 @@ min_recall:
   rucountrycodepat: 1.0
   rudriverlicensevalue: 0.0
   rueqsecregvalue: 0.0
+  ruesklpcodevalue: 1.0
   rufiasvalue: 1.0
   ruinn: 1.0
   rukadastrbypat: 1.0
   rukadastrvalue: 1.0
   rukpp: 1.0
+  runpabyfunc: 0.75
+  runpakindbydata: 0.8333
   ruogrn: 1.0
   ruokeicode: 1.0
   ruokeiname: 1.0
+  ruokeisymbol: 0.0
+  ruokeisymbolbyfield: 0.3333
+  ruokpdcodepat: 1.0
+  ruokpdcodepatimprecise: 1.0
   ruookvedcodepat: 1.0
   ruookvedcodepatimprecise: 1.0
   ruregioncode: 1.0
-  rusfeddistrict: 0.4
+  rusfeddistrict: 0.3333
+  rusnils: 0.0
   russianbikcode: 1.0
   russianswiftcode: 0.0
   rustimerangebypat: 0.5
@@ -323,4 +339,5 @@ min_recall:
   winregkeybyvalue: 0.0
   yearbydatafiltered: 1.0
   yearbydataimprecise: 0.5
-negative_exceptions: {}
+negative_exceptions:
+  wikidataidvalue: accepts registry negative examples; fix in metacrafter-rules
