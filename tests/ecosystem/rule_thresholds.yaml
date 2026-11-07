@@ -40,6 +40,7 @@ min_recall:
   chuidvalue: 0.0
   contractawardvalue: 1.0
   crc32: 1.0
+  currencycodebyvalue: 1.0
   cusipvalue: 1.0
   datasizebyvalue: 0.0
   de_pii_ibanvalue: 1.0
@@ -108,6 +109,7 @@ min_recall:
   gtinvalue: 0.0
   gtinwithai01value: 0.0
   guid: 0.25
+  hscodebyvalue: 1.0
   ibanvalue: 1.0
   icaoairportcodevalue: 1.0
   iccidvalue: 0.6667
@@ -128,6 +130,7 @@ min_recall:
   imsivalue: 1.0
   inchibyvalue: 1.0
   inchikeybyvalue: 1.0
+  incotermsbyvalue: 1.0
   inreplytovalue: 1.0
   ipv4: 1.0
   ipv6: 0.25
@@ -322,6 +325,7 @@ min_recall:
   tlshbyvalue: 0.0
   torrentinfohashvalue: 1.0
   ulidvalue: 1.0
+  unitcodebyvalue: 1.0
   unlocodevalue: 1.0
   uprnvalue: 0.0
   url: 1.0
