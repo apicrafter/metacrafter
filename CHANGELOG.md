@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`height_measurement`, `width_measurement`, `path_file`) and `negative_exceptions` is
   empty. On a column of IBANs from several countries, `de_pii_ibanvalue` now also reports
   `de_iban`: it validates check digits, so it is no longer dropped as a repeat of `iban`.
+  OGRN and OGRNIP are detected by value in default scans (#51): `ruogrn` is no longer
+  imprecise and accepts 15-digit OGRNIP, `ruogrnknown` reports `ogrn` and matches more
+  field names, and `rutitleknown` no longer labels `ИНН`, `КПП`, `ОКПО` and `ОГРН` columns
+  `name`. In `tests/fixtures/ru_utf8_comma.csv` the `ogrn` column gets `ogrn 100` instead
+  of only `ogrn_ogrnip 36` from its name.
 - **Float columns of whole numbers are matched by data rules.** A column whose values are
   all whole numbers stored as floats (`.xls` files, pandas columns with missing values, CSV
   text such as `1027700132195.0`) is matched as integer text (`1027700132195`). Before,
