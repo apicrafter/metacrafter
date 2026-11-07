@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Default rule pack is metacrafter-rules v0.0.4** (#42). Full-name rules of every country
+  except China report `person_fullname`, and first-name and last-name rules report
+  `person_firstname` and `person_surname`. Before, `full_name` in the Australian, Indian and
+  Singapore rules was labelled `person_name`, which in the registry is a Chinese datatype, and
+  Indian first and last names used the Indian `firstname` and `lastname`. The universal rules
+  also match `full_name`, `person_name`, `given_name`, `family_name` and `Last Name` (a
+  surname, no longer a middle name). New label `file_extension`: fields named
+  `file_extension`, `file_ext` and the like, and `extension` or `ext` fields whose values are
+  extensions (`pdf`, `.docx`), such as GeoNode `links.extension`.
 - **Default rule pack is metacrafter-rules v0.0.3** (#41). Rule keys resolve to registry
   datatypes: field-name rules report `boolean`, `latitude`, `datetime`, `address`, `orgname`,
   `userid` and other registry ids instead of draft keys such as `active_boolean` or

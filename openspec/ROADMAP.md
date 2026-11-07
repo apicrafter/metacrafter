@@ -61,7 +61,6 @@ Open items:
 | `--pack` once the registry implements `add-datatype-packs` | apicrafter/metacrafter#38 | metacrafter-registry, then metacrafter |
 | Registry-derived detectors from pattern records (`iso639_1`, `iso639_2`) | apicrafter/metacrafter#39 | metacrafter |
 | Opt-in LLM verifier mode (`--llm-verify`) | apicrafter/metacrafter#40 | metacrafter |
-| Universal full-name rule; file extension field rule | apicrafter/metacrafter#42 | metacrafter-rules |
 
 Distribution (decided 2026-11-05, `update-ecosystem-distribution`): neither
 `metacrafter-rules` nor `metacrafter-registry` is published on PyPI. The rule pack is a
@@ -81,9 +80,9 @@ language suffix; registry `parent` ids count as half-weight field-name evidence;
 country check needs the type's own name with its country; `llm_max_requests` is
 configurable.
 
-Blocked outside this repository: the metacrafter-rules fixes for apicrafter/metacrafter#42
-and registry datatype packs (apicrafter/metacrafter#38). The apicrafter/metacrafter#41 fixes
-shipped in metacrafter-rules v0.0.3, the pinned rule pack since 2026-11-07.
+Blocked outside this repository: registry datatype packs (apicrafter/metacrafter#38). The
+metacrafter-rules fixes shipped in v0.0.3 (apicrafter/metacrafter#41) and v0.0.4
+(apicrafter/metacrafter#42); v0.0.4 is the pinned rule pack since 2026-11-07.
 
 ## Phase 0 — Foundation and reliability
 
