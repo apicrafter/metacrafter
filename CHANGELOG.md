@@ -28,9 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   again (key `month`), and the pack imports without `SyntaxWarning`. In
   `tests/ecosystem/`, the allow-list of unresolved rule keys shrinks from 32 to 3
   (`height_measurement`, `width_measurement`, `path_file`) and `negative_exceptions` is
-  empty. On a column of IBANs from several countries, `de_pii_ibanvalue` now also reports
-  `de_iban`: it validates check digits, so it is no longer dropped as a repeat of `iban`.
-  OGRN and OGRNIP are detected by value in default scans (#51): `ruogrn` is no longer
+  empty. OGRN and OGRNIP are detected by value in default scans (#51): `ruogrn` is no longer
   imprecise and accepts 15-digit OGRNIP, `ruogrnknown` reports `ogrn` and matches more
   field names, and `rutitleknown` no longer labels `ИНН`, `КПП`, `ОКПО` and `ОГРН` columns
   `name`. In `tests/fixtures/ru_utf8_comma.csv` the `ogrn` column gets `ogrn 100` instead
@@ -103,6 +101,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`de_iban` on columns of IBANs from several countries** (#52). Since rules v0.0.3,
+  `de_pii_ibanvalue` validates check digits with the same `validate_iban` as the universal
+  `iban` rule, so it was kept as country evidence and reported `de_iban` on one value in
+  three. A country-specific value rule whose validator a matched universal rule also uses
+  is now dropped when its confidence is lower than that match: it missed values the
+  universal rule accepted. On a column of German IBANs it is still reported. Country rules
+  with their own checksum, such as `de_steuerid`, keep their matches. The benchmark
+  baseline no longer lists `de_iban`.
 - **Country-specific detectors and broader field names.** Field-name evidence lifted the
   country check for country-specific registry detectors even when the field name only
   named the broader type: a column `driver_license` supported every

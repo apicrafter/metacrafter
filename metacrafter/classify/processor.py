@@ -1325,32 +1325,49 @@ class RulesProcessor:
             kept.append(rule)
         return kept
 
+    @staticmethod
+    def _validator_id(rule: Dict[str, Any]) -> Any:
+        """What identifies a rule's validator: its declared name, else the function itself."""
+        return rule.get("validator") or rule.get("vfunc")
+
     def _drop_shadowed_country_matches(self, found, m_result: ColumnMatchResult, explain: bool) -> None:
         """Drop country-specific value matches that only repeat a universal match.
 
-        Applies when no scan country is set, to curated rules without a validator and
-        without field-name evidence: ``rufias`` (a GUID pattern) is dropped when ``uuid``
-        matched the same values with at least the same confidence.
+        Applies when no scan country is set, to curated rules without field-name evidence.
+        A rule without a validator is dropped when a universal rule matched with at least its
+        confidence: ``rufias`` (a GUID pattern) repeats ``uuid``. A rule with a validator is
+        kept, unless a matched universal rule uses the same validator and has a higher
+        confidence: the shared check proves nothing beyond the universal match, and the
+        country pattern missed values the universal rule accepted. ``de_iban``
+        (``validate_iban``) is dropped on a column of mixed-country IBANs and kept on a
+        column of German IBANs.
         """
         if self.preset_countries or not found:
             return
-        universal = [match.confidence for rule, match, _ in found if not self._rule_countries(rule)]
+        universal = [(rule, match) for rule, match, _ in found if not self._rule_countries(rule)]
         if not universal:
             return
-        best = max(universal)
+        best = max(match.confidence for _, match in universal)
+        shared = {self._validator_id(rule) for rule, _ in universal if "vfunc" in rule}
         for rule, match, name_weight in found:
             if (
                 rule.get("derived")
                 or name_weight
                 or not self._rule_countries(rule)
                 or rule.get("match") == "func"
-                or "vfunc" in rule
-                or match.confidence > best
             ):
                 continue
+            if "vfunc" in rule:
+                if self._validator_id(rule) not in shared or match.confidence >= best:
+                    continue
+                reason = "Country-specific pattern covers fewer values than a universal match with the same validator"
+            elif match.confidence > best:
+                continue
+            else:
+                reason = "Country-specific pattern repeats a universal match"
             m_result.matches.remove(match)
             if explain:
-                m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": match.confidence, "matched_count": match.evidence.get("matched_count", 0) if match.evidence else 0, "considered_count": match.evidence.get("considered_count", 0) if match.evidence else 0, "reason": "Country-specific pattern repeats a universal match"})
+                m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": match.confidence, "matched_count": match.evidence.get("matched_count", 0) if match.evidence else 0, "considered_count": match.evidence.get("considered_count", 0) if match.evidence else 0, "reason": reason})
 
     def qddate_pattern(self, date_format: Optional[str]) -> Optional[str]:
         """Registry pattern record id for a qddate format key, via the registry crosswalk."""

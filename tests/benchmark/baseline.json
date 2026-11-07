@@ -28,10 +28,6 @@
       "precision": 0.0,
       "recall": null
     },
-    "de_iban": {
-      "precision": 0.0,
-      "recall": null
-    },
     "email": {
       "precision": 1.0,
       "recall": 1.0
