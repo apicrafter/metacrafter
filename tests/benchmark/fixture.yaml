@@ -24,4 +24,4 @@
   labels:
     inn: [inn]
     country: [countrycode_alpha2]
-    currency: [currency]
+    currency: [currency, iso4217curcode]

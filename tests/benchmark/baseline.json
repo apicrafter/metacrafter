@@ -17,8 +17,8 @@
       "recall": 1.0
     },
     "currency": {
-      "precision": null,
-      "recall": 0.0
+      "precision": 1.0,
+      "recall": 1.0
     },
     "date": {
       "precision": 1.0,
@@ -44,9 +44,9 @@
       "precision": 1.0,
       "recall": 1.0
     },
-    "okvalpha": {
-      "precision": 0.0,
-      "recall": null
+    "iso4217curcode": {
+      "precision": 1.0,
+      "recall": 1.0
     },
     "url": {
       "precision": 1.0,
