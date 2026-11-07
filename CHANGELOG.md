@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Default rule pack is metacrafter-rules v0.0.6; bundled registry snapshot is 3e99a78.**
+  Fields of museum and cultural heritage data get labels: on an export of the
+  ar.culture.ru "Артефакт" API (16077 objects, 193 fields) a full scan labels 125 fields
+  instead of 100.
+  - Goskatalog registration numbers (`goskatalogNumber`) are `ru_goskatalog_regnum`, by
+    field name and by value in such fields.
+  - Surnames with initials (`Иванов И.И.`, `И.И. Иванов`) are `rus_initials_surname`;
+    fields named `author` or `автор` are `dc_creator`.
+  - Historical dating (`XIX век`, `конец XIX века`, `19th century`, `1950s`) is
+    `ru_historical_dating` and `historical_dating`.
+  - URL slugs are `slug`, artwork technique and material fields are `art_medium`, and
+    dimensions as text (`30х40 см`, `68 x 82 cm`) are `object_dimensions`.
+  - `fqdn` no longer matches Japanese and Chinese text with the ideographic full stop `。`.
+  - `oid` no longer matches decimal fractions such as `0.1`.
+  - The `languagetag` value rule runs on fields such as `lang`, `language_code` and
+    `locale`; its field guard matched no field name.
+
+  The registry snapshot adds `slug`, `art_medium`, `object_dimensions` and
+  `historical_dating`, which v0.0.6 rule keys use, and makes `ogrn` cover OGRNIP (15
+  digits), with `ogrn_ogrnip` as an alias. All rule keys resolve. In
+  `tests/ecosystem/rule_thresholds.yaml` the new value rules start at recall 1.0, and
+  `ruogrn` goes down to 0.6667: it rejects the new registry example `385768585948949`,
+  whose year digits `85` are not a year in which OGRNIP numbers were issued (the check
+  digit is valid). The benchmark baseline is unchanged.
 - **Default rule pack is metacrafter-rules v0.0.5; bundled registry snapshot is 34a946c**
   (#61). Fields of the Russian ESKLP drug catalogue get labels (18 of 29 fields of an
   export instead of 10):
