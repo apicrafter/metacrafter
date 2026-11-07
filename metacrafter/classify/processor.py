@@ -388,6 +388,27 @@ def match_rank_key(match: "RuleResult") -> Tuple[float, float]:
     return (-float(match.confidence or 0.0), -match_name_score(match))
 
 
+def date_pattern_key(dateparser: Any, value: str) -> Optional[str]:
+    """qddate pattern key of the date that starts ``value``, or None.
+
+    qddate reads a date at the start of a text and ignores what follows (its
+    ``:t_right`` patterns), so ``18-2-023909`` read as 18 February 0239 with ``09``
+    left over. A date must end the value or be followed by a character that is
+    neither a letter nor a digit, and its values must form a date.
+    """
+    match_typed = getattr(dateparser, "match_typed", None)
+    if match_typed is None:
+        res = dateparser.match(value, noyear=False)
+        return res["pattern"]["key"] if res else None
+    found = match_typed(value, allow_no_year=False)
+    if found is None:
+        return None
+    end = found.span[1]
+    if end < len(value) and value[end].isalnum():
+        return None
+    return found.pattern_key
+
+
 def rule_pii_source(rule: Dict[str, Any]) -> Optional[str]:
     """Return why a rule marks PII: its own ``is_pii`` flag or its ``pii`` context."""
     if rule.get("is_pii") is True:
@@ -1198,10 +1219,10 @@ class RulesProcessor:
                         continue
                     if not hasattr(dateparser, 'match'):
                         break
-                    res = dateparser.match(value, noyear=False)
-                    if res:
+                    pattern_key = date_pattern_key(dateparser, value)
+                    if pattern_key:
                         success += 1
-                        date_format = res["pattern"]["key"]
+                        date_format = pattern_key
 
                 if except_empty:
                     subtotal = total - empty

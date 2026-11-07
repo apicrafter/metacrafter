@@ -92,6 +92,44 @@ def test_date_patterns_skip_a_field_with_a_value_match(tmp_path):
     assert "registry:date" in ruleids and "qddate" not in ruleids
 
 
+def test_date_patterns_need_the_date_to_end_at_a_word_boundary(tmp_path):
+    import qddate
+
+    processor = _processor(tmp_path, "off")
+    dateparser = qddate.DateParser(generate=True)
+    # Grant application numbers: qddate reads 18-2-0239 as a date and ignores "09".
+    numbers = [{"number": v} for v in ("18-2-023909", "18-2-011923", "18-2-001535")]
+    dates = [{"started": v} for v in ("2019-10-31 0:00:00", "12-05-2020, Moscow", "21.01.2008")]
+    result = processor.match_dict(numbers + dates, confidence=MIN_CONFIDENCE_FOR_MATCH,
+                                  dateparser=dateparser)
+    matches = {r.field: r.matches for r in result.results}
+    assert matches["number"] == []
+    assert [m.ruleid for m in matches["started"]] == ["qddate"]
+
+
+def test_date_pattern_key():
+    import qddate
+
+    from metacrafter.classify.processor import date_pattern_key
+
+    dateparser = qddate.DateParser(generate=True)
+    assert date_pattern_key(dateparser, "2021-09-17T00:00:00") == "dt:date:date_9:time_2"
+    assert date_pattern_key(dateparser, "18-2-023909") is None
+    # The values must form a date.
+    assert date_pattern_key(dateparser, "31.02.2020") is None
+
+
+def test_date_pattern_key_without_match_typed():
+    from metacrafter.classify.processor import date_pattern_key
+
+    class OldParser:
+        def match(self, value, noyear=True):
+            return {"pattern": {"key": "dt:date:x"}} if value == "2020" else None
+
+    assert date_pattern_key(OldParser(), "2020") == "dt:date:x"
+    assert date_pattern_key(OldParser(), "abc") is None
+
+
 def test_default_confidence_drops_partial_value_matches():
     from metacrafter.core import CrafterCmd
 
