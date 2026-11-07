@@ -197,6 +197,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Rule pack validators from another `metacrafterext` copy.** When a `metacrafterext`
+  package was imported before the rule pack was activated (an older metacrafter-rules
+  checkout on `sys.path`, or the probe for an installed package), the pack's rules called
+  the validators of that copy. Rules whose validators it lacked were skipped with warnings
+  such as `Failed to import function 'metacrafterext.rules.common.internet.is_fqdn' for
+  rule 'fqdnbyvalidators'` (also `oidvalue`, `deustvalue`, `enhistoricaldatingvalue`,
+  `rushistoricaldatingvalue`). Activating a pack now puts its directory first on
+  `sys.path` and unloads a `metacrafterext` imported from another location.
 - **Field rules on objects keyed by language.** Field-name rules saw only the last
   segment of a nested path, so in `{"title": {"ru": …, "en": …}}` the fields `title.ru`
   and `title.en` were matched as `ru` and `en`, and the language-suffix fallback never

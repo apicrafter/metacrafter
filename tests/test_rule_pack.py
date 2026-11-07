@@ -169,3 +169,63 @@ def test_pinned_pack_detects_ogrn_by_value():
     by_value = [m for m in fields["ogrn"]["matches"] if m["ruletype"] == "data"]
     assert [(m["dataclass"], m["ruleid"], m["confidence"]) for m in by_value] == [("ogrn", "ruogrn", 100.0)]
     assert "name" not in {m["dataclass"] for m in fields["ogrn"]["matches"]}
+
+
+@pytest.fixture
+def isolated_validators(monkeypatch):
+    """Restore sys.path and the imported metacrafterext modules after the test."""
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    saved = {n: m for n, m in sys.modules.items()
+             if n == pack.PYTHON_PACKAGE or n.startswith(pack.PYTHON_PACKAGE + ".")}
+    for name in saved:
+        del sys.modules[name]
+    yield
+    for name in [n for n in sys.modules
+                 if n == pack.PYTHON_PACKAGE or n.startswith(pack.PYTHON_PACKAGE + ".")]:
+        del sys.modules[name]
+    sys.modules.update(saved)
+
+
+def make_checkout(root, checks, rules=b""):
+    (root / "rules").mkdir(parents=True)
+    (root / "rules" / "t.yaml").write_bytes(rules or RULE_YAML)
+    (root / "metacrafterext").mkdir()
+    (root / "metacrafterext" / "__init__.py").write_bytes(b"")
+    (root / "metacrafterext" / "checks.py").write_bytes(checks)
+    return root
+
+
+def test_activate_unloads_validators_imported_from_another_copy(cache, tmp_path, isolated_validators):
+    # A stale metacrafterext (an older checkout on sys.path) is imported before the pack
+    # is activated; the pack's rules must still get the pack's own validators.
+    import importlib
+
+    old = make_checkout(tmp_path / "old", b"def ok(value):\n    return False\n")
+    sys.path.insert(0, str(old))
+    assert importlib.import_module("metacrafterext.checks").ok("x") is False
+    sys.path.remove(str(old))
+
+    rules = RULE_YAML + b"  newcheck: {key: t, match: func, type: data, rule: metacrafterext.checks.newcheck}\n"
+    new = make_checkout(tmp_path / "new", b"def ok(value):\n    return True\n\n"
+                        b"def newcheck(value):\n    return True\n", rules)
+    pack.activate(pack.resolve_pack(rules_dir=str(new)))
+    assert sys.path[0] == str(new.resolve())
+    assert importlib.import_module("metacrafterext.checks").ok("x") is True
+
+    from metacrafter.classify.processor import RulesProcessor
+
+    processor = RulesProcessor()
+    processor.import_rules_path(str(new / "rules"))
+    assert processor.diagnostics == []
+
+
+def test_activate_keeps_validators_of_the_same_pack(cache, tmp_path, isolated_validators):
+    import importlib
+
+    root = make_checkout(tmp_path / "checkout", b"def ok(value):\n    return True\n")
+    resolved = pack.resolve_pack(rules_dir=str(root))
+    pack.activate(resolved)
+    module = importlib.import_module("metacrafterext.checks")
+    pack.activate(resolved)
+    assert importlib.import_module("metacrafterext.checks") is module
+    assert sys.path.count(str(root.resolve())) == 1

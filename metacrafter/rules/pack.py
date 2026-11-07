@@ -20,6 +20,7 @@ release is refused.
 from __future__ import annotations
 
 import hashlib
+import importlib
 import io
 import json
 import logging
@@ -40,6 +41,8 @@ RULES_REPO = "apicrafter/metacrafter-rules"
 DEFAULT_RELEASE = "v0.0.7"
 DEFAULT_SHA256 = "7f34e41205cae5bc2684157f8add2b685b813c1af63fe3e39c4dd6a595edc96d"
 MARKER = ".metacrafter-pack.json"
+#: Python package of rule pack validators.
+PYTHON_PACKAGE = "metacrafterext"
 DOWNLOAD_TIMEOUT = 60.0
 MAX_ARCHIVE_BYTES = 50 * 1024 * 1024
 #: Copies of pinned release archives shipped with the package (scripts/bundle_rule_pack.py).
@@ -271,10 +274,38 @@ def resolve_pack(*, rules_dir: Optional[str] = None, release: Optional[str] = No
     return _download_pack(tag, digest, RULES_REPO, DOWNLOAD_TIMEOUT)
 
 
+def _package_dir(module) -> Optional[Path]:
+    """Directory an imported package was loaded from."""
+    locations = list(getattr(module, "__path__", None) or [])
+    if not locations and getattr(module, "__file__", None):
+        locations = [str(Path(module.__file__).parent)]
+    return Path(locations[0]).resolve() if locations else None
+
+
 def activate(pack: RulePack) -> None:
-    """Make the pack's ``metacrafterext`` validators importable."""
+    """Make the pack's ``metacrafterext`` validators the ones that rules import.
+
+    The pack's directory goes first on ``sys.path``. A ``metacrafterext`` imported earlier
+    from another location (an older checkout or release on ``sys.path``, or the package
+    probe in ``_installed_pack``) is unloaded: otherwise rules of this pack would call the
+    validators of that copy, and those it lacks would fail to import.
+    """
     if pack.python_path is None:
         return
     path = str(pack.python_path)
-    if path not in sys.path:
-        sys.path.insert(0, path)
+    if path in sys.path:
+        sys.path.remove(path)
+    sys.path.insert(0, path)
+    loaded = sys.modules.get(PYTHON_PACKAGE)
+    if loaded is None:
+        return
+    expected = (pack.python_path / PYTHON_PACKAGE).resolve()
+    current = _package_dir(loaded)
+    if current == expected:
+        return
+    logger.info("Unloading %s from %s; rule pack validators come from %s",
+                PYTHON_PACKAGE, current, expected)
+    prefix = PYTHON_PACKAGE + "."
+    for name in [n for n in sys.modules if n == PYTHON_PACKAGE or n.startswith(prefix)]:
+        del sys.modules[name]
+    importlib.invalidate_caches()
