@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `metacrafter rules lint` lists field rules without `priority` under `warnings`: their
+  name-only match scores 36, below the default confidence 50, so they report only together
+  with a value match (380 rules in metacrafter-rules v0.0.9). `--strict` fails on them.
+
 ### Changed
 
 - **Default rule pack is metacrafter-rules v0.0.9.** The registry snapshot stays 1.3.0
@@ -20,6 +26,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     with 40 columns, 28 columns get a label instead of 5.
   - In the benchmark, the `currency` column reports `currency` and `iso4217curcode`
     (precision and recall 1.0) instead of the false `okvalpha`.
+
+### Fixed
+
+- Date patterns (qddate) no longer report numbers that start like a date: a date must end
+  the value or be followed by a character that is not a letter or digit, and its values must
+  form a date. Grant application numbers `18-2-023909` were `datetime` at 100.
+- Field rules compare a name with a dot without its path escape: a CSV header
+  `Имеет привязку к физ. лицам` (the column `…физ\. лицам`) matches a rule for it.
+  `--fields` accepts the unescaped name (`info.recordNum` for the column `info\.recordNum`).
 
 ## [2.0.0] - 2026-11-07
 
