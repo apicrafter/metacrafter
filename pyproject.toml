@@ -46,7 +46,7 @@ dependencies = [
     "rich",
     "pydantic>=2.0",
     "xmltodict",
-    "iterabledata>=1.1",
+    "iterabledata>=1.2",
     "tqdm",
     "requests>=2.28.0",
     "chardet",
