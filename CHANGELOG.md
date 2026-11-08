@@ -27,8 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     logs a warning.
   - Delimited `.txt` files such as GTFS `stops.txt` are read as CSV (#85).
   - An Excel `sep=;` first line sets the delimiter, and title or note rows above the header
-    (GENESIS, statistics offices) are skipped; the header is the first row with the body's
-    column count (#87).
+    (GENESIS, statistics offices) are skipped, in CSV files and in the first sheet of XLSX
+    and XLS workbooks; the header is the first row with the body's column count (#87).
+  - Zipped Shapefiles (`.shp.zip`) are read with pyshp, in the DBF encoding of their
+    `.cpg` member; iterabledata 1.1 cannot open them (#86).
 - A decoding error is reported as such, with a hint to pass `--encoding`, instead of
   "Unsupported file type" (#81). Unhandled errors name the exception when its text is not
   enough (`Error: KeyError: 0`).
