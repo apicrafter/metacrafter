@@ -314,3 +314,31 @@ class TestEtreeToDict:
         assert "@attr1" in result["root"]
         assert result["root"]["@attr1"] == "value1"
 
+
+
+class TestFieldPathNames:
+    def test_unescape_field_path(self):
+        from metacrafter.classify.utils import unescape_field_path
+
+        assert unescape_field_path("info\\.recordNum") == "info.recordNum"
+        assert unescape_field_path("a.b") == "a.b"
+        assert unescape_field_path("a\\\\b") == "a\\b"
+        assert unescape_field_path("trailing\\") == "trailing\\"
+
+    def test_resolve_field_names(self):
+        from metacrafter.classify.utils import resolve_field_names
+
+        columns = ["info\\.recordNum", "info.regNum", "name"]
+        assert resolve_field_names(["info.recordNum", "name"], columns) == ["info\\.recordNum", "name"]
+        assert resolve_field_names(["info\\.recordNum"], columns) == ["info\\.recordNum"]
+        # An exact column name wins over the unescaped form of another column.
+        assert resolve_field_names(["info.regNum"], columns) == ["info.regNum"]
+        with pytest.raises(ValueError, match="Unknown selected fields: missing"):
+            resolve_field_names(["missing"], columns)
+
+    def test_ambiguous_unescaped_name_is_unknown(self):
+        from metacrafter.classify.utils import resolve_field_names
+
+        # {"a.b": {"c": 1}} and {"a": {"b.c": 2}}: both read "a.b.c" without escapes.
+        with pytest.raises(ValueError):
+            resolve_field_names(["a.b.c"], ["a\\.b.c", "a.b\\.c"])

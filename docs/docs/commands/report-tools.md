@@ -47,7 +47,7 @@ record rejected candidates; `--include-reasons` prints them.
 
 | Command | Purpose |
 |---|---|
-| `metacrafter rules lint PATH` | Load rules and report invalid structure, duplicate ids, missing validators and compile errors |
+| `metacrafter rules lint PATH [--strict]` | Load rules and report invalid structure, duplicate ids, missing validators and compile errors. `warnings` lists field rules without `priority`: their name-only match scores 36, below the default confidence 50, so they report only with a value match. `--strict` fails on warnings too |
 | `metacrafter rules validate PATH` | Check files against the rule format JSON Schema |
 | `metacrafter rules test PATH --examples FILE` | Run rules on your own positive and negative examples |
 | `metacrafter rules test --registry-examples` | Run rules on registry examples (see [Ecosystem contract](/development/ecosystem)) |
