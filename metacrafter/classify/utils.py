@@ -60,6 +60,52 @@ def get_dict_value(object, keys):
     return out
 
 
+def unescape_field_path(path):
+    """Field path with the escapes of ``dict_generator`` removed.
+
+    ``info\\.recordNum`` (a CSV header with a dot) becomes ``info.recordNum``, and
+    ``a\\\\b`` becomes ``a\\b``. The result is a name to compare with rules and with
+    the names users type; it no longer tells nesting from a dot inside a key.
+    """
+    path = str(path)
+    if "\\" not in path:
+        return path
+    out = []
+    chars = iter(path)
+    for ch in chars:
+        if ch == "\\":
+            out.append(next(chars, "\\"))
+        else:
+            out.append(ch)
+    return "".join(out)
+
+
+def resolve_field_names(requested, available):
+    """Column names in ``available`` for the field names in ``requested``.
+
+    A requested name matches a column exactly, or by its unescaped form when only
+    one column has it, so ``--fields info.recordNum`` selects the column
+    ``info\\.recordNum`` of a CSV header ``info.recordNum``. Raises ``ValueError``
+    for names that match no column.
+    """
+    columns = list(available)
+    by_plain = {}
+    for column in columns:
+        by_plain.setdefault(unescape_field_path(column), []).append(column)
+    known = set(columns)
+    resolved, missing = [], []
+    for name in requested:
+        if name in known:
+            resolved.append(name)
+        elif len(by_plain.get(name, [])) == 1:
+            resolved.append(by_plain[name][0])
+        else:
+            missing.append(name)
+    if missing:
+        raise ValueError("Unknown selected fields: " + ", ".join(sorted(missing)))
+    return resolved
+
+
 def dict_to_columns(data):
     """Collect scalar values and count missing paths as null for each row."""
     rows = []

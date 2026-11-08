@@ -34,7 +34,14 @@ from pyparsing import (
     ParserElement,
 )
 
-from .utils import headers, dict_to_columns, strip_language_suffix, whole_number_texts
+from .utils import (
+    dict_to_columns,
+    headers,
+    resolve_field_names,
+    strip_language_suffix,
+    unescape_field_path,
+    whole_number_texts,
+)
 
 
 def _normalize_country_codes(
@@ -386,6 +393,27 @@ def match_name_score(match: "RuleResult") -> float:
 def match_rank_key(match: "RuleResult") -> Tuple[float, float]:
     """Sort key: higher confidence first, then higher field-name evidence; stable otherwise."""
     return (-float(match.confidence or 0.0), -match_name_score(match))
+
+
+def date_pattern_key(dateparser: Any, value: str) -> Optional[str]:
+    """qddate pattern key of the date that starts ``value``, or None.
+
+    qddate reads a date at the start of a text and ignores what follows (its
+    ``:t_right`` patterns), so ``18-2-023909`` read as 18 February 0239 with ``09``
+    left over. A date must end the value or be followed by a character that is
+    neither a letter nor a digit, and its values must form a date.
+    """
+    match_typed = getattr(dateparser, "match_typed", None)
+    if match_typed is None:
+        res = dateparser.match(value, noyear=False)
+        return res["pattern"]["key"] if res else None
+    found = match_typed(value, allow_no_year=False)
+    if found is None:
+        return None
+    end = found.span[1]
+    if end < len(value) and value[end].isalnum():
+        return None
+    return found.pattern_key
 
 
 def rule_pii_source(rule: Dict[str, Any]) -> Optional[str]:
@@ -959,9 +987,7 @@ class RulesProcessor:
         )
 
         data_columns = dict_to_columns(data)
-        missing = set(fields) - set(data_columns)
-        if missing:
-            raise ValueError("Unknown selected fields: " + ", ".join(sorted(missing)))
+        fields = resolve_field_names(fields, data_columns)
         nonstr = []
         if datastats:
             for field in datastats.keys():
@@ -971,16 +997,21 @@ class RulesProcessor:
             m_result = ColumnMatchResult(field=field, matches=[])
             if explain:
                 m_result.rejected = []
-            shortfield = field.rsplit(".", 1)[-1].strip()
+            # Names are compared without the escapes of nested paths: a CSV header
+            # "Имеет привязку к физ. лицам" is the column "…физ\. лицам". The short name is
+            # the part after the last dot, escaped or not, so a flattened header
+            # "info.okoguCode" still matches a rule for "okoguCode".
+            name = unescape_field_path(field)
+            shortfield = name.rsplit(".", 1)[-1].strip()
             # Match field name first; a name with a language suffix (title_en) or a language
             # key of a nested object (title.en) falls back to its base name (title) when the
             # full name matches no field rule.
             field_found: List[Dict[str, Any]] = []
-            name_variants = [(shortfield, field)]
+            name_variants = [(shortfield, name)]
             base = shortfield
-            base_field = strip_language_suffix(field.strip())
+            base_field = strip_language_suffix(name.strip())
             base_name = base_field.rsplit(".", 1)[-1].strip()
-            if base_field != field.strip() and base_name:
+            if base_field != name.strip() and base_name:
                 base = base_name
                 name_variants.append((base, base_field))
             for short_name, full_name in name_variants:
@@ -1198,10 +1229,10 @@ class RulesProcessor:
                         continue
                     if not hasattr(dateparser, 'match'):
                         break
-                    res = dateparser.match(value, noyear=False)
-                    if res:
+                    pattern_key = date_pattern_key(dateparser, value)
+                    if pattern_key:
                         success += 1
-                        date_format = res["pattern"]["key"]
+                        date_format = pattern_key
 
                 if except_empty:
                     subtotal = total - empty

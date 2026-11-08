@@ -20,7 +20,7 @@ flags.
 | `--include-imprecise` | Include imprecise rules that are ignored by default |
 | `--include-empty` | Include empty values in statistics and confidence |
 | `--strip` | Remove leading and trailing whitespace from values before analysis (off by default) |
-| `--fields` | Process only specific fields (comma-separated) |
+| `--fields` | Process only specific fields (comma-separated). Nested fields are paths (`info.okoguCode`); reports write a dot inside a key or header as `\.` (`info\.okoguCode` for a CSV header `info.okoguCode`), and either form selects the field |
 | `--rulepath` | Extra YAML rule directories (comma-separated) |
 | `--limit` | Maximum records sampled per field |
 
