@@ -8,10 +8,8 @@ import pytest
 from metacrafter.core import CrafterCmd
 from metacrafter.file_inputs import (
     detect_encoding,
-    is_px_metadata_key,
     json_records,
     prepare_input,
-    px_encoding,
     split_name,
     table_layout,
 )
@@ -69,19 +67,6 @@ def test_utf8_and_bom():
     assert detect_encoding("\ufeffid".encode("utf-8")) == "utf-8-sig"
     # A sample cut inside a multi-byte character is still UTF-8.
     assert detect_encoding("Straße".encode("utf-8")[:5], truncated=True) == "utf-8"
-
-
-def test_px_encoding_follows_codepage_and_charset():
-    assert px_encoding(b'CHARSET="ANSI";\nCODEPAGE="iso-8859-15";\nTITLE="Bev\xf6lkerung";') == "iso8859-15"
-    assert px_encoding(b'CHARSET="ANSI";\nTITLE="Bev\xf6lkerung";') == "cp1252"
-    assert px_encoding('CHARSET="ANSI";\nTITLE="Bevölkerung";'.encode("utf-8")) == "utf-8"
-
-
-def test_px_metadata_keys():
-    for key in ("_CHARSET", "_AXIS-VERSION", "_SUBJECT-AREA", "_TITLE", "_TITLE[en]", "_NOTE(\"x\")"):
-        assert is_px_metadata_key(key)
-    for key in ("Gemeinde", "VALUE", "_id", "_", "__x", 5):
-        assert not is_px_metadata_key(key)
 
 
 # ---------------------------------------------------------------- CSV layout (#85, #87)
@@ -214,8 +199,7 @@ def test_wfs_gml_members(tmp_path):
         + "</wfs:FeatureCollection>\n"
     )
     fields = _fields(_scan(path))
-    # iterabledata 1.1 needs the XML fallback (flat fields); later releases read the
-    # members as GeoJSON-like features (properties.<name>).
+    # iterabledata reads the members as GeoJSON-like features (properties.<name>).
     email = next(k for k in fields if k.split(".")[-1] == "email")
     assert any(k.split(".")[-1] == "name" for k in fields) and "email" in fields[email]
 
