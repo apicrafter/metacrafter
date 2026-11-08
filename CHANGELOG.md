@@ -40,6 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Data/value`, the `SchemaData/SimpleData` elements of GDAL / ogr2ogr exports and the name /
   value table that ArcGIS puts in the description become `properties.<name>` (`<Nulo>` /
   `<Null>` cells are empty). The geometry and the other fields are as before.
+- **XML tables with a header element** (#101): when each record repeats one element
+  (`<body><column>市長選挙</column>…</body>`) and an earlier sibling lists as many distinct
+  names in the same element (`<header><column>選挙名</column>…</header>`), the values are
+  named after the header (`選挙名`, `執行年月日`, …) instead of one field `column`. This works
+  with a found or a given `--tagname`.
 
 ## [2.1.0] - 2026-11-08
 

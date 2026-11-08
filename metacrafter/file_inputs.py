@@ -16,7 +16,9 @@ zipped Shapefiles and sheet options themselves, #90):
 - SPSS files need pandas in iterabledata's reader; they are read here with pyreadstat's
   dict output, and their variable and value labels go to the report (#97);
 - KML keeps attributes in ``SchemaData/SimpleData`` (GDAL, ogr2ogr) or in the HTML table of
-  the description (ArcGIS), which iterabledata's reader drops (#100).
+  the description (ArcGIS), which iterabledata's reader drops (#100);
+- XML tables list the column names in a header element and each record as a flat list of
+  identically named elements (``<header><column>Name</column>`` ... ``<body><column>``) (#101).
 
 :func:`prepare_input` reads the start of the file (decompressed) and returns a
 :class:`InputPlan`: iterabledata arguments plus the clean-up of the records. It only adds
@@ -40,7 +42,7 @@ import zipfile
 from collections import Counter
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
-from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -118,12 +120,15 @@ class InputPlan:
     # What the file says about its fields, by field name (SPSS labels), for the report.
     field_info: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     kind: str = "json"  # reader id reported for ``records`` read here
+    transform: Optional[Callable[[Any], Any]] = None  # applied to every record
 
     def apply(self, records: Iterable[Any]) -> Iterator[Any]:
-        """Skip the title and header lines read as records."""
+        """Skip the title and header lines read as records; reshape the records."""
         iterator = iter(records)
         if self.skip_records:
             iterator = itertools.islice(iterator, self.skip_records, None)
+        if self.transform is not None:
+            iterator = map(self.transform, iterator)
         return iterator
 
 
@@ -572,6 +577,8 @@ def prepare_input(filename: str, iterableargs: dict) -> InputPlan:
         _plan_spss(filename, plan)
     elif ext in ("kml", "kmz") and codec is None:
         _plan_kml(filename, ext, plan)
+    elif ext == "xml" and args.get("tagname"):
+        _plan_xml(filename, codec, plan)
     for note in plan.notes:
         logger.info("%s: %s", filename, note)
     return plan
@@ -931,16 +938,18 @@ def _kml_stream(filename: str, ext: str):
     return stream
 
 
-def _iterparse(stream):
+def _iterparse(stream, events: Tuple[str, ...] = ("end",)):
+    """Element events of an XML stream: lxml without entities, DTDs or network access (it
+    reads every declared encoding, Shift_JIS included), else the standard library."""
     try:
         from lxml import etree
 
-        return etree.iterparse(stream, events=("end",), resolve_entities=False, no_network=True,
+        return etree.iterparse(stream, events=events, resolve_entities=False, no_network=True,
                                load_dtd=False, recover=True, huge_tree=False)
     except ImportError:  # lxml is in the formats extra
         from xml.etree import ElementTree
 
-        return ElementTree.iterparse(stream, events=("end",))
+        return ElementTree.iterparse(stream, events=events)
 
 
 def kml_records(filename: str, ext: str = "kml") -> Iterator[dict]:
@@ -975,3 +984,61 @@ def _prepend(first: Any, rest: Iterator[Any]) -> Iterator[Any]:
     """``first`` and then ``rest``; closing it closes ``rest`` (and its file)."""
     yield first
     yield from rest
+
+
+# ---------------------------------------------------------------- XML column lists
+def xml_header_names(data: bytes, tagname: str) -> Optional[Tuple[str, List[str]]]:
+    """(child tag, column names) when the ``tagname`` records repeat one child element and an
+    earlier sibling lists as many distinct names in the same element:
+    ``<header><column>選挙名</column>...</header><body><column>市長選挙</column>...</body>``."""
+    tagname = _local(tagname)
+    depth = 0
+    headers: Dict[int, Tuple[str, List[str]]] = {}  # depth -> the last header-like element there
+    try:
+        for event, element in _iterparse(io.BytesIO(data), ("start", "end")):
+            if event == "start":
+                depth += 1
+                continue
+            depth -= 1
+            children = list(element)
+            tags = {_local(c.tag) for c in children}
+            if _local(element.tag) == tagname:
+                if len(tags) != 1 or len(children) < 2:
+                    return None
+                header = headers.get(depth)
+                if header and header[0] == next(iter(tags)) and len(header[1]) == len(children):
+                    return header
+                return None
+            if len(tags) == 1 and len(children) >= 2 and not any(len(c) for c in children):
+                names = [" ".join((c.text or "").split()) for c in children]
+                if all(names) and len(set(names)) == len(names):
+                    headers[depth] = (next(iter(tags)), names)
+    except Exception:  # noqa: BLE001 - a sample that ends inside the document, or broken XML
+        return None
+    return None
+
+
+def _column_record(child: str, names: List[str]) -> Callable[[Any], Any]:
+    def pair(record: Any) -> Any:
+        if not isinstance(record, dict) or child not in record:
+            return record
+        values = record[child] if isinstance(record[child], list) else [record[child]]
+        out = {k: v for k, v in record.items() if k != child}
+        out.update(zip(names, values))
+        if len(values) > len(names):
+            out[child] = values[len(names):]
+        return out
+
+    return pair
+
+
+def _plan_xml(filename: str, codec: Optional[str], plan: InputPlan) -> None:
+    sample = read_bytes(filename, codec)
+    if not sample:
+        return
+    found = xml_header_names(sample, str(plan.iterableargs["tagname"]))
+    if found is None:
+        return
+    child, names = found
+    plan.transform = _column_record(child, names)
+    plan.notes.append(f"<{child}> values named after the {len(names)} names of the header element")

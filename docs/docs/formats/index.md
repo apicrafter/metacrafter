@@ -20,7 +20,7 @@ is gzip-compressed CSV).
 | Delimited text | `.txt` | Read as CSV when the lines have a consistent delimiter (GTFS `stops.txt`), else as plain text |
 | JSON | `.json` | Array of objects, or an object that holds them: the longest list of objects (OData `value`, JSON-LD `@graph`, `result.records`) gives the records, or column names next to rows as lists (`columns` + `data`); `--tagname` names the key |
 | JSON Lines | `.jsonl`, `.ndjson` | Newline-delimited JSON |
-| XML | `.xml` | `--tagname` selects the record element |
+| XML | `.xml` | `--tagname` selects the record element. Records that repeat one element (`<body><column>…</column><column>…</column></body>`) get the names listed by a sibling header element (`<header><column>選挙名</column>…</header>`) |
 | PC-Axis | `.px` | Read in the encoding of `CODEPAGE` / `CHARSET`; the metadata keywords are not reported as fields |
 
 ## Geodata formats

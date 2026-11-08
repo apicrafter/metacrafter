@@ -278,3 +278,36 @@ def test_kmz_and_kml_without_namespace(tmp_path):
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr("doc.kml", plain)
     assert {"properties.COD_DIS", "properties.NOMBRE"} <= set(_fields(_scan(path)))
+
+
+# ---------------------------------------------------------------- #101 XML header and column lists
+def _column_xml(encoding="UTF-8", records=4):
+    names = ["選挙名", "執行年月日", "当日有権者数計", "投票率（％）計"]
+    rows = [["市長選挙", f"平成{9 + r}. 4.27", f"{45693 + r}", f"{78.47 - r:.2f}"] for r in range(records)]
+    body = "".join("<body>" + "".join(f"<column>{v}</column>" for v in row) + "</body>" for row in rows)
+    header = "<header>" + "".join(f"<column>{n}</column>" for n in names) + "</header>"
+    return f'<?xml version="1.0" encoding="{encoding}"?>\n<contents>{header}{body}</contents>\n', names
+
+
+def test_xml_column_lists_take_the_header_names(tmp_path):
+    text, names = _column_xml()
+    path = tmp_path / "turnout.xml"
+    path.write_text(text, encoding="utf-8")
+    assert list(_fields(_scan(path))) == names
+    # With the record tag given, too; Shift_JIS files are read in their encoding.
+    sjis = tmp_path / "turnout_sjis.xml"
+    sjis.write_bytes(_column_xml("Shift_JIS")[0].encode("shift_jis"))
+    assert list(_fields(_scan(sjis, tagname="body"))) == names
+
+
+def test_xml_records_with_different_children_stay_as_they_are(tmp_path):
+    from metacrafter.file_inputs import xml_header_names
+
+    data = ("<root><header><column>a</column><column>b</column></header>"
+            "<item><name>x</name><email>x@example.com</email></item>"
+            "<item><name>y</name><email>y@example.com</email></item></root>").encode()
+    assert xml_header_names(data, "item") is None
+    # A header with another number of names is not this table's header.
+    data = ("<root><header><column>a</column><column>b</column></header>"
+            "<body><column>1</column><column>2</column><column>3</column></body></root>").encode()
+    assert xml_header_names(data, "body") is None
