@@ -46,8 +46,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Default rule pack is metacrafter-rules v0.0.10**, and the registry snapshot is 1.3.0 at
-  4baa8ff (adds the `okfsname` and `okoguname` records). Fixes from a scan of 19 real exports
+- **Default rule pack is metacrafter-rules v0.0.11**, and the registry snapshot is 1.3.0 at
+  4dceeb8. From the multilingual metacrafter-testdata scan (128 files, 19 languages),
+  apicrafter/metacrafter-rules#52 and apicrafter/metacrafter-registry#152:
+  - New field names: coordinates (`緯度`/`経度`, `위도`/`경도`, `latitudine`, `easting`/
+    `northing` incl. UTM `Rechtswert`/`Hochwert`), postal codes (`PLZ`, `PSČ`, `Code_postal`,
+    `Eircode`, `Supplier Post Code`), money amounts (`amount`, `importe`, `monto`, `montant`,
+    `Betrag`, `金額`), region codes (AGS, ARS, GKZ, BFS-Nr, kód obce, 全国地方公共団体コード,
+    CODGEO, NUTS levels, GSS by ONS/GIAS names), streets and address lines; Finnish Y-tunnus
+    and Chilean RUT by value with check digits.
+  - Value rules of the Indonesian, Swiss, Korean and Vietnamese passports, the Spanish CIF
+    (now with its control character), the Russian KPP, the Saudi Iqama and German vehicle
+    plates apply only to fields named for them: they labelled GB GSS codes, German regional
+    keys, Swedish organization numbers and charging point ids.
+  - Registry: `postcode` is an alias of the universal `postindex` (it was the Chinese postal
+    code), and `taxid`, `province`, `state` and `district` are country-neutral, so Italian
+    `cap` or US `STATE` columns are no longer reported as Chinese or Indian types.
+  - On metacrafter-testdata, 781 fields get a label instead of 710 and 387 expected fields
+    instead of 322 (measured with the #89 changes). Registry-example thresholds only rise
+    (three new rules at 1.0); the benchmark results are unchanged.
+- **metacrafter-rules v0.0.10** (pinned on 2026-11-08, with the registry snapshot 1.3.0 at
+  4baa8ff, which adds the `okfsname` and `okoguname` records). Fixes from a scan of 19 real exports
   (metacrafter-testdata), apicrafter/metacrafter-rules#50:
   - Every field rule sets a priority (#76): 238 field rules that scored 36 on a name-only
     match now report at 60 (`okogu`, `okfs`, `tofkcode`, `inn`, `телефон`, `адрес`, `annee`);

@@ -12,4 +12,4 @@ metacrafter-rules:
 metacrafter-registry:
   base_url: https://registry.apicrafter.io
   version: 1.3.0
-  git_sha: 4baa8fff0b4387348714505f415dc9b7f855991c
+  git_sha: 4dceeb820c1027b2db1c8745b7ac9a3415e90d19

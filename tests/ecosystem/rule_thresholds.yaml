@@ -38,6 +38,7 @@ min_recall:
   chibanvalue: 0.0
   chpassportvalue: 1.0
   chuidvalue: 0.0
+  clrutvalue: 1.0
   contractawardvalue: 1.0
   crc32: 1.0
   currencycodebyvalue: 1.0
@@ -93,6 +94,7 @@ min_recall:
   fileextensionbyvalue: 1.0
   filenamebyvalue: 1.0
   filesizebyvalue: 0.0
+  fiytunnusvalue: 1.0
   fqdnbyvalidators: 1.0
   frccamvalue: 0.0
   fricd10value: 1.0
@@ -123,6 +125,7 @@ min_recall:
   idnpwpvalue: 0.0
   idpassportvalue: 1.0
   idprovincevalue: 1.0
+  ieeircodevalue: 1.0
   ifscvalue: 1.0
   imeivalue: 0.6667
   imeivaluewithdashes: 0.3333
