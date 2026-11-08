@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`scan file --sheet NAME|NUMBER|all`** (#102) for XLSX, XLS and ODS workbooks. `all` scans
+  every sheet that holds a table (a header and three rows below it; every non-empty sheet of
+  an ODS file) as a table of its own and writes an aggregate report, one source per sheet
+  (`source` is the file, `table` the sheet name), as `scan sql` does for tables; Markdown
+  headings name the sheet. A file that is not a workbook is one table for `--sheet all`.
+  Without `--sheet` the scan is unchanged: one report for the first sheet that holds a table
+  (the log notes that `--sheet all` reads the others). `CrafterCmd.scan_file(sheet=...)` takes
+  the same values. A sheet given by name now gets the header search too.
+
+### Fixed
+
+- **Dates are `date`, not `datetime`** (apicrafter/metacrafter-rules#55): the qddate patterns
+  are dates, so a field of `01.01.1974`, `2020/8/5` or `26/07/2005` is labelled `date` (with
+  the registry pattern, as before); it is `datetime` only when the values carry a time after
+  the date (`2016-01-01 00:00:00`). A field-name `date` match is dropped when a value rule finds
+  datetimes (`created_date` with `2021-11-12T08:08:16+00:00`, WordPress `date`).
+- **Values veto contradicted labels** (apicrafter/metacrafter-rules#56): a `boolean` value
+  match needs a column of at most three distinct values (`да`/`не`/`кран`/`бутон` is a
+  category), and a field-name `name` match needs a value that is not a number (a KML
+  `name` holding district numbers). A country-specific registry detector of a format with
+  letters does not report a column of digits alone without field-name or country evidence:
+  most Italian ISTAT municipality codes pass the AIC check (`it_aic`) and the Kyiv budget code
+  26000000000 the German driving licence check (`dedriverlic`). Detectors of all-digit formats
+  (Russian INN) keep reporting by checksum.
+- **`_id` is a field** (#96): file scans report the `_id` field of MongoDB exports (JSONL,
+  JSON) and CKAN DataStore dumps (CSV) like any other field (`mongodbid` for ObjectIds);
+  `dict_generator` and the statistics no longer drop it. `scan mongodb` still leaves the
+  collection ids out.
+- **Field names are stripped** (#103): leading and trailing spaces of header cells (GTFS
+  `wheelchair_boarding   `, sheet headers ending in a space) are removed from the reported
+  field name, so name rules match it; inner runs of spaces stay. The field entry keeps the
+  header as it was in `name_in_source`. A name that would become empty or equal to another
+  field keeps its spaces.
+- **Big5 files in cp950** (#99): encoding detection tries cp950 instead of strict big5. Taiwanese
+  files use the cp950 extensions (`碁`, 0xF9D6), on which big5 fails, and such a file was
+  decoded as cp1250 (`łc˝ć·~` instead of `販賣業`).
+- **Headers below metadata rows** (#98), in CSV, TSV, XLSX and XLS:
+  - exports of Mexico's Plataforma Nacional de Transparencia (SIPOT): the header is the line
+    after `Tabla Campos`, below the format id, title, type code and field id rows;
+  - headings over the row label columns only (`Batken oblast` above `Items;1990;1991`) are
+    section titles: they are skipped, not joined into the column names; group headings over
+    value columns are still joined;
+  - a title with a unit note (`（２）年齢別人口 … 単位：人`) is a title row, also when it is
+    repeated over the blocks of a wide sheet, and a letterhead or title row right above the
+    header is no longer joined into the column names;
+  - XLS numbers are read as the sheet shows them for the header search and the column names
+    (`1990`, not `1990.0`).
+- **SPSS files** (#97): `.sav` and `.zsav` files are read with pyreadstat's dict output in
+  chunks of 1000 rows, so they need neither pandas nor polars (iterabledata's reader calls
+  `read_sav` with pandas output). `pyreadstat>=1.3.1` is in the `formats` and `all` extras
+  (`all` also gets `pyshp` and `odfpy`, which were only in `formats`). Each field entry
+  carries the variable label (`label`) and the value labels (`value_labels`, e.g.
+  `{"1": "Mees", "2": "Naine"}`); system-missing values are empty.
+- **KML attributes** (#100): KML and KMZ files are read one placemark at a time; besides
+  `Data/value`, the `SchemaData/SimpleData` elements of GDAL / ogr2ogr exports and the name /
+  value table that ArcGIS puts in the description become `properties.<name>` (`<Nulo>` /
+  `<Null>` cells are empty). The geometry and the other fields are as before.
+- **XML tables with a header element** (#101): when each record repeats one element
+  (`<body><column>市長選挙</column>…</body>`) and an earlier sibling lists as many distinct
+  names in the same element (`<header><column>選挙名</column>…</header>`), the values are
+  named after the header (`選挙名`, `執行年月日`, …) instead of one field `column`. This works
+  with a found or a given `--tagname`.
+
 ## [2.1.0] - 2026-11-08
 
 Open data files that iterabledata 1.1 misread are scanned (encodings, header offsets, JSON

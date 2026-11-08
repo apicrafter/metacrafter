@@ -36,10 +36,12 @@ class TestDictGenerator:
         assert len(result) == 1
         assert ["key1", "item", "value"] in result
 
-    def test_dict_ignores_id(self):
-        data = {"_id": "123", "key1": "value1"}
+    def test_dict_keeps_id(self):
+        # MongoDB exports and CKAN DataStore dumps carry their record id in _id (#96).
+        data = {"_id": "123", "key1": "value1", "nested": {"_id": "456"}}
         result = list(dict_generator(data))
-        assert ["_id", "123"] not in result
+        assert ["_id", "123"] in result
+        assert ["nested", "_id", "456"] in result
         assert ["key1", "value1"] in result
 
     def test_empty_dict(self):

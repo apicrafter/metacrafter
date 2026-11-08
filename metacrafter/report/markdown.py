@@ -9,7 +9,10 @@ def _escape(value: Any) -> str:
 
 
 def _source_md(report: Dict[str, Any], include_samples: bool) -> List[str]:
-    lines = [f"## {_escape(report.get('source') or report.get('table') or 'data')}", ""]
+    heading = report.get("source") or report.get("table") or "data"
+    if report.get("table") and report.get("table") != heading:
+        heading = f"{heading}: {report['table']}"  # a sheet of a workbook (--sheet all)
+    lines = [f"## {_escape(heading)}", ""]
     if not report.get("complete", True):
         lines += ["**Incomplete scan.** Errors: " + _escape(report.get("errors")), ""]
     lines += ["| Field | Datatype | Confidence | PII | Registry |", "|---|---|---|---|---|"]

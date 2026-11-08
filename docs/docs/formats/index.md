@@ -20,7 +20,7 @@ is gzip-compressed CSV).
 | Delimited text | `.txt` | Read as CSV when the lines have a consistent delimiter (GTFS `stops.txt`), else as plain text |
 | JSON | `.json` | Array of objects, or an object that holds them: the longest list of objects (OData `value`, JSON-LD `@graph`, `result.records`) gives the records, or column names next to rows as lists (`columns` + `data`); `--tagname` names the key |
 | JSON Lines | `.jsonl`, `.ndjson` | Newline-delimited JSON |
-| XML | `.xml` | `--tagname` selects the record element |
+| XML | `.xml` | `--tagname` selects the record element. Records that repeat one element (`<body><column>…</column><column>…</column></body>`) get the names listed by a sibling header element (`<header><column>選挙名</column>…</header>`) |
 | PC-Axis | `.px` | Read in the encoding of `CODEPAGE` / `CHARSET`; the metadata keywords are not reported as fields |
 
 ## Geodata formats
@@ -28,7 +28,7 @@ is gzip-compressed CSV).
 | Format | Extensions | Notes |
 |--------|------------|-------|
 | GeoJSON, TopoJSON | `.geojson`, `.topojson` | Feature properties are scanned as `properties.<name>` |
-| KML | `.kml` | Placemarks |
+| KML | `.kml`, `.kmz` | Placemarks; `Data`, `SchemaData/SimpleData` and the attribute table of an ArcGIS description become `properties.<name>` |
 | GML | `.gml` | GML and WFS feature collections (`gml:featureMember`, `wfs:member`) |
 | Shapefile | `.shp.zip` | Zipped Shapefile; needs `pyshp` (in the `formats` extra) |
 
@@ -40,9 +40,10 @@ is gzip-compressed CSV).
 | Parquet | `.parquet` |
 | Avro | `.avro` |
 | ORC | `.orc` |
-| Excel | `.xls`, `.xlsx` (the first sheet that holds a table; title rows and multi-row headers are handled) |
+| Excel | `.xls`, `.xlsx` (the first sheet that holds a table, or `--sheet NAME`, `--sheet 2`, `--sheet all` for one table per sheet; title rows and multi-row headers are handled) |
 | OpenDocument spreadsheet | `.ods` (needs `odfpy`, in the `formats` extra) |
 | Pickle | `.pickle`, `.pkl` |
+| SPSS | `.sav`, `.zsav` (needs `pyreadstat` 1.3.1 or later, in the `formats` extra; no pandas). Variable labels and value labels are reported with each field (`label`, `value_labels`) |
 
 ## Compression codecs
 

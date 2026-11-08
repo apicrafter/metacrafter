@@ -12,7 +12,13 @@ zipped Shapefiles and sheet options themselves, #90):
   API wrappers) (#83);
 - WFS GML wraps features in ``wfs:member`` or a namespaced ``featureMember`` (#84);
 - GTFS and other delimited tables are named ``.txt`` (#85);
-- CSV files start with an Excel ``sep=;`` line or with title rows above the header (#87).
+- CSV files start with an Excel ``sep=;`` line or with title rows above the header (#87);
+- SPSS files need pandas in iterabledata's reader; they are read here with pyreadstat's
+  dict output, and their variable and value labels go to the report (#97);
+- KML keeps attributes in ``SchemaData/SimpleData`` (GDAL, ogr2ogr) or in the HTML table of
+  the description (ArcGIS), which iterabledata's reader drops (#100);
+- XML tables list the column names in a header element and each record as a flat list of
+  identically named elements (``<header><column>Name</column>`` ... ``<body><column>``) (#101).
 
 :func:`prepare_input` reads the start of the file (decompressed) and returns a
 :class:`InputPlan`: iterabledata arguments plus the clean-up of the records. It only adds
@@ -35,7 +41,8 @@ import re
 import zipfile
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Iterator, List, Optional, Tuple
+from html.parser import HTMLParser
+from typing import Any, Callable, Dict, Iterable, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -50,10 +57,12 @@ CODEC_EXTENSIONS = {"gz", "bz2", "xz", "zst", "zip", "lz4", "br"}
 TABLE_EXTENSIONS = {"csv", "tsv", "psv", "tab", "txt"}
 DELIMITERS = (",", ";", "\t", "|")
 # Code pages tried for text that is not UTF-8. Mac and DOS code pages are left out on
-# purpose: detectors pick them for short Western samples ("Straße" -> "Straşe").
+# purpose: detectors pick them for short Western samples ("Straße" -> "Straşe"). Big5 text is
+# tried as cp950, the Windows superset that Taiwanese files are written in: strict big5
+# fails on its extensions (0xF9D6-0xF9FE) and the file came out in a Latin code page (#99).
 CANDIDATE_ENCODINGS = (
     "cp1252", "cp1250", "cp1251", "cp1253", "cp1254", "cp1255", "cp1256", "cp1257",
-    "cp932", "euc_jp", "cp949", "big5", "gb18030", "koi8_r",
+    "cp932", "euc_jp", "cp949", "cp950", "gb18030", "koi8_r",
 )
 _LATIN_NAMES = {"cp1252", "cp1250", "cp1254", "cp1257", "latin_1", "iso8859_1", "iso8859_2", "iso8859_4",
                 "iso8859_9", "iso8859_13", "iso8859_15"}
@@ -63,6 +72,13 @@ _PX_CHARSET = re.compile(rb'CHARSET\s*=\s*"([\w\-]+)"', re.IGNORECASE)
 _NUMBER = re.compile(r"^[\s+\-]?[\d\s.,]+%?$")
 _YEAR = re.compile(r"^(?:1[89]|20)\d{2}\s*[*¹²³)]*$")
 _DATE = re.compile(r"^(?:\d{1,2}[./]\d{1,2}[./]\d{4}|\d{4}-\d{2}-\d{2})$")
+# A unit note next to a table title: "単位：人", "(Unit: persons)", "Einheit: 1000".
+_UNIT_NOTE = re.compile(r"^[\s(（]*(?:単位|单位|unit|units|einheit|unité|unidad|unidade|unità|единица|одиниця)\s*[:：]",
+                        re.IGNORECASE)
+# A line that announces the header on the next line: the field list of exports of Mexico's
+# Plataforma Nacional de Transparencia (SIPOT) follows a "Tabla Campos" line, after the format
+# id, title, type code and field id rows (#98).
+HEADER_MARKERS = {"tabla campos"}
 
 
 def _alphabet(letters: str) -> frozenset:
@@ -101,12 +117,18 @@ class InputPlan:
     skip_records: int = 0
     records: Optional[list] = None
     notes: List[str] = field(default_factory=list)
+    # What the file says about its fields, by field name (SPSS labels), for the report.
+    field_info: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    kind: str = "json"  # reader id reported for ``records`` read here
+    transform: Optional[Callable[[Any], Any]] = None  # applied to every record
 
     def apply(self, records: Iterable[Any]) -> Iterator[Any]:
-        """Skip the title and header lines read as records."""
+        """Skip the title and header lines read as records; reshape the records."""
         iterator = iter(records)
         if self.skip_records:
             iterator = itertools.islice(iterator, self.skip_records, None)
+        if self.transform is not None:
+            iterator = map(self.transform, iterator)
         return iterator
 
 
@@ -328,17 +350,46 @@ def _filled(row: List[str]) -> int:
 
 def _is_title_row(row: List[str], columns: int = 0) -> bool:
     """Blank, one filled cell ("Tabelle 1: ..."), a note like "Quelle:;Statistisches Amt",
-    or two cells far narrower than the table (a letterhead: address and date)."""
+    a title with its unit ("(2) 年齢別人口;単位：人"), or two cells far narrower than the
+    table (a letterhead: address and date)."""
     filled = [str(c).strip() for c in row if str(c).strip()]
     if len(filled) <= 1:
         return True
-    return len(filled) == 2 and (filled[0].endswith(":") or (columns >= 8 and _width(row) <= columns // 4))
+    if any(_UNIT_NOTE.match(c) for c in filled) and (len(filled) == 2 or len(filled) <= columns // 4):
+        return True  # titles with their unit, repeated over the blocks of a wide sheet
+    return len(filled) == 2 and (filled[0].endswith((":", "：")) or (columns >= 8 and _width(row) <= columns // 4))
 
 
-def _is_band_row(row: List[str]) -> bool:
+def _is_band_row(row: List[str], columns: int = 0) -> bool:
     """An upper header row: two or more label cells and no numbers (merged group headings)."""
     filled = [str(c).strip() for c in row if str(c).strip()]
-    return len(filled) >= 2 and all(_is_label(c) for c in filled) and not _is_title_row(row)
+    return len(filled) >= 2 and all(_is_label(c) for c in filled) and not _is_title_row(row, columns)
+
+
+def _text_columns(body: List[List[str]], columns: int) -> set:
+    """Columns whose filled body cells are mostly text (the row labels of a statistics table)."""
+    out = set()
+    for i in range(columns):
+        cells = [str(r[i]).strip() for r in body if i < len(r) and str(r[i]).strip()]
+        if cells and sum(1 for c in cells if not _NUMBER.match(c)) > len(cells) / 2:
+            out.add(i)
+    return out
+
+
+def _is_section_row(row: List[str], text_columns: set) -> bool:
+    """A heading over the row labels only ("Batken oblast" above "Items;1990;1991"): a section
+    or table title, not a group heading, which spans value columns."""
+    cells = [i for i, c in enumerate(row) if str(c).strip()]
+    return bool(cells) and bool(text_columns) and all(i in text_columns for i in cells)
+
+
+def _marker_header(rows: List[List[str]]) -> Optional[int]:
+    """Index of the row after a header marker line (SIPOT exports: "Tabla Campos")."""
+    for index, row in enumerate(rows[:MAX_HEADER_OFFSET]):
+        filled = [str(c).strip() for c in row if str(c).strip()]
+        if len(filled) == 1 and filled[0].casefold() in HEADER_MARKERS and index + 1 < len(rows):
+            return index + 1
+    return None
 
 
 def _combine_header(band: List[List[str]], header: List[str], columns: int) -> List[str]:
@@ -366,20 +417,26 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
     """(header row index, body column count, combined names or None) of the first table rows.
 
     The header is the first row with the body's column count (the most common width), if
-    every row above it is a title or note row, or an upper header row (merged group
-    headings) directly above it; then the names join the upper rows and the header row.
-    Otherwise the header is the first row.
+    every row above it is a title or note row, a section heading over the row label columns
+    ("Batken oblast"), or an upper header row (merged group headings) directly above it;
+    then the names join the upper rows and the header row. A header marker line ("Tabla
+    Campos") puts the header on the next row. Otherwise the header is the first row.
     """
     widths = Counter(w for w in (_width(r) for r in rows) if w > 1)
     if not widths:
         return 0, 0, None
     columns = max(widths.items(), key=lambda kv: (kv[1], kv[0]))[0]
+    marked = _marker_header(rows)
+    if marked is not None:
+        return marked, columns, None
     for index, row in enumerate(rows[: MAX_HEADER_OFFSET + 1]):
         following = next((r for r in rows[index + 1:] if _width(r) > 1), None)
         if not _looks_like_header(row, columns, following):
             continue
+        # Headings over the row label columns only are section titles (#98).
+        text_columns = _text_columns([r for r in rows[index + 1:] if _width(r) > 1], columns)
         top = index
-        while top > 0 and _is_band_row(rows[top - 1]):
+        while top > 0 and _is_band_row(rows[top - 1], columns) and not _is_section_row(rows[top - 1], text_columns):
             top -= 1
         # Header rows below it (GENESIS: "Stichtag" / "31.12.2025" / "Insgesamt"): label
         # rows with fewer filled cells than the first data row continue the header.
@@ -388,7 +445,7 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
             if data is None or _filled(rows[index + 1]) >= _filled(data):
                 break
             index += 1
-        if all(_is_title_row(r, columns) for r in rows[:top]):
+        if all(_is_title_row(r, columns) or _is_section_row(r, text_columns) for r in rows[:top]):
             if top < index:
                 return index, columns, _combine_header(rows[top:index], rows[index], columns)
             return index, columns, None
@@ -517,6 +574,12 @@ def prepare_input(filename: str, iterableargs: dict) -> InputPlan:
         _plan_json(filename, codec, plan)
     elif ext in ("xlsx", "xls") and codec is None and "start_line" not in args and "keys" not in args:
         _plan_sheet(filename, ext, plan)
+    elif ext in ("sav", "zsav") and codec is None:
+        _plan_spss(filename, plan)
+    elif ext in ("kml", "kmz") and codec is None:
+        _plan_kml(filename, ext, plan)
+    elif ext == "xml" and args.get("tagname"):
+        _plan_xml(filename, codec, plan)
     for note in plan.notes:
         logger.info("%s: %s", filename, note)
     return plan
@@ -572,7 +635,7 @@ def sheet_rows(filename: str, ext: str, page: int = 0, limit: int = SAMPLE_RECOR
         book = xlrd.open_workbook(filename, on_demand=True)
         try:
             sheet = book.sheet_by_index(page)
-            return [[str(v) for v in sheet.row_values(i)] for i in range(min(limit, sheet.nrows))]
+            return [[_xls_cell(v) for v in sheet.row_values(i)] for i in range(min(limit, sheet.nrows))]
         finally:
             book.release_resources()
     except Exception as exc:  # noqa: BLE001 - best effort; iterabledata reports real errors
@@ -580,9 +643,22 @@ def sheet_rows(filename: str, ext: str, page: int = 0, limit: int = SAMPLE_RECOR
         return None
 
 
+def _xls_cell(value: Any) -> str:
+    """Cell text as the sheet shows it: xlrd gives every number as a float (1990.0)."""
+    if isinstance(value, float) and value.is_integer() and abs(value) < 1e15:
+        return str(int(value))
+    return str(value)
+
+
 def sheet_names(filename: str, ext: str) -> List[str]:
     """Sheet names of a workbook, [] when they cannot be read."""
     try:
+        if ext == "ods":
+            from odf.opendocument import load
+            from odf.table import Table
+
+            tables = load(filename).spreadsheet.getElementsByType(Table)
+            return [t.getAttribute("name") or f"Sheet{i}" for i, t in enumerate(tables)]
         if ext == "xlsx":
             import openpyxl
 
@@ -603,22 +679,67 @@ def sheet_names(filename: str, ext: str) -> List[str]:
         return []
 
 
-def _is_table(rows: List[List[str]], index: int, columns: int) -> bool:
+def _is_table(rows: List[List[str]], index: int, columns: int, min_columns: int = MIN_TABLE_COLUMNS) -> bool:
     """At least three columns and three filled rows below the header."""
     body = [r for r in rows[index + 1:] if _width(r) > 1]
-    return columns >= MIN_TABLE_COLUMNS and len(body) >= MIN_TABLE_ROWS
+    return columns >= min_columns and len(body) >= MIN_TABLE_ROWS
+
+
+SHEET_EXTENSIONS = ("xlsx", "xls", "ods")
+
+
+def select_sheets(filename: str, sheet: Any) -> Optional[List[Tuple[int, str]]]:
+    """(0-based page, sheet name) of the workbook sheets that ``--sheet`` names (#102).
+
+    ``sheet`` is a sheet name, a sheet number counted from 1, or ``all``: every sheet of an
+    XLSX or XLS workbook that holds a table (a header and three rows below it; two columns
+    are enough here), else the first sheet; every sheet of an ODS workbook. ``all`` on a file
+    that is not a workbook gives None (the file is one table); a name or number there, or one
+    that the workbook lacks, raises ``ValueError``.
+    """
+    ext, codec = split_name(filename)
+    value = str(sheet).strip()
+    if ext not in SHEET_EXTENSIONS or codec is not None:
+        if value.lower() == "all":
+            return None
+        raise ValueError(f"--sheet applies to XLSX, XLS and ODS workbooks, not {os.path.basename(filename)}")
+    names = sheet_names(filename, ext)
+    if value.lower() == "all":
+        if ext == "ods":
+            return list(enumerate(names)) or [(0, "1")]
+        found = []
+        for page, name in enumerate(names):
+            rows = sheet_rows(filename, ext, page)
+            if not rows:
+                continue
+            index, columns, _ = header_row(rows)
+            if _is_table(rows, index, columns, min_columns=2):
+                found.append((page, name))
+        return found or [(0, names[0] if names else "1")]
+    if value in names:
+        return [(names.index(value), value)]
+    if value.isdigit() and 1 <= int(value) <= len(names):
+        return [(int(value) - 1, names[int(value) - 1])]
+    listed = ", ".join(names) or "none could be read"
+    raise ValueError(f"No sheet {value!r} in {os.path.basename(filename)}; sheets: {listed}")
 
 
 def _plan_sheet(filename: str, ext: str, plan: InputPlan) -> None:
     given = plan.iterableargs.get("page")
     if given is not None:
         if not str(given).isdigit():
-            return  # a sheet name: leave it to iterabledata
+            names = sheet_names(filename, ext)
+            if given not in names:
+                return  # leave the error to iterabledata
+            given = names.index(given)
         candidates = [int(given)]
     else:
         # Notes, a title page or contents often come first (INSEE, Destatis): scan the
-        # first sheet that holds a table (#89).
-        candidates = list(range(max(1, min(len(sheet_names(filename, ext)), MAX_SHEETS))))
+        # first sheet that holds a table (#89). --sheet all scans every one (#102).
+        count = len(sheet_names(filename, ext))
+        if count > 1:
+            plan.notes.append(f"the workbook has {count} sheets; --sheet all scans every sheet that holds a table")
+        candidates = list(range(max(1, min(count, MAX_SHEETS))))
     page, rows, index, names = candidates[0], None, 0, None
     for candidate in candidates:
         found = sheet_rows(filename, ext, candidate)
@@ -642,6 +763,10 @@ def _plan_sheet(filename: str, ext: str, plan: InputPlan) -> None:
     if names:
         plan.iterableargs["keys"] = _unique(names)
         plan.iterableargs["start_line"] = index + 1
+    elif index and ext == "xls":
+        # The XLS reader names columns after str(cell): years in a header become "1990.0".
+        plan.iterableargs["keys"] = list(rows[index])
+        plan.iterableargs["start_line"] = index + 1
     elif index:
         plan.iterableargs["start_line"] = index
     if index:
@@ -660,3 +785,312 @@ def _plan_json(filename: str, codec: Optional[str], plan: InputPlan) -> None:
         return
     plan.records, where = found
     plan.notes.append(f"records from {where}")
+
+
+# ---------------------------------------------------------------- SPSS
+SPSS_CHUNK_ROWS = 1000
+
+
+def _label_key(value: Any) -> str:
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _spss_value(value: Any) -> Any:
+    return None if isinstance(value, float) and math.isnan(value) else value
+
+
+def _spss_rows(data: dict) -> Iterator[dict]:
+    columns = list(data)
+    for i in range(len(data[columns[0]]) if columns else 0):
+        yield {name: _spss_value(data[name][i]) for name in columns}
+
+
+def spss_records(filename: str, first: Optional[dict] = None, chunk: Optional[int] = None) -> Iterator[dict]:
+    """Records of an SPSS ``.sav`` / ``.zsav`` file, read in chunks of rows.
+
+    pyreadstat's dict output (pyreadstat >= 1.3.1) needs neither pandas nor polars;
+    system-missing values become None. ``first`` is the first chunk, already read.
+    """
+    import pyreadstat
+
+    chunk = chunk or SPSS_CHUNK_ROWS
+    offset = 0
+    data = first
+    while True:
+        if data is None:
+            data, _ = pyreadstat.read_sav(filename, row_offset=offset, row_limit=chunk, output_format="dict")
+        rows = len(next(iter(data.values()), []))
+        yield from _spss_rows(data)
+        if rows < chunk:
+            return
+        offset += rows
+        data = None
+
+
+def _plan_spss(filename: str, plan: InputPlan) -> None:
+    try:
+        import pyreadstat
+    except ImportError:
+        return  # iterabledata names the missing package
+    try:
+        first, meta = pyreadstat.read_sav(filename, row_limit=SPSS_CHUNK_ROWS, output_format="dict")
+    except TypeError:
+        return  # pyreadstat < 1.3.1 has no dict output: iterabledata's reader needs pandas
+    except Exception as exc:  # noqa: BLE001 - iterabledata reports the error
+        logger.debug("pyreadstat could not read %s: %s", filename, exc)
+        return
+    plan.records = spss_records(filename, first)
+    plan.kind = "sav"
+    labels = getattr(meta, "column_names_to_labels", None) or {}
+    value_labels = getattr(meta, "variable_value_labels", None) or {}
+    for name in getattr(meta, "column_names", None) or list(first):
+        info: Dict[str, Any] = {}
+        if labels.get(name):
+            info["label"] = labels[name]
+        if value_labels.get(name):
+            info["value_labels"] = {_label_key(k): v for k, v in value_labels[name].items()}
+        if info:
+            plan.field_info[name] = info
+    plan.notes.append(f"read with pyreadstat ({getattr(meta, 'number_columns', len(first))} variables)")
+
+
+# ---------------------------------------------------------------- KML
+KML_NULLS = {"<Null>", "<Nulo>"}  # ArcGIS writes empty attributes so in description tables
+
+
+def _local(tag: Any) -> str:
+    return tag.rsplit("}", 1)[-1] if isinstance(tag, str) else ""
+
+
+class _CellRows(HTMLParser):
+    """Cell texts of the table rows of an HTML fragment (rows of nested tables included)."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.rows: List[List[str]] = []
+        self._row: Optional[List[str]] = None
+        self._cell: Optional[List[str]] = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "tr":
+            self._row = []
+        elif tag in ("td", "th") and self._row is not None:
+            self._cell = []
+
+    def handle_endtag(self, tag):
+        if tag in ("td", "th") and self._row is not None and self._cell is not None:
+            self._row.append(" ".join("".join(self._cell).split()))
+            self._cell = None
+        elif tag == "tr" and self._row is not None:
+            self.rows.append(self._row)
+            self._row = None
+
+    def handle_data(self, data):
+        if self._cell is not None:
+            self._cell.append(data)
+
+
+def description_attributes(html: str) -> Dict[str, Optional[str]]:
+    """Name / value rows of an attribute table in a KML description (ArcGIS pop-ups:
+    ``<tr><td>COD_DIS</td><td>17</td></tr>``); {} unless two or more such rows."""
+    if "<td" not in html.lower():
+        return {}
+    parser = _CellRows()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception:  # noqa: BLE001 - malformed markup: no attributes
+        return {}
+    pairs = [row for row in parser.rows if len(row) == 2 and row[0]]
+    if len(pairs) < 2:
+        return {}
+    return {name: (None if value in KML_NULLS else value) for name, value in pairs}
+
+
+def _kml_coordinates(element) -> Optional[list]:
+    for child in element.iter():
+        if _local(child.tag) == "coordinates" and child.text:
+            coords = []
+            for item in child.text.split():
+                parts = item.split(",")
+                if len(parts) < 2:
+                    continue
+                try:
+                    coords.append([float(p) for p in parts[:3]])
+                except ValueError:
+                    continue
+            return coords
+    return None
+
+
+def _kml_geometry(placemark) -> Optional[dict]:
+    """The first Point, else LineString, else Polygon of a placemark (as iterabledata has it)."""
+    found: Dict[str, Any] = {}
+    for element in placemark.iter():
+        name = _local(element.tag)
+        if name in ("Point", "LineString", "Polygon"):
+            found.setdefault(name, element)
+    if "Point" in found:
+        coords = _kml_coordinates(found["Point"])
+        return {"type": "Point", "coordinates": coords[0]} if coords else None
+    if "LineString" in found:
+        coords = _kml_coordinates(found["LineString"])
+        return {"type": "LineString", "coordinates": coords} if coords else None
+    if "Polygon" in found:
+        outer = next((e for e in found["Polygon"].iter() if _local(e.tag) == "outerBoundaryIs"), None)
+        coords = _kml_coordinates(outer) if outer is not None else None
+        return {"type": "Polygon", "coordinates": [coords]} if coords else None
+    return None
+
+
+def kml_feature(placemark) -> dict:
+    """GeoJSON-like feature of a KML Placemark, as iterabledata reads it plus the attributes
+    of ``SchemaData/SimpleData`` and of an attribute table in the description."""
+    properties: Dict[str, Any] = {}
+    for element in placemark.iter():
+        tag = _local(element.tag)
+        if tag == "Data" and element.get("name"):
+            value = next((c for c in element if _local(c.tag) == "value"), None)
+            if value is not None:
+                properties[element.get("name")] = value.text or ""
+        elif tag == "SimpleData" and element.get("name"):
+            properties[element.get("name")] = element.text or ""
+    description = None
+    for child in placemark:
+        tag = _local(child.tag)
+        if tag == "name" and child.text:
+            properties["name"] = child.text
+        elif tag == "description" and child.text:
+            description = properties["description"] = child.text
+    if description is not None:
+        for key, value in description_attributes(description).items():
+            properties.setdefault(key, value)
+    return {"type": "Feature", "properties": properties, "geometry": _kml_geometry(placemark)}
+
+
+def _kml_stream(filename: str, ext: str):
+    if ext == "kml":
+        return open(filename, "rb")
+    archive = zipfile.ZipFile(filename)
+    names = [n for n in archive.namelist() if n.lower().endswith(".kml")]
+    if not names:
+        archive.close()
+        raise ValueError("no .kml file in the KMZ archive")
+    name = "doc.kml" if "doc.kml" in names else names[0]
+    stream = archive.open(name)
+    original_close = stream.close
+
+    def close():
+        original_close()
+        archive.close()
+
+    stream.close = close  # type: ignore[method-assign]
+    return stream
+
+
+def _iterparse(stream, events: Tuple[str, ...] = ("end",)):
+    """Element events of an XML stream: lxml without entities, DTDs or network access (it
+    reads every declared encoding, Shift_JIS included), else the standard library."""
+    try:
+        from lxml import etree
+
+        return etree.iterparse(stream, events=events, resolve_entities=False, no_network=True,
+                               load_dtd=False, recover=True, huge_tree=False)
+    except ImportError:  # lxml is in the formats extra
+        from xml.etree import ElementTree
+
+        return ElementTree.iterparse(stream, events=events)
+
+
+def kml_records(filename: str, ext: str = "kml") -> Iterator[dict]:
+    """Features of the placemarks that have a geometry, read one placemark at a time."""
+    with _kml_stream(filename, ext) as stream:
+        try:
+            for _, element in _iterparse(stream):
+                if _local(element.tag) != "Placemark":
+                    continue
+                feature = kml_feature(element)
+                element.clear()
+                if feature["geometry"] is not None:
+                    yield feature
+        except Exception as exc:  # noqa: BLE001 - keep the placemarks read so far
+            logger.warning("%s: KML parsing stopped: %s", filename, exc)
+
+
+def _plan_kml(filename: str, ext: str, plan: InputPlan) -> None:
+    records = kml_records(filename, ext)
+    try:
+        first = next(records)
+    except StopIteration:
+        return  # no placemark read here: let iterabledata try
+    except Exception as exc:  # noqa: BLE001 - iterabledata reports the error
+        logger.debug("Could not read %s as KML: %s", filename, exc)
+        return
+    plan.records = _prepend(first, records)
+    plan.kind = ext
+
+
+def _prepend(first: Any, rest: Iterator[Any]) -> Iterator[Any]:
+    """``first`` and then ``rest``; closing it closes ``rest`` (and its file)."""
+    yield first
+    yield from rest
+
+
+# ---------------------------------------------------------------- XML column lists
+def xml_header_names(data: bytes, tagname: str) -> Optional[Tuple[str, List[str]]]:
+    """(child tag, column names) when the ``tagname`` records repeat one child element and an
+    earlier sibling lists as many distinct names in the same element:
+    ``<header><column>選挙名</column>...</header><body><column>市長選挙</column>...</body>``."""
+    tagname = _local(tagname)
+    depth = 0
+    headers: Dict[int, Tuple[str, List[str]]] = {}  # depth -> the last header-like element there
+    try:
+        for event, element in _iterparse(io.BytesIO(data), ("start", "end")):
+            if event == "start":
+                depth += 1
+                continue
+            depth -= 1
+            children = list(element)
+            tags = {_local(c.tag) for c in children}
+            if _local(element.tag) == tagname:
+                if len(tags) != 1 or len(children) < 2:
+                    return None
+                header = headers.get(depth)
+                if header and header[0] == next(iter(tags)) and len(header[1]) == len(children):
+                    return header
+                return None
+            if len(tags) == 1 and len(children) >= 2 and not any(len(c) for c in children):
+                names = [" ".join((c.text or "").split()) for c in children]
+                if all(names) and len(set(names)) == len(names):
+                    headers[depth] = (next(iter(tags)), names)
+    except Exception:  # noqa: BLE001 - a sample that ends inside the document, or broken XML
+        return None
+    return None
+
+
+def _column_record(child: str, names: List[str]) -> Callable[[Any], Any]:
+    def pair(record: Any) -> Any:
+        if not isinstance(record, dict) or child not in record:
+            return record
+        values = record[child] if isinstance(record[child], list) else [record[child]]
+        out = {k: v for k, v in record.items() if k != child}
+        out.update(zip(names, values))
+        if len(values) > len(names):
+            out[child] = values[len(names):]
+        return out
+
+    return pair
+
+
+def _plan_xml(filename: str, codec: Optional[str], plan: InputPlan) -> None:
+    sample = read_bytes(filename, codec)
+    if not sample:
+        return
+    found = xml_header_names(sample, str(plan.iterableargs["tagname"]))
+    if found is None:
+        return
+    child, names = found
+    plan.transform = _column_record(child, names)
+    plan.notes.append(f"<{child}> values named after the {len(names)} names of the header element")

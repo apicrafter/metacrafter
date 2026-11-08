@@ -11,15 +11,14 @@ def dict_generator(indict, pre=None):
     """Flatten objects; dots/backslashes in literal keys are escaped.
 
     Arrays share a field path; each scalar element is a value. Empty containers
-    contribute None. MongoDB _id is intentionally excluded for compatibility.
+    contribute None. Every key is a field, ``_id`` included (MongoDB exports, CKAN
+    DataStore dumps, #96); ``scan mongodb`` leaves collection ids out itself.
     """
     pre = list(pre or [])
     if not pre and indict == {}:
         return
     if isinstance(indict, dict) and indict:
         for key, value in indict.items():
-            if key == "_id":
-                continue
             segment = str(key).replace("\\", "\\\\").replace(".", "\\.")
             yield from dict_generator(value, pre + [segment])
     elif isinstance(indict, (list, tuple)) and indict:
