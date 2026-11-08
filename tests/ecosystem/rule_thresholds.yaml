@@ -110,6 +110,7 @@ min_recall:
   gtinwithai01value: 0.0
   guid: 0.25
   hscodebyvalue: 1.0
+  httpstatuscodevalue: 1.0
   ibanvalue: 1.0
   icaoairportcodevalue: 1.0
   iccidvalue: 0.6667
@@ -161,7 +162,7 @@ min_recall:
   md5hash: 1.0
   md5hashbyvalue: 1.0
   messageidvalue: 1.0
-  mimetypebyvalue: 0.5
+  mimetypebyvalue: 1.0
   mmsivalue: 1.0
   mongodbidvalue: 1.0
   msisdnvalue: 1.0
@@ -242,7 +243,6 @@ min_recall:
   registry:nl_onderwijsnummer: 1.0
   registry:nl_postcode: 1.0
   registry:okato: 1.0
-  registry:okfs: 1.0
   registry:okpo: 1.0
   registry:oktmo: 1.0
   registry:opencorporatesid: 1.0
@@ -289,6 +289,9 @@ min_recall:
   ruokeiname: 1.0
   ruokeisymbol: 0.0
   ruokeisymbolbyfield: 0.3333
+  ruokfscodevalue: 1.0
+  ruokfsname: 1.0
+  ruokoguname: 0.5
   ruokpdcodepat: 1.0
   ruokpdcodepatimprecise: 1.0
   ruookvedcodepat: 1.0
@@ -326,6 +329,7 @@ min_recall:
   torrentinfohashvalue: 1.0
   ulidvalue: 1.0
   unitcodebyvalue: 1.0
+  unixtimevalue: 1.0
   unlocodevalue: 1.0
   uprnvalue: 0.0
   url: 1.0

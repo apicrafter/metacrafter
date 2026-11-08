@@ -15,8 +15,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Default rule pack is metacrafter-rules v0.0.9.** The registry snapshot stays 1.3.0
-  (9a2898d).
+- **Default rule pack is metacrafter-rules v0.0.10**, and the registry snapshot is 1.3.0 at
+  4baa8ff (adds the `okfsname` and `okoguname` records). Fixes from a scan of 19 real exports
+  (metacrafter-testdata), apicrafter/metacrafter-rules#50:
+  - Every field rule sets a priority (#76): 238 field rules that scored 36 on a name-only
+    match now report at 60 (`okogu`, `okfs`, `tofkcode`, `inn`, `телефон`, `адрес`, `annee`);
+    142 that share names with rules of other keys (country variants of `city`, `postcode`)
+    stay name evidence only.
+  - False positives removed: check digit validators reject numbers of one repeated digit
+    (`0000000000` was ISBN-10, INN, NHS number and NIP at 100), `rusbankaccountvalue` checks
+    the balance account and currency, `fqdn` needs a delegated TLD (`SP.ContentType`,
+    `2-150x150.png`), the `is_`/`has_`/`show_` boolean guards need a word boundary (`iso`).
+  - New or wider detection: `mimetype` by the registry regexp, URLs with `&#038;`, Unix time,
+    gender, HTTP status codes, OKFS and OKOGU codes and names, Russian organization names in
+    upper case and short state body names (`ФНС России`), Russian addresses in any order.
+  - On metacrafter-testdata, 290 fields get a label instead of 251 (with the CSV fixes below).
+    The benchmark results are unchanged; registry-example thresholds only rise.
+- **metacrafter-rules v0.0.9** (pinned on 2026-11-07, with the registry snapshot 1.3.0 at
+  9a2898d).
   - Foreign trade and customs data (apicrafter/metacrafter-rules#39): `incoterms`,
     `hs_code` in HS code fields, ISO 4217 currency codes (`iso4217curcode`) in currency
     fields and UN/ECE Recommendation 20 unit codes in unit fields by value; weights,
