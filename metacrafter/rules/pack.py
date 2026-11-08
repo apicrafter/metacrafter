@@ -38,8 +38,8 @@ logger = logging.getLogger(__name__)
 
 RULES_REPO = "apicrafter/metacrafter-rules"
 #: Release pinned by this version of metacrafter.
-DEFAULT_RELEASE = "v0.0.10"
-DEFAULT_SHA256 = "d799f7de1937a3c43601b494798bbe8abf5b76c7b3aeaea4c7ba710c4fdd281f"
+DEFAULT_RELEASE = "v0.0.11"
+DEFAULT_SHA256 = "33d0f3fc78c5b0c2f9c6bd3a9333d6bdbf27c04f4e7e68cc9c0f558e864339d6"
 MARKER = ".metacrafter-pack.json"
 #: Python package of rule pack validators.
 PYTHON_PACKAGE = "metacrafterext"
