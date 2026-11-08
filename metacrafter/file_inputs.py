@@ -14,7 +14,9 @@ zipped Shapefiles and sheet options themselves, #90):
 - GTFS and other delimited tables are named ``.txt`` (#85);
 - CSV files start with an Excel ``sep=;`` line or with title rows above the header (#87);
 - SPSS files need pandas in iterabledata's reader; they are read here with pyreadstat's
-  dict output, and their variable and value labels go to the report (#97).
+  dict output, and their variable and value labels go to the report (#97);
+- KML keeps attributes in ``SchemaData/SimpleData`` (GDAL, ogr2ogr) or in the HTML table of
+  the description (ArcGIS), which iterabledata's reader drops (#100).
 
 :func:`prepare_input` reads the start of the file (decompressed) and returns a
 :class:`InputPlan`: iterabledata arguments plus the clean-up of the records. It only adds
@@ -37,6 +39,7 @@ import re
 import zipfile
 from collections import Counter
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -567,6 +570,8 @@ def prepare_input(filename: str, iterableargs: dict) -> InputPlan:
         _plan_sheet(filename, ext, plan)
     elif ext in ("sav", "zsav") and codec is None:
         _plan_spss(filename, plan)
+    elif ext in ("kml", "kmz") and codec is None:
+        _plan_kml(filename, ext, plan)
     for note in plan.notes:
         logger.info("%s: %s", filename, note)
     return plan
@@ -790,3 +795,183 @@ def _plan_spss(filename: str, plan: InputPlan) -> None:
         if info:
             plan.field_info[name] = info
     plan.notes.append(f"read with pyreadstat ({getattr(meta, 'number_columns', len(first))} variables)")
+
+
+# ---------------------------------------------------------------- KML
+KML_NULLS = {"<Null>", "<Nulo>"}  # ArcGIS writes empty attributes so in description tables
+
+
+def _local(tag: Any) -> str:
+    return tag.rsplit("}", 1)[-1] if isinstance(tag, str) else ""
+
+
+class _CellRows(HTMLParser):
+    """Cell texts of the table rows of an HTML fragment (rows of nested tables included)."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.rows: List[List[str]] = []
+        self._row: Optional[List[str]] = None
+        self._cell: Optional[List[str]] = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "tr":
+            self._row = []
+        elif tag in ("td", "th") and self._row is not None:
+            self._cell = []
+
+    def handle_endtag(self, tag):
+        if tag in ("td", "th") and self._row is not None and self._cell is not None:
+            self._row.append(" ".join("".join(self._cell).split()))
+            self._cell = None
+        elif tag == "tr" and self._row is not None:
+            self.rows.append(self._row)
+            self._row = None
+
+    def handle_data(self, data):
+        if self._cell is not None:
+            self._cell.append(data)
+
+
+def description_attributes(html: str) -> Dict[str, Optional[str]]:
+    """Name / value rows of an attribute table in a KML description (ArcGIS pop-ups:
+    ``<tr><td>COD_DIS</td><td>17</td></tr>``); {} unless two or more such rows."""
+    if "<td" not in html.lower():
+        return {}
+    parser = _CellRows()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception:  # noqa: BLE001 - malformed markup: no attributes
+        return {}
+    pairs = [row for row in parser.rows if len(row) == 2 and row[0]]
+    if len(pairs) < 2:
+        return {}
+    return {name: (None if value in KML_NULLS else value) for name, value in pairs}
+
+
+def _kml_coordinates(element) -> Optional[list]:
+    for child in element.iter():
+        if _local(child.tag) == "coordinates" and child.text:
+            coords = []
+            for item in child.text.split():
+                parts = item.split(",")
+                if len(parts) < 2:
+                    continue
+                try:
+                    coords.append([float(p) for p in parts[:3]])
+                except ValueError:
+                    continue
+            return coords
+    return None
+
+
+def _kml_geometry(placemark) -> Optional[dict]:
+    """The first Point, else LineString, else Polygon of a placemark (as iterabledata has it)."""
+    found: Dict[str, Any] = {}
+    for element in placemark.iter():
+        name = _local(element.tag)
+        if name in ("Point", "LineString", "Polygon"):
+            found.setdefault(name, element)
+    if "Point" in found:
+        coords = _kml_coordinates(found["Point"])
+        return {"type": "Point", "coordinates": coords[0]} if coords else None
+    if "LineString" in found:
+        coords = _kml_coordinates(found["LineString"])
+        return {"type": "LineString", "coordinates": coords} if coords else None
+    if "Polygon" in found:
+        outer = next((e for e in found["Polygon"].iter() if _local(e.tag) == "outerBoundaryIs"), None)
+        coords = _kml_coordinates(outer) if outer is not None else None
+        return {"type": "Polygon", "coordinates": [coords]} if coords else None
+    return None
+
+
+def kml_feature(placemark) -> dict:
+    """GeoJSON-like feature of a KML Placemark, as iterabledata reads it plus the attributes
+    of ``SchemaData/SimpleData`` and of an attribute table in the description."""
+    properties: Dict[str, Any] = {}
+    for element in placemark.iter():
+        tag = _local(element.tag)
+        if tag == "Data" and element.get("name"):
+            value = next((c for c in element if _local(c.tag) == "value"), None)
+            if value is not None:
+                properties[element.get("name")] = value.text or ""
+        elif tag == "SimpleData" and element.get("name"):
+            properties[element.get("name")] = element.text or ""
+    description = None
+    for child in placemark:
+        tag = _local(child.tag)
+        if tag == "name" and child.text:
+            properties["name"] = child.text
+        elif tag == "description" and child.text:
+            description = properties["description"] = child.text
+    if description is not None:
+        for key, value in description_attributes(description).items():
+            properties.setdefault(key, value)
+    return {"type": "Feature", "properties": properties, "geometry": _kml_geometry(placemark)}
+
+
+def _kml_stream(filename: str, ext: str):
+    if ext == "kml":
+        return open(filename, "rb")
+    archive = zipfile.ZipFile(filename)
+    names = [n for n in archive.namelist() if n.lower().endswith(".kml")]
+    if not names:
+        archive.close()
+        raise ValueError("no .kml file in the KMZ archive")
+    name = "doc.kml" if "doc.kml" in names else names[0]
+    stream = archive.open(name)
+    original_close = stream.close
+
+    def close():
+        original_close()
+        archive.close()
+
+    stream.close = close  # type: ignore[method-assign]
+    return stream
+
+
+def _iterparse(stream):
+    try:
+        from lxml import etree
+
+        return etree.iterparse(stream, events=("end",), resolve_entities=False, no_network=True,
+                               load_dtd=False, recover=True, huge_tree=False)
+    except ImportError:  # lxml is in the formats extra
+        from xml.etree import ElementTree
+
+        return ElementTree.iterparse(stream, events=("end",))
+
+
+def kml_records(filename: str, ext: str = "kml") -> Iterator[dict]:
+    """Features of the placemarks that have a geometry, read one placemark at a time."""
+    with _kml_stream(filename, ext) as stream:
+        try:
+            for _, element in _iterparse(stream):
+                if _local(element.tag) != "Placemark":
+                    continue
+                feature = kml_feature(element)
+                element.clear()
+                if feature["geometry"] is not None:
+                    yield feature
+        except Exception as exc:  # noqa: BLE001 - keep the placemarks read so far
+            logger.warning("%s: KML parsing stopped: %s", filename, exc)
+
+
+def _plan_kml(filename: str, ext: str, plan: InputPlan) -> None:
+    records = kml_records(filename, ext)
+    try:
+        first = next(records)
+    except StopIteration:
+        return  # no placemark read here: let iterabledata try
+    except Exception as exc:  # noqa: BLE001 - iterabledata reports the error
+        logger.debug("Could not read %s as KML: %s", filename, exc)
+        return
+    plan.records = _prepend(first, records)
+    plan.kind = ext
+
+
+def _prepend(first: Any, rest: Iterator[Any]) -> Iterator[Any]:
+    """``first`` and then ``rest``; closing it closes ``rest`` (and its file)."""
+    yield first
+    yield from rest

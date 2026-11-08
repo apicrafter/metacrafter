@@ -229,3 +229,52 @@ def test_spss_file_without_pandas(monkeypatch):
 def test_compressed_spss_file():
     __import__("pytest").importorskip("pyreadstat")
     assert list(_fields(_scan(FIXTURES / "spss_survey.zsav"))) == ["id", "sugu", "email", "vanus"]
+
+
+# ---------------------------------------------------------------- #100 KML attributes
+KML = """<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Folder>
+<Placemark><name>01</name><ExtendedData><SchemaData schemaUrl="#d"><SimpleData name="COD_DIS">01</SimpleData><SimpleData name="NOMBRE">Centro</SimpleData></SchemaData></ExtendedData><Point><coordinates>-3.70,40.41</coordinates></Point></Placemark>
+<Placemark><name>02</name><ExtendedData><Data name="NOMBRE"><value>Arganzuela</value></Data></ExtendedData><Point><coordinates>-3.69,40.40</coordinates></Point></Placemark>
+</Folder></Document></kml>
+"""
+
+ARCGIS_DESCRIPTION = """<![CDATA[<html><body><table><tr><td>{n}</td></tr><tr><td><table>
+<tr><td>FID</td><td>{n}</td></tr><tr bgcolor="#D4E4F3"><td>COD_DIS</td><td>{n:02d}</td></tr>
+<tr><td>NOMBRE</td><td>Distrito {n}</td></tr><tr><td>FCH_BAJA</td><td>&lt;Nulo&gt;</td></tr>
+</table></td></tr></table></body></html>]]>"""
+
+
+def test_kml_simpledata_becomes_properties(tmp_path):
+    path = tmp_path / "ext.kml"
+    path.write_text(KML)
+    fields = list(_fields(_scan(path)))
+    assert {"properties.COD_DIS", "properties.NOMBRE", "properties.name"} <= set(fields)
+    assert fields[0] == "type" and "geometry.coordinates" in fields
+
+
+def test_kml_arcgis_description_table(tmp_path):
+    from metacrafter.file_inputs import prepare_input
+
+    placemarks = "".join(
+        f"<Placemark><name>{n}</name><description>{ARCGIS_DESCRIPTION.format(n=n)}</description>"
+        f"<MultiGeometry><LineString><coordinates>-3.7,40.4 -3.6,40.5</coordinates></LineString></MultiGeometry>"
+        f"</Placemark>" for n in range(1, 4))
+    path = tmp_path / "districts.kml"
+    path.write_text('<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2">'
+                    f"<Document>{placemarks}</Document></kml>")
+    records = list(prepare_input(str(path), {}).records)
+    assert len(records) == 3
+    props = records[0]["properties"]
+    assert props["COD_DIS"] == "01" and props["NOMBRE"] == "Distrito 1" and props["FCH_BAJA"] is None
+    assert records[0]["geometry"]["type"] == "LineString"
+
+
+def test_kmz_and_kml_without_namespace(tmp_path):
+    import zipfile
+
+    plain = KML.replace(' xmlns="http://www.opengis.net/kml/2.2"', "")
+    path = tmp_path / "ext.kmz"
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("doc.kml", plain)
+    assert {"properties.COD_DIS", "properties.NOMBRE"} <= set(_fields(_scan(path)))

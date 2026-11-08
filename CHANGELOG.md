@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`all` also gets `pyshp` and `odfpy`, which were only in `formats`). Each field entry
   carries the variable label (`label`) and the value labels (`value_labels`, e.g.
   `{"1": "Mees", "2": "Naine"}`); system-missing values are empty.
+- **KML attributes** (#100): KML and KMZ files are read one placemark at a time; besides
+  `Data/value`, the `SchemaData/SimpleData` elements of GDAL / ogr2ogr exports and the name /
+  value table that ArcGIS puts in the description become `properties.<name>` (`<Nulo>` /
+  `<Null>` cells are empty). The geometry and the other fields are as before.
 
 ## [2.1.0] - 2026-11-08
 

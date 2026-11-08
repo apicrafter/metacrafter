@@ -28,7 +28,7 @@ is gzip-compressed CSV).
 | Format | Extensions | Notes |
 |--------|------------|-------|
 | GeoJSON, TopoJSON | `.geojson`, `.topojson` | Feature properties are scanned as `properties.<name>` |
-| KML | `.kml` | Placemarks |
+| KML | `.kml`, `.kmz` | Placemarks; `Data`, `SchemaData/SimpleData` and the attribute table of an ArcGIS description become `properties.<name>` |
 | GML | `.gml` | GML and WFS feature collections (`gml:featureMember`, `wfs:member`) |
 | Shapefile | `.shp.zip` | Zipped Shapefile; needs `pyshp` (in the `formats` extra) |
 

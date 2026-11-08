@@ -59,6 +59,7 @@ SUPPORTED_FILE_TYPES = [
     "geojson",  # GeoJSON feature collection
     "topojson", # TopoJSON
     "kml",      # KML placemarks
+    "kmz",      # zipped KML
     "gml",      # GML / WFS feature collections
     "shp",      # Zipped Shapefile, e.g. counties.shp.zip (pyshp, in the formats extra)
     "px",       # PC-Axis statistics cube
