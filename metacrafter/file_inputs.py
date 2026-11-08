@@ -12,7 +12,9 @@ zipped Shapefiles and sheet options themselves, #90):
   API wrappers) (#83);
 - WFS GML wraps features in ``wfs:member`` or a namespaced ``featureMember`` (#84);
 - GTFS and other delimited tables are named ``.txt`` (#85);
-- CSV files start with an Excel ``sep=;`` line or with title rows above the header (#87).
+- CSV files start with an Excel ``sep=;`` line or with title rows above the header (#87);
+- SPSS files need pandas in iterabledata's reader; they are read here with pyreadstat's
+  dict output, and their variable and value labels go to the report (#97).
 
 :func:`prepare_input` reads the start of the file (decompressed) and returns a
 :class:`InputPlan`: iterabledata arguments plus the clean-up of the records. It only adds
@@ -112,6 +114,7 @@ class InputPlan:
     notes: List[str] = field(default_factory=list)
     # What the file says about its fields, by field name (SPSS labels), for the report.
     field_info: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    kind: str = "json"  # reader id reported for ``records`` read here
 
     def apply(self, records: Iterable[Any]) -> Iterator[Any]:
         """Skip the title and header lines read as records."""
@@ -562,6 +565,8 @@ def prepare_input(filename: str, iterableargs: dict) -> InputPlan:
         _plan_json(filename, codec, plan)
     elif ext in ("xlsx", "xls") and codec is None and "start_line" not in args and "keys" not in args:
         _plan_sheet(filename, ext, plan)
+    elif ext in ("sav", "zsav") and codec is None:
+        _plan_spss(filename, plan)
     for note in plan.notes:
         logger.info("%s: %s", filename, note)
     return plan
@@ -716,3 +721,72 @@ def _plan_json(filename: str, codec: Optional[str], plan: InputPlan) -> None:
         return
     plan.records, where = found
     plan.notes.append(f"records from {where}")
+
+
+# ---------------------------------------------------------------- SPSS
+SPSS_CHUNK_ROWS = 1000
+
+
+def _label_key(value: Any) -> str:
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value)
+
+
+def _spss_value(value: Any) -> Any:
+    return None if isinstance(value, float) and math.isnan(value) else value
+
+
+def _spss_rows(data: dict) -> Iterator[dict]:
+    columns = list(data)
+    for i in range(len(data[columns[0]]) if columns else 0):
+        yield {name: _spss_value(data[name][i]) for name in columns}
+
+
+def spss_records(filename: str, first: Optional[dict] = None, chunk: Optional[int] = None) -> Iterator[dict]:
+    """Records of an SPSS ``.sav`` / ``.zsav`` file, read in chunks of rows.
+
+    pyreadstat's dict output (pyreadstat >= 1.3.1) needs neither pandas nor polars;
+    system-missing values become None. ``first`` is the first chunk, already read.
+    """
+    import pyreadstat
+
+    chunk = chunk or SPSS_CHUNK_ROWS
+    offset = 0
+    data = first
+    while True:
+        if data is None:
+            data, _ = pyreadstat.read_sav(filename, row_offset=offset, row_limit=chunk, output_format="dict")
+        rows = len(next(iter(data.values()), []))
+        yield from _spss_rows(data)
+        if rows < chunk:
+            return
+        offset += rows
+        data = None
+
+
+def _plan_spss(filename: str, plan: InputPlan) -> None:
+    try:
+        import pyreadstat
+    except ImportError:
+        return  # iterabledata names the missing package
+    try:
+        first, meta = pyreadstat.read_sav(filename, row_limit=SPSS_CHUNK_ROWS, output_format="dict")
+    except TypeError:
+        return  # pyreadstat < 1.3.1 has no dict output: iterabledata's reader needs pandas
+    except Exception as exc:  # noqa: BLE001 - iterabledata reports the error
+        logger.debug("pyreadstat could not read %s: %s", filename, exc)
+        return
+    plan.records = spss_records(filename, first)
+    plan.kind = "sav"
+    labels = getattr(meta, "column_names_to_labels", None) or {}
+    value_labels = getattr(meta, "variable_value_labels", None) or {}
+    for name in getattr(meta, "column_names", None) or list(first):
+        info: Dict[str, Any] = {}
+        if labels.get(name):
+            info["label"] = labels[name]
+        if value_labels.get(name):
+            info["value_labels"] = {_label_key(k): v for k, v in value_labels[name].items()}
+        if info:
+            plan.field_info[name] = info
+    plan.notes.append(f"read with pyreadstat ({getattr(meta, 'number_columns', len(first))} variables)")

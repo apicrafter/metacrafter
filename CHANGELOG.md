@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - a title with a unit note (`（２）年齢別人口 … 単位：人`) is a title row;
   - XLS numbers are read as the sheet shows them for the header search and the column names
     (`1990`, not `1990.0`).
+- **SPSS files** (#97): `.sav` and `.zsav` files are read with pyreadstat's dict output in
+  chunks of 1000 rows, so they need neither pandas nor polars (iterabledata's reader calls
+  `read_sav` with pandas output). `pyreadstat>=1.3.1` is in the `formats` and `all` extras
+  (`all` also gets `pyshp` and `odfpy`, which were only in `formats`). Each field entry
+  carries the variable label (`label`) and the value labels (`value_labels`, e.g.
+  `{"1": "Mees", "2": "Naine"}`); system-missing values are empty.
 
 ## [2.1.0] - 2026-11-08
 

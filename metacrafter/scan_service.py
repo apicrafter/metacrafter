@@ -62,6 +62,8 @@ SUPPORTED_FILE_TYPES = [
     "gml",      # GML / WFS feature collections
     "shp",      # Zipped Shapefile, e.g. counties.shp.zip (pyshp, in the formats extra)
     "px",       # PC-Axis statistics cube
+    "sav",      # SPSS data file (pyreadstat, in the formats extra)
+    "zsav",     # compressed SPSS data file
 ]
 CODECS = ["lz4", 'gz', 'xz', 'bz2', 'zst', 'br', 'snappy', 'zip']
 BINARY_DATA_FORMATS = ["bson", "parquet", "avro", "orc", "pickle", "pkl", "xls", "xlsx"]
@@ -1842,7 +1844,7 @@ class CrafterCmd(object):
         iterableargs = plan.iterableargs
         try:
             if plan.records is not None:
-                data_file = RecordSource(plan.records, "json")
+                data_file = RecordSource(plan.records, plan.kind)
             else:
                 data_file = _open_data_file(filename, iterableargs)
         except UnicodeDecodeError as e:

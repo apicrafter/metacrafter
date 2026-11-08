@@ -198,3 +198,34 @@ def test_xlsx_with_trilingual_titles_and_sections(tmp_path):
     workbook.save(path)
     fields = list(_fields(_scan(path)))
     assert fields[:4] == ["Көрсөткүчтөрдүн аталышы", "Наименование показателей", "Items", "1990"]
+
+
+# ---------------------------------------------------------------- #97 SPSS
+FIXTURES = __import__("pathlib").Path(__file__).parent / "fixtures"
+
+
+def test_spss_file_without_pandas(monkeypatch):
+    pytest = __import__("pytest")
+    pytest.importorskip("pyreadstat")
+    import metacrafter.file_inputs as file_inputs
+
+    # Chunks of 10 rows: the 25 records come from three reads.
+    monkeypatch.setattr(file_inputs, "SPSS_CHUNK_ROWS", 10)
+    plan = file_inputs.prepare_input(str(FIXTURES / "spss_survey.sav"), {})
+    records = list(plan.records)
+    assert len(records) == 25 and records[0] == {"id": 1.0, "sugu": 2.0, "email": "vastaja0@example.ee", "vanus": None}
+    assert plan.field_info["sugu"] == {"label": "Sugu", "value_labels": {"1": "Mees", "2": "Naine"}}
+
+    report = _scan(FIXTURES / "spss_survey.sav")
+    fields = _fields(report)
+    assert list(fields) == ["id", "sugu", "email", "vanus"] and "email" in fields["email"]
+    entries = {f["field"]: f for f in report["data"]}
+    assert entries["email"]["label"] == "E-post"
+    assert entries["sugu"]["value_labels"] == {"1": "Mees", "2": "Naine"}
+    # System-missing values are None, not NaN: the numbers stay a float field.
+    assert report["stats"]["vanus"]["ftype"] == "float" and report["stats"]["vanus"]["minval"] == 19.0
+
+
+def test_compressed_spss_file():
+    __import__("pytest").importorskip("pyreadstat")
+    assert list(_fields(_scan(FIXTURES / "spss_survey.zsav"))) == ["id", "sugu", "email", "vanus"]
