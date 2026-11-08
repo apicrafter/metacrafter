@@ -20,6 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Dates are `date`, not `datetime`** (apicrafter/metacrafter-rules#55): the qddate patterns
+  are dates, so a field of `01.01.1974`, `2020/8/5` or `26/07/2005` is labelled `date` (with
+  the registry pattern, as before); it is `datetime` only when the values carry a time after
+  the date (`2016-01-01 00:00:00`). A field-name `date` match is dropped when a value rule finds
+  datetimes (`created_date` with `2021-11-12T08:08:16+00:00`, WordPress `date`).
+- **Values veto contradicted labels** (apicrafter/metacrafter-rules#56): a `boolean` value
+  match needs a column of at most three distinct values (`да`/`не`/`кран`/`бутон` is a
+  category), and a field-name `name` match needs a value that is not a number (a KML
+  `name` holding district numbers). A country-specific registry detector of a format with
+  letters does not report a column of digits alone without field-name or country evidence:
+  most Italian ISTAT municipality codes pass the AIC check (`it_aic`) and the Kyiv budget code
+  26000000000 the German driving licence check (`dedriverlic`). Detectors of all-digit formats
+  (Russian INN) keep reporting by checksum.
 - **`_id` is a field** (#96): file scans report the `_id` field of MongoDB exports (JSONL,
   JSON) and CKAN DataStore dumps (CSV) like any other field (`mongodbid` for ObjectIds);
   `dict_generator` and the statistics no longer drop it. `scan mongodb` still leaves the

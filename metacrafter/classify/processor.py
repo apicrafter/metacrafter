@@ -395,25 +395,40 @@ def match_rank_key(match: "RuleResult") -> Tuple[float, float]:
     return (-float(match.confidence or 0.0), -match_name_score(match))
 
 
-def date_pattern_key(dateparser: Any, value: str) -> Optional[str]:
-    """qddate pattern key of the date that starts ``value``, or None.
+#: A character class with a range of letters ([A-Z0-9], [0-9B-DF-HJ-NP-Z]) in a regexp.
+_LETTER_CLASS = re.compile(r"\[[^\]]*[A-Za-z]-[A-Za-z][^\]]*\]")
+
+
+def date_pattern_match(dateparser: Any, value: str) -> Optional[Tuple[str, bool]]:
+    """``(qddate pattern key, has_time)`` of the date that starts ``value``, or None.
 
     qddate reads a date at the start of a text and ignores what follows (its
     ``:t_right`` patterns), so ``18-2-023909`` read as 18 February 0239 with ``09``
     left over. A date must end the value or be followed by a character that is
-    neither a letter nor a digit, and its values must form a date.
+    neither a letter nor a digit, and its values must form a date. ``has_time`` is
+    True when digits follow the date (``2016-01-01 00:00:00``): the value is a date
+    and time, not a date. qddate reports a time it read as a ``:time_N`` suffix of the key.
     """
     match_typed = getattr(dateparser, "match_typed", None)
     if match_typed is None:
         res = dateparser.match(value, noyear=False)
-        return res["pattern"]["key"] if res else None
+        if not res:
+            return None
+        return res["pattern"]["key"], len(value.strip()) > 10 and any(ch.isdigit() for ch in value[10:])
     found = match_typed(value, allow_no_year=False)
     if found is None:
         return None
     end = found.span[1]
     if end < len(value) and value[end].isalnum():
         return None
-    return found.pattern_key
+    # match_typed reads a time after the date too (dt:date:date_9:time_1).
+    return found.pattern_key, ":time" in found.pattern_key or any(ch.isdigit() for ch in value[end:])
+
+
+def date_pattern_key(dateparser: Any, value: str) -> Optional[str]:
+    """qddate pattern key of the date that starts ``value``, or None (see date_pattern_match)."""
+    found = date_pattern_match(dateparser, value)
+    return found[0] if found else None
 
 
 def rule_pii_source(rule: Dict[str, Any]) -> Optional[str]:
@@ -1150,6 +1165,7 @@ class RulesProcessor:
                             continue
                     success = 0
                     pattern_hits = 0
+                    letter_hits = 0
                     empty = 0
                     total = len(slice)
                     for value in slice:
@@ -1170,6 +1186,12 @@ class RulesProcessor:
                             pattern_hits += 1
                         if valid:
                             success += 1
+                            if not text.isdigit():
+                                letter_hits += 1
+                    if success and not letter_hits and self._digits_only_for_letters(rule, name_weight):
+                        if explain:
+                            m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": 0.0, "matched_count": success, "considered_count": total, "reason": "Digits only for a country-specific format with letters"})
+                        continue
                     considered = total - empty if except_empty else total
                     scored = data_score(
                         matched=success,
@@ -1216,6 +1238,7 @@ class RulesProcessor:
                 success = 0
                 empty = 0
                 date_format = None
+                with_time = 0
                 for value in slice:
                     if value in empty_values:
                         if except_empty:
@@ -1229,10 +1252,11 @@ class RulesProcessor:
                         continue
                     if not hasattr(dateparser, 'match'):
                         break
-                    pattern_key = date_pattern_key(dateparser, value)
-                    if pattern_key:
+                    found_date = date_pattern_match(dateparser, value)
+                    if found_date:
                         success += 1
-                        date_format = pattern_key
+                        date_format = found_date[0]
+                        with_time += found_date[1]
 
                 if except_empty:
                     subtotal = total - empty
@@ -1243,10 +1267,12 @@ class RulesProcessor:
                 else:
                     result = success * 100.0 / total if total else 0
                 if success and result >= confidence:
+                    # qddate patterns are dates: the field is a datetime only when the values
+                    # carry a time after the date (#55 of metacrafter-rules).
                     date_match = RuleResult(
                         ruleid="qddate",
                         confidence=result,
-                        dataclass="datetime",
+                        dataclass="datetime" if with_time else "date",
                         ruletype="data",
                         format=date_format,
                         evidence={
@@ -1256,10 +1282,53 @@ class RulesProcessor:
                             "empty_count": empty,
                         },
                     )
-                    date_match.pattern = self.qddate_pattern(date_format)
+                    if not with_time:
+                        date_match.pattern = self.qddate_pattern(date_format)
                     m_result.add(date_match)
+            self._drop_contradicted_matches(m_result, slice, empty_values, explain)
             results.add(m_result)
         return results
+
+    #: Values that a yes/no column may hold besides empty ones: two answers and a placeholder.
+    MAX_BOOLEAN_VALUES = 3
+
+    def _drop_contradicted_matches(
+        self, m_result: ColumnMatchResult, values: List[Any], empty_values: Any, explain: bool
+    ) -> None:
+        """Drop matches that the values of the field contradict.
+
+        - A ``date`` match by field name when a value rule found dates with a time of day
+          (``datetime``): a WordPress ``date`` holds ``2024-01-01T10:00:00``.
+        - A ``boolean`` match by values when the field has more distinct values than a
+          yes/no column: ``да``/``не``/``кран``/``бутон`` is a category.
+        - A ``name`` match by field name when every value is a number: a KML Placemark
+          ``name`` that holds district numbers (17, 18).
+        """
+        drop = []
+        if any(m.ruletype == "field" and m.dataclass == "name" for m in m_result.matches):
+            texts = [str(v).strip() for v in values if v not in empty_values and str(v).strip()]
+            if texts and all(t.replace(".", "", 1).isdigit() for t in texts):
+                drop += [m for m in m_result.matches if m.ruletype == "field" and m.dataclass == "name"]
+        value_types = {m.dataclass for m in m_result.matches if m.ruletype != "field"}
+        if "datetime" in value_types:
+            drop += [m for m in m_result.matches if m.ruletype == "field" and m.dataclass == "date"]
+        booleans = [m for m in m_result.matches if m.dataclass == "boolean" and m.ruletype == "data"]
+        if booleans:
+            distinct = set()
+            for value in values:
+                if value in empty_values:
+                    continue
+                text = str(value).strip().lower()
+                if text and text != "-":
+                    distinct.add(text)
+                if len(distinct) > self.MAX_BOOLEAN_VALUES:
+                    drop += booleans
+                    break
+        for match in drop:
+            if match in m_result.matches:
+                m_result.matches.remove(match)
+                if explain:
+                    m_result.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": "Contradicted by the values of the field"})
 
     # --- matching helpers ---------------------------------------------------
 
@@ -1336,6 +1405,24 @@ class RulesProcessor:
         wanted = {c.upper() for c in self.preset_countries}
         return bool(wanted & {c.upper() for c in countries})
 
+    def _digits_only_for_letters(self, rule: Dict[str, Any], name_weight: float) -> bool:
+        """True when a country-specific registry detector should not report digits alone.
+
+        The detector has a checksum and runs without field-name or country evidence, and the
+        format of its datatype has letters (``[A-Z0-9]``). Digit strings are the usual shape
+        of codes in every country, and a short check digit accepts many of them: most
+        Italian ISTAT municipality codes (``047016``) pass the AIC check, and the Kyiv budget
+        code ``26000000000`` passes the German driving licence check (metacrafter-rules #56).
+        Detectors of all-digit formats (Russian INN) keep reporting by checksum.
+        """
+        if not rule.get("derived") or name_weight or not rule.get("registry_country"):
+            return False
+        if self._country_match(rule) is not None:
+            return False
+        pattern = rule.get("compiled")
+        source = getattr(pattern, "pattern", "") or ""
+        return bool(_LETTER_CLASS.search(source))
+
     @staticmethod
     def _rule_countries(rule: Dict[str, Any]) -> Set[str]:
         """Countries a rule is specific to; empty for universal rules (``country_code: xx``)."""
@@ -1350,7 +1437,8 @@ class RulesProcessor:
         field-name evidence for its datatype or its parent (``name_weight``). A detector for
         a country-specific datatype needs the field name to name the datatype itself
         (``names_type``), unless the scan country matches, or is unknown and the record has
-        a checksum.
+        a checksum. A checksum detector without field-name or country evidence must also see
+        letters when its format has them (see ``_digits_only_for_letters``).
         """
         if rule.get("needs_name_evidence") and not name_weight:
             return "Generic pattern without field-name evidence"
