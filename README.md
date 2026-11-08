@@ -38,7 +38,7 @@ for the first scan. For offline use, run `metacrafter registry fetch --to DIR`.
 Optional extras:
 
 ```bash
-pip install 'metacrafter[formats]'       # Parquet, ORC, Excel, XML, compressed files
+pip install 'metacrafter[formats]'       # Parquet, ORC, Excel, ODS, XML, Shapefile, compressed files
 pip install 'metacrafter[mongodb]'       # MongoDB and BSON
 pip install 'metacrafter[duckdb]'        # native DuckDB scanning
 pip install 'metacrafter[server]'        # HTTP API server

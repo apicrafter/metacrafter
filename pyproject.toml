@@ -56,7 +56,7 @@ dependencies = [
 [project.optional-dependencies]
 # Kept for backward compatibility: the rule pack is downloaded from GitHub releases.
 rules = []
-# Binary, compressed and XML file formats handled by iterabledata.
+# Binary, compressed, XML, Shapefile and ODS file formats handled by iterabledata.
 formats = [
     "pyarrow>=10.0",
     "avro>=1.11",
@@ -68,6 +68,8 @@ formats = [
     "zstandard",
     "brotli",
     "brotli_file",
+    "pyshp>=2.3",
+    "odfpy>=1.4",
 ]
 # MongoDB scanning (`metacrafter scan mongodb`).
 mongodb = ["pymongo>=4.6"]

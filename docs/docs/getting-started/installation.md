@@ -33,7 +33,7 @@ metacrafter registry fetch --to ./registry      # registry snapshot for registry
 Optional features are available as install extras:
 
 ```bash
-pip install 'metacrafter[formats]'       # Parquet, ORC, Excel, XML, lz4/zstd/brotli
+pip install 'metacrafter[formats]'       # Parquet, ORC, Excel, ODS, XML, Shapefile, lz4/zstd/brotli
 pip install 'metacrafter[mongodb]'       # metacrafter scan mongodb, .bson files
 pip install 'metacrafter[duckdb]'        # native DuckDB scanning, duckdb:// URLs
 pip install 'metacrafter[server]'        # metacrafter server run

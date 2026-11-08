@@ -134,8 +134,13 @@ Rules are YAML files that define how to identify data types. Three match types:
 
 Metacrafter uses `iterabledata` package for file format support:
 
-**Text formats:** CSV, TSV, JSON, JSONL, XML
-**Binary formats:** BSON, Parquet, Avro, ORC, Excel (XLS/XLSX), Pickle
+**Text formats:** CSV, TSV, delimited TXT (GTFS), JSON, JSONL, XML, PC-Axis
+**Geodata:** GeoJSON, TopoJSON, KML, GML, zipped Shapefile
+**Binary formats:** BSON, Parquet, Avro, ORC, Excel (XLS/XLSX), ODS, Pickle
+
+`metacrafter/file_inputs.py` reads the start of each file before iterabledata opens it and
+fills in encoding, delimiter, header offset, JSON record key, PC-Axis encoding and the GML
+fallback (`prepare_input`).
 **Compression:** gzip, bzip2, xz, lz4, zstandard, Brotli, Snappy, ZIP
 
 Format detection is automatic based on file extension.

@@ -22,7 +22,11 @@ def main():
         # Preserve exit codes raised by Typer/argparse (including 0 on success).
         raise
     except Exception as exc:  # noqa: BLE001 - top-level guard for non-zero exit
-        print(f"Error: {exc}", file=sys.stderr)
+        # str(KeyError(0)) is "0": name the exception when its text alone says nothing.
+        text = str(exc)
+        if isinstance(exc, LookupError) or len(text) < 3:
+            text = f"{type(exc).__name__}: {text}" if text else type(exc).__name__
+        print(f"Error: {text}", file=sys.stderr)
         sys.exit(1)
 
 

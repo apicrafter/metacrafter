@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Open data files that iterabledata 1.1 misreads are scanned** (#81-#87). Before opening a
+  file, `scan file` reads its first megabyte (decompressed) and fills in what is missing
+  (`metacrafter/file_inputs.py`); explicit `--delimiter`, `--encoding` and `--tagname` win:
+  - CSV/TSV/TXT get their encoding from the decompressed bytes, so cp1252 or cp932
+    `.csv.gz` files open (#81). Single-byte Latin text gets the code page whose letters fit
+    one alphabet: short cp1252 files are no longer read as MacTurkish (`Straße` was
+    `Straşe`), Polish and Czech get cp1250, Lithuanian cp1257, Turkish cp1254.
+  - PC-Axis files are read in the encoding of their `CODEPAGE` (or cp1252 for
+    `CHARSET="ANSI"`), and the `_KEYWORD` metadata copies are no longer reported as fields
+    (#82).
+  - JSON with an object at the root is scanned: the longest list of objects (up to three
+    levels deep, e.g. OData `value`, JSON-LD `@graph`, CKAN `result.records`) gives the
+    records, else the object is one record (#83). It failed with `Error: 0`.
+  - GML feature collections from WFS (`wfs:member`, namespaced `featureMember`) that the GML
+    reader returns empty are read as XML members (#84). A file that gives no records now
+    logs a warning.
+  - Delimited `.txt` files such as GTFS `stops.txt` are read as CSV (#85).
+  - An Excel `sep=;` first line sets the delimiter, and title or note rows above the header
+    (GENESIS, statistics offices) are skipped; the header is the first row with the body's
+    column count (#87).
+- A decoding error is reported as such, with a hint to pass `--encoding`, instead of
+  "Unsupported file type" (#81). Unhandled errors name the exception when its text is not
+  enough (`Error: KeyError: 0`).
+- The `formats` extra installs `pyshp` and `odfpy`, so zipped Shapefiles and ODS
+  spreadsheets open (#86); the supported formats list names GeoJSON, TopoJSON, KML, GML,
+  Shapefile, ODS, PC-Axis and delimited TXT.
+
 ### Added
 
 - `metacrafter rules lint` lists field rules without `priority` under `warnings`: their
