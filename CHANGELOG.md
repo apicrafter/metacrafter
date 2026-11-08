@@ -7,16 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-
-- **Requires iterabledata 1.2** (#90), which reads PC-Axis encodings and its `metadata`
-  option, WFS GML members, zipped Shapefiles (with `.cpg`, `.cst` or the DBF language
-  driver) and `keys`/`start_line`/`page` of sheets itself (datenoio/iterabledata#40-#46,
-  #48, #50). `metacrafter/file_inputs.py` drops its workarounds for them (GML read as XML,
-  pyshp reader, PX metadata filter, direct sheet readers, zstd delimiter); it keeps the
-  encoding by alphabet fit, the header row search, nested and split JSON records and the
-  `.txt` delimiter check.
-
 ### Fixed
 
 - **Workbooks: the first sheet that holds a table is scanned** (#89). Statistics offices
@@ -70,6 +60,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Requires iterabledata 1.2** (#90), which reads PC-Axis encodings and its `metadata`
+  option, WFS GML members, zipped Shapefiles (with `.cpg`, `.cst` or the DBF language
+  driver) and `keys`/`start_line`/`page` of sheets itself (datenoio/iterabledata#40-#46,
+  #48, #50). `metacrafter/file_inputs.py` drops its workarounds for them (GML read as XML,
+  pyshp reader, PX metadata filter, direct sheet readers, zstd delimiter); it keeps the
+  encoding by alphabet fit, the header row search, nested and split JSON records and the
+  `.txt` delimiter check.
 - **Default rule pack is metacrafter-rules v0.0.11**, and the registry snapshot is 1.3.0 at
   4dceeb8. From the multilingual metacrafter-testdata scan (128 files, 19 languages),
   apicrafter/metacrafter-rules#52 and apicrafter/metacrafter-registry#152:
