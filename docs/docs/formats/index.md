@@ -15,7 +15,7 @@ is gzip-compressed CSV).
 
 | Format | Extensions | Notes |
 |--------|------------|-------|
-| CSV | `.csv` | `--delimiter` overrides auto-detection |
+| CSV | `.csv` | Delimiter (comma, semicolon, tab or pipe) detected from the header line; `--delimiter` overrides it |
 | TSV | `.tsv` | Use `--delimiter '\t'` if needed |
 | JSON | `.json` | Array of objects |
 | JSON Lines | `.jsonl`, `.ndjson` | Newline-delimited JSON |
@@ -37,6 +37,9 @@ is gzip-compressed CSV).
 These suffixes (and `--compression`) are recognized: gzip (`.gz`), bzip2
 (`.bz2`), xz (`.xz`), lz4 (`.lz4`), zstandard (`.zst`), Brotli (`.br`), Snappy,
 ZIP (`.zip`).
+
+A zstandard stream cannot be rewound, so the delimiter of a `.csv.zst` file is not
+detected: it is read with a comma unless `--delimiter` is given.
 
 `--encoding` selects character encoding for text formats (default:
 auto-detected). `--compression auto` is the default; `none` disables codec

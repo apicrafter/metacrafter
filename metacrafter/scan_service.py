@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf8 -*-
+import io
 import json
 import logging
 import os
@@ -85,7 +86,25 @@ DEFAULT_RETRY_DELAY = 1.0
 from metacrafter.cmd.helpers import (  # noqa: E402
     split_option_list as _split_option_list,
     resolve_output_target as _resolve_output_target,
+    strip_bom_from_keys as _strip_bom_from_keys,
 )
+
+
+def _open_data_file(filename, iterableargs):
+    """Open a data file with iterabledata.
+
+    Delimiter detection reads the first line and rewinds the stream. A stream that
+    cannot rewind (zstandard) raises ``io.UnsupportedOperation``; such a file is
+    opened again without detection, so its CSV delimiter is a comma.
+    """
+    try:
+        return open_iterable(filename, iterableargs=iterableargs)
+    except io.UnsupportedOperation:
+        if not iterableargs.get("autodetect"):
+            raise
+    logging.debug(f"Delimiter detection is not possible for {filename}; using a comma")
+    fallback = {key: value for key, value in iterableargs.items() if key != "autodetect"}
+    return open_iterable(filename, iterableargs=fallback)
 
 
 app = typer.Typer(
@@ -1751,7 +1770,11 @@ class CrafterCmd(object):
         if tagname is not None:
             iterableargs['tagname'] = tagname
         if delimiter is not None:
-            iterableargs['delimiter'] = delimiter            
+            iterableargs['delimiter'] = delimiter
+        else:
+            # iterabledata >= 1.1 uses a comma unless asked to detect the delimiter,
+            # so semicolon- and pipe-separated CSV files were read as one column.
+            iterableargs['autodetect'] = True
 
         if encoding is not None:
             iterableargs['encoding'] = encoding                         
@@ -1764,7 +1787,7 @@ class CrafterCmd(object):
             if discovered:
                 iterableargs["tagname"] = discovered["short"]
         try:
-            data_file = open_iterable(filename, iterableargs=iterableargs) 
+            data_file = _open_data_file(filename, iterableargs)
         except (IOError, OSError) as e:
             logging.error(f"Error opening file {filename}: {e}")
             print(f"Error: Could not open file {filename}: {e}", file=sys.stderr)
@@ -1801,6 +1824,7 @@ class CrafterCmd(object):
             finally:
                 if progress_bar:
                     progress_bar.close()
+            _strip_bom_from_keys(items)
 
             if len(items) == 0 and output_format == "table" and not self.quiet:
                 print("No records found to process")

@@ -29,6 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `scan file` detects the CSV delimiter again. iterabledata 1.1 reads CSV with a comma
+  unless detection is requested, so semicolon- and pipe-separated files were scanned as
+  one column and no field got a label. A `--delimiter` option still wins; `.csv.zst` files
+  are read with a comma, since a zstandard stream cannot be rewound for detection.
+- A UTF-8 byte order mark is removed from the first field name (`\ufeffid` became `id`).
+  It stayed when the rest of the file decoded as plain UTF-8, so field-name rules and
+  `--fields` did not match the first column.
 - Date patterns (qddate) no longer report numbers that start like a date: a date must end
   the value or be followed by a character that is not a letter or digit, and its values must
   form a date. Grant application numbers `18-2-023909` were `datetime` at 100.
