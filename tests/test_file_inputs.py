@@ -214,7 +214,10 @@ def test_wfs_gml_members(tmp_path):
         + "</wfs:FeatureCollection>\n"
     )
     fields = _fields(_scan(path))
-    assert "name" in fields and "email" in fields["email"]
+    # iterabledata 1.1 needs the XML fallback (flat fields); later releases read the
+    # members as GeoJSON-like features (properties.<name>).
+    email = next(k for k in fields if k.split(".")[-1] == "email")
+    assert any(k.split(".")[-1] == "name" for k in fields) and "email" in fields[email]
 
 
 def test_xlsx_title_rows(tmp_path):
