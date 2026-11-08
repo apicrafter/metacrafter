@@ -653,6 +653,12 @@ def _xls_cell(value: Any) -> str:
 def sheet_names(filename: str, ext: str) -> List[str]:
     """Sheet names of a workbook, [] when they cannot be read."""
     try:
+        if ext == "ods":
+            from odf.opendocument import load
+            from odf.table import Table
+
+            tables = load(filename).spreadsheet.getElementsByType(Table)
+            return [t.getAttribute("name") or f"Sheet{i}" for i, t in enumerate(tables)]
         if ext == "xlsx":
             import openpyxl
 
@@ -673,22 +679,67 @@ def sheet_names(filename: str, ext: str) -> List[str]:
         return []
 
 
-def _is_table(rows: List[List[str]], index: int, columns: int) -> bool:
+def _is_table(rows: List[List[str]], index: int, columns: int, min_columns: int = MIN_TABLE_COLUMNS) -> bool:
     """At least three columns and three filled rows below the header."""
     body = [r for r in rows[index + 1:] if _width(r) > 1]
-    return columns >= MIN_TABLE_COLUMNS and len(body) >= MIN_TABLE_ROWS
+    return columns >= min_columns and len(body) >= MIN_TABLE_ROWS
+
+
+SHEET_EXTENSIONS = ("xlsx", "xls", "ods")
+
+
+def select_sheets(filename: str, sheet: Any) -> Optional[List[Tuple[int, str]]]:
+    """(0-based page, sheet name) of the workbook sheets that ``--sheet`` names (#102).
+
+    ``sheet`` is a sheet name, a sheet number counted from 1, or ``all``: every sheet of an
+    XLSX or XLS workbook that holds a table (a header and three rows below it; two columns
+    are enough here), else the first sheet; every sheet of an ODS workbook. ``all`` on a file
+    that is not a workbook gives None (the file is one table); a name or number there, or one
+    that the workbook lacks, raises ``ValueError``.
+    """
+    ext, codec = split_name(filename)
+    value = str(sheet).strip()
+    if ext not in SHEET_EXTENSIONS or codec is not None:
+        if value.lower() == "all":
+            return None
+        raise ValueError(f"--sheet applies to XLSX, XLS and ODS workbooks, not {os.path.basename(filename)}")
+    names = sheet_names(filename, ext)
+    if value.lower() == "all":
+        if ext == "ods":
+            return list(enumerate(names)) or [(0, "1")]
+        found = []
+        for page, name in enumerate(names):
+            rows = sheet_rows(filename, ext, page)
+            if not rows:
+                continue
+            index, columns, _ = header_row(rows)
+            if _is_table(rows, index, columns, min_columns=2):
+                found.append((page, name))
+        return found or [(0, names[0] if names else "1")]
+    if value in names:
+        return [(names.index(value), value)]
+    if value.isdigit() and 1 <= int(value) <= len(names):
+        return [(int(value) - 1, names[int(value) - 1])]
+    listed = ", ".join(names) or "none could be read"
+    raise ValueError(f"No sheet {value!r} in {os.path.basename(filename)}; sheets: {listed}")
 
 
 def _plan_sheet(filename: str, ext: str, plan: InputPlan) -> None:
     given = plan.iterableargs.get("page")
     if given is not None:
         if not str(given).isdigit():
-            return  # a sheet name: leave it to iterabledata
+            names = sheet_names(filename, ext)
+            if given not in names:
+                return  # leave the error to iterabledata
+            given = names.index(given)
         candidates = [int(given)]
     else:
         # Notes, a title page or contents often come first (INSEE, Destatis): scan the
-        # first sheet that holds a table (#89).
-        candidates = list(range(max(1, min(len(sheet_names(filename, ext)), MAX_SHEETS))))
+        # first sheet that holds a table (#89). --sheet all scans every one (#102).
+        count = len(sheet_names(filename, ext))
+        if count > 1:
+            plan.notes.append(f"the workbook has {count} sheets; --sheet all scans every sheet that holds a table")
+        candidates = list(range(max(1, min(count, MAX_SHEETS))))
     page, rows, index, names = candidates[0], None, 0, None
     for candidate in candidates:
         found = sheet_rows(filename, ext, candidate)

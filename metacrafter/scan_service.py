@@ -1040,10 +1040,10 @@ class CrafterCmd(object):
             print(f"Output written to {output}", file=sys.stderr)
 
     def _write_db_results(
-        self, db_results, dformat, output, output_format="table", stats_only=False, errors=None
+        self, db_results, dformat, output, output_format="table", stats_only=False, errors=None, source=None
     ):
         if output_format in ("json", "yaml", "legacy", "md"):
-            reports = [dict(report, source=table, table=table) for table, report in db_results.items()]
+            reports = [dict(report, source=source or table, table=table) for table, report in db_results.items()]
             payload = aggregate_reports(reports, errors)
             if output_format == "legacy":
                 self._write_serialized_output(to_legacy(payload), output, "json")
@@ -1753,6 +1753,7 @@ class CrafterCmd(object):
         sampling="head",
         seed=0,
         explain=False,
+        sheet=None,
     ):
         """Scan a file and classify its fields.
         
@@ -1799,10 +1800,14 @@ class CrafterCmd(object):
                 Use '""' for empty string. Defaults to [None, "", "None", "NaN", "-", "N/A"].
             compression: Compression codec handling - 'auto' (detect), 'none' (disable),
                 or specific codec ('gz', 'bz2', etc.). Defaults to 'auto'.
+            sheet: Workbook sheet (XLSX, XLS, ODS): a sheet name, a sheet number counted
+                from 1, or 'all' for every sheet that holds a table, each as a table of
+                its own (an aggregate report, like a database scan). Defaults to the first
+                sheet that holds a table.
         
         Returns:
-            None if output is written to file/stdout, otherwise returns empty list
-            on error or None on success.
+            The report (an aggregate report with one source per sheet for
+            ``sheet='all'``); an empty list on error.
         
         Raises:
             IOError: If file cannot be opened or read.
@@ -1840,6 +1845,71 @@ class CrafterCmd(object):
             discovered = xml_quick_analyzer(filename)
             if discovered:
                 iterableargs["tagname"] = discovered["short"]
+        scan_options = dict(
+            limit=limit, contexts=contexts, langs=langs, confidence=confidence,
+            stop_on_match=stop_on_match, parse_dates=parse_dates, ignore_imprecise=ignore_imprecise,
+            except_empty=except_empty, fields=fields, stats_only=stats_only, dict_share=dict_share,
+            empty_values=empty_values, explain=explain, classification_mode=classification_mode,
+            llm_min_confidence=llm_min_confidence,
+        )
+        read_options = dict(sampling=sampling, seed=seed, output_format=output_format)
+        if sheet is not None:
+            from metacrafter.file_inputs import select_sheets
+
+            try:
+                pages = select_sheets(str(filename), sheet)
+            except ValueError as e:
+                print(f"Error: {e}", file=sys.stderr)
+                return []
+            if pages is None:
+                logging.info(f"{filename} is not a workbook; --sheet all scans it as one table")
+            elif str(sheet).strip().lower() == "all":
+                return self._scan_sheets(filename, iterableargs, pages, scan_options, read_options,
+                                         dformat, output, output_format, stats_only)
+            else:
+                iterableargs["page"] = pages[0][0]
+        report = self._scan_one_file(filename, iterableargs, scan_options, **read_options)
+        if not isinstance(report, dict):
+            return report
+        self._write_results(
+            report,
+            filename,
+            dformat,
+            output,
+            output_format=output_format,
+            stats_only=stats_only,
+        )
+        return report
+
+    def _scan_sheets(self, filename, iterableargs, pages, scan_options, read_options,
+                     dformat, output, output_format, stats_only):
+        """Scan each sheet as a table of its own; write and return an aggregate report (#102)."""
+        reports, errors = {}, []
+        for page, name in pages:
+            try:
+                report = self._scan_one_file(filename, dict(iterableargs, page=page), scan_options,
+                                             table=name, **read_options)
+            except ValueError as e:  # e.g. --fields that this sheet lacks
+                errors.append({"source": str(filename), "table": name, "code": "ValueError", "message": str(e)})
+                continue
+            if isinstance(report, dict):
+                if report.get("data") or report.get("stats"):
+                    reports[name] = report  # empty sheets of an ODS workbook are left out
+            else:
+                errors.append({"source": str(filename), "table": name, "code": "SheetScanFailed",
+                               "message": "Sheet scan failed"})
+        self._write_db_results(reports, dformat, output, output_format, stats_only, errors=errors,
+                               source=str(filename))
+        return aggregate_reports([dict(r, source=str(filename), table=name) for name, r in reports.items()], errors)
+
+    def _scan_one_file(self, filename, iterableargs, options, sampling="head", seed=0,
+                       output_format="table", table=None):
+        """Read a file (one sheet of a workbook) and scan its records.
+
+        Returns the report; an empty list after an error that was reported; None when a
+        remote server cannot give statistics only.
+        """
+        contexts, langs = options["contexts"], options["langs"]
         # Encoding, header offset, JSON records, sheet choice, PC-Axis metadata, GTFS .txt.
         plan = prepare_input(str(filename), iterableargs)
         iterableargs = plan.iterableargs
@@ -1879,7 +1949,7 @@ class CrafterCmd(object):
         items = []
         try:
             try:
-                items, provenance = self._read_records(data_file, filename, plan, limit, sampling, seed)
+                items, provenance = self._read_records(data_file, filename, plan, options["limit"], sampling, seed)
             except Exception as e:  # noqa: BLE001 - only decoding errors are handled here
                 decode_error = _decode_error(e)
                 if decode_error is None:
@@ -1896,58 +1966,21 @@ class CrafterCmd(object):
             if len(items) == 0 and output_format == "table" and not self.quiet:
                 print("No records found to process")
 
-            if output_format == "table":
+            if output_format == "table" and table is None:
                 self._print_scan_header(filename, data_file.id(), len(items), contexts, langs)
 
             if self.remote is None:
-                report = self.scan_data(
-                    items,
-                    limit,
-                    contexts,
-                    langs,
-                    confidence=confidence,
-                    stop_on_match=stop_on_match,
-                    parse_dates=parse_dates,
-                    ignore_imprecise=ignore_imprecise,
-                    except_empty=except_empty,
-                    fields=fields,
-                    stats_only=stats_only,
-                    dict_share=dict_share,
-                    empty_values=empty_values,
-                    explain=explain,
-                    classification_mode=classification_mode,
-                    llm_min_confidence=llm_min_confidence,
-                )
+                report = self.scan_data(items, **options)
             else:
-                report = self.scan_data_client(
-                    self.remote,
-                    items,
-                    limit,
-                    contexts,
-                    langs,
-                    confidence=confidence,
-                    stop_on_match=stop_on_match,
-                    parse_dates=parse_dates,
-                    ignore_imprecise=ignore_imprecise,
-                    except_empty=except_empty,
-                    fields=fields,
-                    stats_only=stats_only,
-                    dict_share=dict_share,
-                    empty_values=empty_values,
-                )
-                if stats_only and not report.get("stats_table"):
+                remote_options = {k: v for k, v in options.items()
+                                  if k not in ("explain", "classification_mode", "llm_min_confidence")}
+                limit = remote_options.pop("limit")
+                report = self.scan_data_client(self.remote, items, limit, **remote_options)
+                if options["stats_only"] and not report.get("stats_table"):
                     print("Stats-only mode is not available for remote scans.")
-                    return
-            report.update(source=str(filename), table=str(filename), sampling=provenance)
+                    return None
+            report.update(source=str(filename), table=str(filename) if table is None else table, sampling=provenance)
             _annotate_fields(report, renamed, plan.field_info)
-            self._write_results(
-                report,
-                filename,
-                dformat,
-                output,
-                output_format=output_format,
-                stats_only=stats_only,
-            )
             return report
         finally:
             if data_file is not None:

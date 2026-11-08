@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **`scan file --sheet NAME|NUMBER|all`** (#102) for XLSX, XLS and ODS workbooks. `all` scans
+  every sheet that holds a table (a header and three rows below it; every non-empty sheet of
+  an ODS file) as a table of its own and writes an aggregate report, one source per sheet
+  (`source` is the file, `table` the sheet name), as `scan sql` does for tables; Markdown
+  headings name the sheet. A file that is not a workbook is one table for `--sheet all`.
+  Without `--sheet` the scan is unchanged: one report for the first sheet that holds a table
+  (the log notes that `--sheet all` reads the others). `CrafterCmd.scan_file(sheet=...)` takes
+  the same values. A sheet given by name now gets the header search too.
+
 ### Fixed
 
 - **`_id` is a field** (#96): file scans report the `_id` field of MongoDB exports (JSONL,

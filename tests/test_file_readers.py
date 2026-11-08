@@ -326,3 +326,102 @@ def test_wide_title_rows_with_unit_notes():
     index, _, names = header_row(rows)
     assert index == 2 and names is None
 
+
+# ---------------------------------------------------------------- #102 workbooks with several tables
+def _election_workbook(tmp_path):
+    openpyxl = __import__("pytest").importorskip("openpyxl")
+    workbook = openpyxl.Workbook()
+    notes = workbook.active
+    notes.title = "Notas"
+    notes.append(["Elecciones municipales 2023"])
+    results = workbook.create_sheet("Resultados")
+    results.append(["Distrito", "Barrio", "Mesa", "Votos PP", "Votos PSOE"])
+    for i in range(6):
+        results.append([f"0{i + 1}", f"Barrio {i}", f"{i}-A", 100 + i, 90 + i])
+    parties = workbook.create_sheet("Candidaturas")
+    parties.append(["Siglas", "Denominación"])
+    for short, name in [("PP", "Partido Popular"), ("PSOE", "Partido Socialista Obrero Español"),
+                        ("VOX", "Vox"), ("CS", "Ciudadanos-Partido de la Ciudadanía")]:
+        parties.append([short, name])
+    path = tmp_path / "election.xlsx"
+    workbook.save(path)
+    return path
+
+
+def test_default_scan_keeps_one_sheet(tmp_path):
+    from metacrafter.file_inputs import prepare_input
+
+    path = _election_workbook(tmp_path)
+    assert list(_fields(_scan(path))) == ["Distrito", "Barrio", "Mesa", "Votos PP", "Votos PSOE"]
+    assert any("--sheet all" in note for note in prepare_input(str(path), {}).notes)
+
+
+def test_sheet_all_scans_every_table(tmp_path):
+    path = _election_workbook(tmp_path)
+    report = _scan(path, sheet="all")
+    assert [s["table"] for s in report["sources"]] == ["Resultados", "Candidaturas"]
+    assert {s["source"] for s in report["sources"]} == {str(path)}
+    by_sheet = {s["table"]: list(_fields(s)) for s in report["sources"]}
+    assert by_sheet["Candidaturas"] == ["Siglas", "Denominación"]
+    assert by_sheet["Resultados"][:2] == ["Distrito", "Barrio"]
+    assert report["complete"] and not report["errors"]
+
+
+def test_sheet_by_name_or_number(tmp_path, capsys):
+    path = _election_workbook(tmp_path)
+    assert list(_fields(_scan(path, sheet="Candidaturas"))) == ["Siglas", "Denominación"]
+    assert list(_fields(_scan(path, sheet=3))) == ["Siglas", "Denominación"]
+    assert _scan(path, sheet="Hoja9") == []
+    assert "No sheet 'Hoja9'" in capsys.readouterr().err
+    csv_path = tmp_path / "plain.csv"
+    csv_path.write_text("a,b\n1,2\n")
+    assert _scan(csv_path, sheet="Hoja1") == []
+    # Every sheet of a CSV file is the file itself.
+    assert list(_fields(_scan(csv_path, sheet="all"))) == ["a", "b"]
+
+
+def test_ods_sheets(tmp_path):
+    pytest = __import__("pytest")
+    pytest.importorskip("odf")
+    from odf.opendocument import OpenDocumentSpreadsheet
+    from odf.table import Table, TableCell, TableRow
+    from odf.text import P
+
+    doc = OpenDocumentSpreadsheet()
+    for title, rows in (("Leer", []), ("Kreise", [["Kreis", "E-Mail"]] + [[f"Kreis {i}", f"info{i}@kreis.de"]
+                                                                          for i in range(4)])):
+        table = Table(name=title)
+        for values in rows:
+            row = TableRow()
+            for value in values:
+                cell = TableCell(valuetype="string")
+                cell.addElement(P(text=value))
+                row.addElement(cell)
+            table.addElement(row)
+        doc.spreadsheet.addElement(table)
+    path = tmp_path / "kreise.ods"
+    doc.save(str(path))
+    assert list(_fields(_scan(path, sheet="Kreise"))) == ["Kreis", "E-Mail"]
+    report = _scan(path, sheet="all")
+    assert [s["table"] for s in report["sources"]] == ["Kreise"]
+
+
+def test_cli_sheet_all_writes_an_aggregate(tmp_path):
+    import json
+
+    from typer.testing import CliRunner
+
+    import metacrafter.cli.commands  # noqa: F401 - registers the commands
+    from metacrafter.core import app
+
+    path = _election_workbook(tmp_path)
+    out = tmp_path / "report.json"
+    result = CliRunner().invoke(app, ["scan", "file", str(path), "--sheet", "all", "--format", "full",
+                                      "--output-format", "json", "-o", str(out), "--quiet"])
+    assert result.exit_code == 0, result.output
+    payload = json.loads(out.read_text())
+    assert [s["table"] for s in payload["sources"]] == ["Resultados", "Candidaturas"]
+    assert [f["field"] for f in payload["sources"][1]["fields"]] == ["Siglas", "Denominación"]
+    result = CliRunner().invoke(app, ["scan", "file", str(path), "--sheet", "all", "--output-format", "md",
+                                      "--stdout", "--quiet"])
+    assert result.exit_code == 0 and f"## {path}: Candidaturas" in result.output

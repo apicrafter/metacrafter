@@ -40,7 +40,7 @@ is gzip-compressed CSV).
 | Parquet | `.parquet` |
 | Avro | `.avro` |
 | ORC | `.orc` |
-| Excel | `.xls`, `.xlsx` (the first sheet that holds a table; title rows and multi-row headers are handled) |
+| Excel | `.xls`, `.xlsx` (the first sheet that holds a table, or `--sheet NAME`, `--sheet 2`, `--sheet all` for one table per sheet; title rows and multi-row headers are handled) |
 | OpenDocument spreadsheet | `.ods` (needs `odfpy`, in the `formats` extra) |
 | Pickle | `.pickle`, `.pkl` |
 | SPSS | `.sav`, `.zsav` (needs `pyreadstat` 1.3.1 or later, in the `formats` extra; no pandas). Variable labels and value labels are reported with each field (`label`, `value_labels`) |
