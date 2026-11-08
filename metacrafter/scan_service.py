@@ -20,6 +20,8 @@ import qddate.patterns
 
 from iterable.helpers.detect import open_iterable
 
+from metacrafter.file_inputs import RecordSource, prepare_input, unwrap_members
+
 from metacrafter.classify.processor import RulesProcessor, BASE_URL, match_rank_key
 from metacrafter.classify.stats import Analyzer, DEFAULT_DICT_SHARE, DEFAULT_EMPTY_VALUES
 
@@ -52,6 +54,14 @@ SUPPORTED_FILE_TYPES = [
     "xml",      # XML
     "pickle",   # Python pickle
     "pkl",      # Python pickle (alternative extension)
+    "ods",      # OpenDocument spreadsheet (odfpy, in the formats extra)
+    "txt",      # Delimited text such as GTFS stops.txt (read as CSV when delimited)
+    "geojson",  # GeoJSON feature collection
+    "topojson", # TopoJSON
+    "kml",      # KML placemarks
+    "gml",      # GML / WFS feature collections
+    "shp",      # Zipped Shapefile, e.g. counties.shp.zip (pyshp, in the formats extra)
+    "px",       # PC-Axis statistics cube
 ]
 CODECS = ["lz4", 'gz', 'xz', 'bz2', 'zst', 'br', 'snappy', 'zip']
 BINARY_DATA_FORMATS = ["bson", "parquet", "avro", "orc", "pickle", "pkl", "xls", "xlsx"]
@@ -105,6 +115,28 @@ def _open_data_file(filename, iterableargs):
     logging.debug(f"Delimiter detection is not possible for {filename}; using a comma")
     fallback = {key: value for key, value in iterableargs.items() if key != "autodetect"}
     return open_iterable(filename, iterableargs=fallback)
+
+
+def _decode_error(error):
+    """The UnicodeDecodeError behind ``error`` (iterabledata wraps it in FormatParseError)."""
+    seen = set()
+    while error is not None and id(error) not in seen:
+        if isinstance(error, UnicodeDecodeError):
+            return error
+        seen.add(id(error))
+        error = error.__cause__ or error.__context__
+    return None
+
+
+def _print_decode_error(filename, encoding, error):
+    """Explain a text decoding failure; it is not an unsupported format."""
+    used = encoding or "utf-8"
+    logging.error(f"Could not decode {filename} as {used}: {error}")
+    print(
+        f"Error: could not decode {filename} as {used}: {error}\n"
+        f"Pass the file's encoding with --encoding (for example cp1252, cp1251, cp932).",
+        file=sys.stderr,
+    )
 
 
 app = typer.Typer(
@@ -1786,8 +1818,19 @@ class CrafterCmd(object):
             discovered = xml_quick_analyzer(filename)
             if discovered:
                 iterableargs["tagname"] = discovered["short"]
+        # Encoding, header offset, JSON record key, PC-Axis metadata, GTFS .txt, GML members.
+        plan = prepare_input(str(filename), iterableargs)
+        iterableargs = plan.iterableargs
         try:
-            data_file = _open_data_file(filename, iterableargs)
+            if plan.records is not None:
+                data_file = RecordSource(plan.records, "json")
+            elif plan.opener is not None:
+                data_file = plan.opener()
+            else:
+                data_file = _open_data_file(filename, iterableargs)
+        except UnicodeDecodeError as e:
+            _print_decode_error(filename, iterableargs.get("encoding"), e)
+            return []
         except (IOError, OSError) as e:
             logging.error(f"Error opening file {filename}: {e}")
             print(f"Error: Could not open file {filename}: {e}", file=sys.stderr)
@@ -1815,16 +1858,33 @@ class CrafterCmd(object):
             return []
         items = []
         try:
-            progress_iter, progress_bar = self._iter_with_progress(
-                data_file, desc=f"Reading {filename}", unit="records"
-            )
             try:
-                from metacrafter.sampling import sample_records
-                items, provenance = sample_records(progress_iter, limit, sampling, seed)
-            finally:
-                if progress_bar:
-                    progress_bar.close()
+                items, provenance = self._read_records(data_file, filename, plan, limit, sampling, seed)
+                if not items and plan.fallback is not None:
+                    # GML feature members the GML reader did not find (wfs:member,
+                    # namespaced featureMember): read the members as XML records.
+                    from metacrafter.classify.utils import xml_quick_analyzer
+
+                    discovered = xml_quick_analyzer(filename)
+                    if discovered:
+                        fallback = dict(plan.fallback, tagname=discovered["short"])
+                        data_file.close()
+                        data_file = _open_data_file(filename, fallback)
+                        records, provenance = self._read_records(
+                            data_file, filename, plan, limit, sampling, seed
+                        )
+                        items = list(unwrap_members(records))
+            except Exception as e:  # noqa: BLE001 - only decoding errors are handled here
+                decode_error = _decode_error(e)
+                if decode_error is None:
+                    raise
+                _print_decode_error(filename, iterableargs.get("encoding"), decode_error)
+                return []
             _strip_bom_from_keys(items)
+            if not items:
+                logging.warning(f"No records were read from {filename}")
+                if not self.quiet and output_format != "table":
+                    print(f"Warning: no records were read from {filename}", file=sys.stderr)
 
             if len(items) == 0 and output_format == "table" and not self.quiet:
                 print("No records found to process")
@@ -1887,6 +1947,19 @@ class CrafterCmd(object):
             # Clear items from memory after processing
             del items
 
+
+    def _read_records(self, data_file, filename, plan, limit, sampling, seed):
+        """Sample records of an open file after the plan's skips and key filter."""
+        from metacrafter.sampling import sample_records
+
+        progress_iter, progress_bar = self._iter_with_progress(
+            data_file, desc=f"Reading {filename}", unit="records"
+        )
+        try:
+            return sample_records(plan.apply(progress_iter), limit, sampling, seed)
+        finally:
+            if progress_bar:
+                progress_bar.close()
 
     def scan_bulk(
         self,

@@ -15,11 +15,22 @@ is gzip-compressed CSV).
 
 | Format | Extensions | Notes |
 |--------|------------|-------|
-| CSV | `.csv` | Delimiter (comma, semicolon, tab or pipe) detected from the header line; `--delimiter` overrides it |
-| TSV | `.tsv` | Use `--delimiter '\t'` if needed |
-| JSON | `.json` | Array of objects |
+| CSV | `.csv` | Delimiter (comma, semicolon, tab or pipe) detected from the first records; `--delimiter` overrides it. An Excel `sep=;` first line and title or note rows above the header are skipped |
+| TSV | `.tsv` | Tab-delimited |
+| Delimited text | `.txt` | Read as CSV when the lines have a consistent delimiter (GTFS `stops.txt`), else as plain text |
+| JSON | `.json` | Array of objects, or an object that holds them: the longest list of objects (OData `value`, JSON-LD `@graph`, `result.records`) gives the records; `--tagname` names the key |
 | JSON Lines | `.jsonl`, `.ndjson` | Newline-delimited JSON |
 | XML | `.xml` | `--tagname` selects the record element |
+| PC-Axis | `.px` | Read in the encoding of `CODEPAGE` / `CHARSET`; the metadata keywords are not reported as fields |
+
+## Geodata formats
+
+| Format | Extensions | Notes |
+|--------|------------|-------|
+| GeoJSON, TopoJSON | `.geojson`, `.topojson` | Feature properties are scanned as `properties.<name>` |
+| KML | `.kml` | Placemarks |
+| GML | `.gml` | GML and WFS feature collections (`gml:featureMember`, `wfs:member`) |
+| Shapefile | `.shp.zip` | Zipped Shapefile; needs `pyshp` (in the `formats` extra) |
 
 ## Binary formats
 
@@ -30,6 +41,7 @@ is gzip-compressed CSV).
 | Avro | `.avro` |
 | ORC | `.orc` |
 | Excel | `.xls`, `.xlsx` |
+| OpenDocument spreadsheet | `.ods` (needs `odfpy`, in the `formats` extra) |
 | Pickle | `.pickle`, `.pkl` |
 
 ## Compression codecs
@@ -38,11 +50,9 @@ These suffixes (and `--compression`) are recognized: gzip (`.gz`), bzip2
 (`.bz2`), xz (`.xz`), lz4 (`.lz4`), zstandard (`.zst`), Brotli (`.br`), Snappy,
 ZIP (`.zip`).
 
-A zstandard stream cannot be rewound, so the delimiter of a `.csv.zst` file is not
-detected: it is read with a comma unless `--delimiter` is given.
-
-`--encoding` selects character encoding for text formats (default:
-auto-detected). `--compression auto` is the default; `none` disables codec
+`--encoding` selects character encoding for text formats (default: detected from the
+first megabyte of the decompressed file; single-byte Latin text gets cp1252, cp1250,
+cp1257 or cp1254 by its letters). `--compression auto` is the default; `none` disables codec
 handling.
 
 ## Related docs
