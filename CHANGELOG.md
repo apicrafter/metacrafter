@@ -27,7 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - headings over the row label columns only (`Batken oblast` above `Items;1990;1991`) are
     section titles: they are skipped, not joined into the column names; group headings over
     value columns are still joined;
-  - a title with a unit note (`（２）年齢別人口 … 単位：人`) is a title row;
+  - a title with a unit note (`（２）年齢別人口 … 単位：人`) is a title row, also when it is
+    repeated over the blocks of a wide sheet, and a letterhead or title row right above the
+    header is no longer joined into the column names;
   - XLS numbers are read as the sheet shows them for the header search and the column names
     (`1990`, not `1990.0`).
 - **SPSS files** (#97): `.sav` and `.zsav` files are read with pyreadstat's dict output in

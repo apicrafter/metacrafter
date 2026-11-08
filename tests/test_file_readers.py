@@ -311,3 +311,18 @@ def test_xml_records_with_different_children_stay_as_they_are(tmp_path):
     data = ("<root><header><column>a</column><column>b</column></header>"
             "<body><column>1</column><column>2</column><column>3</column></body></root>").encode()
     assert xml_header_names(data, "body") is None
+
+
+def test_wide_title_rows_with_unit_notes():
+    from metacrafter.file_inputs import header_row
+
+    columns = 20
+    title = [""] * columns
+    for start in (0, 10):
+        title[start], title[start + 6] = "（３）年齢（5歳階級）、男女別人口", " 単位：人"
+    header = ["市 町 村"] + [f"{a}～{a + 4}歳" for a in range(0, 5 * (columns - 1), 5)]
+    rows = [[""] * columns, title, header]
+    rows += [[f"市{i}"] + [str(100 * i + j) for j in range(columns - 1)] for i in range(5)]
+    index, _, names = header_row(rows)
+    assert index == 2 and names is None
+

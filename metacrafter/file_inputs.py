@@ -355,14 +355,15 @@ def _is_title_row(row: List[str], columns: int = 0) -> bool:
     filled = [str(c).strip() for c in row if str(c).strip()]
     if len(filled) <= 1:
         return True
-    return len(filled) == 2 and (filled[0].endswith((":", "：")) or any(_UNIT_NOTE.match(c) for c in filled)
-                                 or (columns >= 8 and _width(row) <= columns // 4))
+    if any(_UNIT_NOTE.match(c) for c in filled) and (len(filled) == 2 or len(filled) <= columns // 4):
+        return True  # titles with their unit, repeated over the blocks of a wide sheet
+    return len(filled) == 2 and (filled[0].endswith((":", "：")) or (columns >= 8 and _width(row) <= columns // 4))
 
 
-def _is_band_row(row: List[str]) -> bool:
+def _is_band_row(row: List[str], columns: int = 0) -> bool:
     """An upper header row: two or more label cells and no numbers (merged group headings)."""
     filled = [str(c).strip() for c in row if str(c).strip()]
-    return len(filled) >= 2 and all(_is_label(c) for c in filled) and not _is_title_row(row)
+    return len(filled) >= 2 and all(_is_label(c) for c in filled) and not _is_title_row(row, columns)
 
 
 def _text_columns(body: List[List[str]], columns: int) -> set:
@@ -435,7 +436,7 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
         # Headings over the row label columns only are section titles (#98).
         text_columns = _text_columns([r for r in rows[index + 1:] if _width(r) > 1], columns)
         top = index
-        while top > 0 and _is_band_row(rows[top - 1]) and not _is_section_row(rows[top - 1], text_columns):
+        while top > 0 and _is_band_row(rows[top - 1], columns) and not _is_section_row(rows[top - 1], text_columns):
             top -= 1
         # Header rows below it (GENESIS: "Stichtag" / "31.12.2025" / "Insgesamt"): label
         # rows with fewer filled cells than the first data row continue the header.
