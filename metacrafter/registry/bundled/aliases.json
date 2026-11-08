@@ -14,6 +14,7 @@
   "ogrn_ogrnip": "ogrn",
   "okpd2": "okpd",
   "path_file": "filepath",
+  "postcode": "postindex",
   "sha1": "sha1hash",
   "sha256": "sha256hash",
   "ssn": "usssn",

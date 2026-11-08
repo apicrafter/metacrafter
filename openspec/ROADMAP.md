@@ -106,7 +106,9 @@ files of Russian open data: 238 matches to 135, fields with a match 116 to 106.
 The metacrafter-rules fixes shipped in v0.0.3 (apicrafter/metacrafter#41) through v0.0.8
 (apicrafter/metacrafter#71). v0.0.9 (trade and customs rules, apicrafter/metacrafter-rules#39)
 followed on 2026-11-07. v0.0.10 (fixes from a scan of metacrafter-testdata, explicit priority
-on every field rule, apicrafter/metacrafter-rules#50) is the pinned rule pack since 2026-11-08.
+on every field rule, apicrafter/metacrafter-rules#50) followed on 2026-11-08, and v0.0.11
+(multilingual field names and guarded foreign value rules from the 128-file metacrafter-testdata
+set, apicrafter/metacrafter-rules#52) is the pinned rule pack since 2026-11-08.
 
 ## Phase 0 — Foundation and reliability
 
