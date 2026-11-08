@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Workbooks: the first sheet that holds a table is scanned** (#89). Statistics offices
+  put notes, a title page or contents first (INSEE, Destatis); `scan file` read only the
+  first sheet and got one or two fields. It now takes the first of up to 20 sheets with at
+  least three columns and three rows below the header, and logs which one. An explicit
+  sheet in `iterableargs` (`page`) is kept.
+- **Multi-row headers** in CSV files and sheets: upper header rows (merged group headings,
+  reference dates) are joined into the column names, as in `Ensemble 0 à 19 ans` or
+  `Stichtag 31.12.2025 Insgesamt`; years and dates count as column labels; a letterhead
+  of two narrow cells above a wide table counts as a title row. Text rows that follow a
+  header with the same shape stay data.
+- **JSON tables split into column names and rows** are scanned as records:
+  `{"columns": [...], "data": [[...]]}` and `{"indices": [...], "data": {"id": [...]}}`.
+  They were one record with thousands of fields.
+
 - **Open data files that iterabledata 1.1 misreads are scanned** (#81-#87). Before opening a
   file, `scan file` reads its first megabyte (decompressed) and fills in what is missing
   (`metacrafter/file_inputs.py`); explicit `--delimiter`, `--encoding` and `--tagname` win:

@@ -18,7 +18,7 @@ is gzip-compressed CSV).
 | CSV | `.csv` | Delimiter (comma, semicolon, tab or pipe) detected from the first records; `--delimiter` overrides it. An Excel `sep=;` first line and title or note rows above the header are skipped |
 | TSV | `.tsv` | Tab-delimited |
 | Delimited text | `.txt` | Read as CSV when the lines have a consistent delimiter (GTFS `stops.txt`), else as plain text |
-| JSON | `.json` | Array of objects, or an object that holds them: the longest list of objects (OData `value`, JSON-LD `@graph`, `result.records`) gives the records; `--tagname` names the key |
+| JSON | `.json` | Array of objects, or an object that holds them: the longest list of objects (OData `value`, JSON-LD `@graph`, `result.records`) gives the records, or column names next to rows as lists (`columns` + `data`); `--tagname` names the key |
 | JSON Lines | `.jsonl`, `.ndjson` | Newline-delimited JSON |
 | XML | `.xml` | `--tagname` selects the record element |
 | PC-Axis | `.px` | Read in the encoding of `CODEPAGE` / `CHARSET`; the metadata keywords are not reported as fields |
@@ -40,7 +40,7 @@ is gzip-compressed CSV).
 | Parquet | `.parquet` |
 | Avro | `.avro` |
 | ORC | `.orc` |
-| Excel | `.xls`, `.xlsx` |
+| Excel | `.xls`, `.xlsx` (the first sheet that holds a table; title rows and multi-row headers are handled) |
 | OpenDocument spreadsheet | `.ods` (needs `odfpy`, in the `formats` extra) |
 | Pickle | `.pickle`, `.pkl` |
 
