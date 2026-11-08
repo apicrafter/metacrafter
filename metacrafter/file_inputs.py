@@ -1,7 +1,8 @@
 """Look at a data file before iterabledata opens it.
 
 iterabledata chooses the reader and its defaults from the file name. Common open data files
-break those defaults:
+break those defaults (since iterabledata 1.2 the readers handle PC-Axis encodings, WFS GML,
+zipped Shapefiles and sheet options themselves, #90):
 
 - compressed CSV in a Windows or East Asian code page is read as UTF-8, and short plain
   Western files are detected as Mac code pages (#81);
@@ -34,7 +35,7 @@ import re
 import zipfile
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any, Callable, Iterable, Iterator, List, Optional, Tuple
+from typing import Any, Iterable, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -98,21 +99,15 @@ class InputPlan:
 
     iterableargs: dict
     skip_records: int = 0
-    drop_key: Optional[Callable[[str], bool]] = None
     records: Optional[list] = None
-    opener: Optional[Callable[[], Any]] = None
-    fallback: Optional[dict] = None
     notes: List[str] = field(default_factory=list)
 
     def apply(self, records: Iterable[Any]) -> Iterator[Any]:
-        """Skip leading records and drop metadata keys."""
+        """Skip the title and header lines read as records."""
         iterator = iter(records)
         if self.skip_records:
             iterator = itertools.islice(iterator, self.skip_records, None)
-        if self.drop_key is None:
-            return iterator
-        drop = self.drop_key
-        return ({k: v for k, v in r.items() if not drop(k)} if isinstance(r, dict) else r for r in iterator)
+        return iterator
 
 
 class RecordSource:
@@ -273,36 +268,6 @@ def detect_encoding(sample: bytes, truncated: bool = True) -> str:
     if detected is None or detected in _LATIN_NAMES or detected.startswith(("mac", "cp8")):
         return _latin_choice(sample)
     return detected
-
-
-def px_encoding(sample: bytes) -> str:
-    """Encoding a PC-Axis file declares: CODEPAGE, else CHARSET="ANSI" (cp1252), else UTF-8."""
-    head = sample[:20000]
-    if head.startswith(codecs.BOM_UTF8):
-        return "utf-8-sig"
-    match = _PX_CODEPAGE.search(head)
-    if match:
-        name = match.group(1).decode("ascii", "replace")
-        try:
-            return codecs.lookup(name).name
-        except LookupError:
-            logger.debug("Unknown PX CODEPAGE %s", name)
-    match = _PX_CHARSET.search(head)
-    if match and match.group(1).upper() == b"ANSI":
-        try:
-            head.decode("utf-8")
-            return "utf-8"
-        except UnicodeDecodeError:
-            return "cp1252"
-    return detect_encoding(sample)
-
-
-def is_px_metadata_key(key: Any) -> bool:
-    """True for the ``_KEYWORD`` copies of PC-Axis metadata that iterabledata adds to records."""
-    if not isinstance(key, str) or len(key) < 2 or key[0] != "_":
-        return False
-    word = re.split(r"[\[(]", key[1:], maxsplit=1)[0]
-    return bool(word) and word.replace("-", "").isalnum() and word.upper() == word and word[0].isalpha()
 
 
 # ---------------------------------------------------------------- CSV layout
@@ -546,17 +511,12 @@ def prepare_input(filename: str, iterableargs: dict) -> InputPlan:
     if ext in TABLE_EXTENSIONS:
         _plan_table(filename, ext, codec, plan)
     elif ext == "px":
-        _plan_px(filename, codec, plan)
+        # iterabledata reads CODEPAGE / CHARSET; its metadata copies are not table fields.
+        args.setdefault("metadata", False)
     elif ext == "json" and not args.get("tagname"):
         _plan_json(filename, codec, plan)
     elif ext in ("xlsx", "xls") and codec is None and "start_line" not in args and "keys" not in args:
         _plan_sheet(filename, ext, plan)
-    elif ext == "shp" and codec == "zip":
-        plan.opener = lambda: RecordSource(shapefile_records(filename), "shapefile")
-        plan.notes.append("zipped Shapefile read with pyshp")
-    elif ext == "gml":
-        plan.fallback = {k: v for k, v in args.items() if k not in ("autodetect", "delimiter")}
-        plan.fallback["format"] = "xml"
     for note in plan.notes:
         logger.info("%s: %s", filename, note)
     return plan
@@ -586,9 +546,6 @@ def _plan_table(filename: str, ext: str, codec: Optional[str], plan: InputPlan) 
         plan.notes.append(f"read as a table delimited by {layout.delimiter!r}")
     if layout is None:
         return
-    if not args.get("delimiter") and codec == "zst" and layout.consistent >= 0.5:
-        # iterabledata cannot rewind a zstandard stream to detect the delimiter.
-        args["delimiter"] = layout.delimiter
     if layout.sep_hint or layout.header_index:
         args["delimiter"] = layout.delimiter
         args["keys"] = _unique(layout.header)
@@ -679,32 +636,16 @@ def _plan_sheet(filename: str, ext: str, plan: InputPlan) -> None:
         titles = sheet_names(filename, ext)
         name = titles[page] if page < len(titles) else str(page)
         plan.notes.append(f"scanned sheet {page + 1} ({name}), the first one that holds a table")
-    # iterabledata 1.1 ignores start_line in iterableargs (datenoio/iterabledata#45), so the
-    # reader is created directly. XLSX skips start_line rows and takes the next non-blank
-    # row as the header; XLS takes row start_line.
-    # With combined names the readers get them as keys and start at the first data row.
-    keys = _unique(names) if names else None
-    start = index + 1 if keys else index
-    if ext == "xlsx":
-        from iterable.datatypes.xlsx import XLSXIterable
-
-        plan.opener = lambda: XLSXIterable(filename, keys=keys, start_line=start, page=page)
-    else:
-        from iterable.datatypes.xls import XLSIterable
-
-        plan.opener = lambda: XLSIterable(filename, keys=keys, start_line=start, page=page)
+    # The readers skip start_line rows; with joined names they get them as keys and start at
+    # the first data row, else they take the next non-blank row as the header.
+    plan.iterableargs["page"] = page
+    if names:
+        plan.iterableargs["keys"] = _unique(names)
+        plan.iterableargs["start_line"] = index + 1
+    elif index:
+        plan.iterableargs["start_line"] = index
     if index:
         plan.notes.append(f"header on sheet row {index + 1}; skipped {index} row(s) above it")
-
-
-def _plan_px(filename: str, codec: Optional[str], plan: InputPlan) -> None:
-    plan.drop_key = is_px_metadata_key
-    if plan.iterableargs.get("encoding"):
-        return
-    sample = read_bytes(filename, codec, 20000)
-    if sample:
-        plan.iterableargs["encoding"] = px_encoding(sample)
-        plan.notes.append(f"PC-Axis encoding {plan.iterableargs['encoding']}")
 
 
 def _plan_json(filename: str, codec: Optional[str], plan: InputPlan) -> None:
@@ -719,46 +660,3 @@ def _plan_json(filename: str, codec: Optional[str], plan: InputPlan) -> None:
         return
     plan.records, where = found
     plan.notes.append(f"records from {where}")
-
-
-def shapefile_records(filename: str) -> Iterator[dict]:
-    """GeoJSON-like features of a zipped Shapefile (iterabledata 1.1 cannot open it, #46).
-
-    pyshp reads the archive directly; the DBF encoding comes from the ``.cpg`` member.
-    """
-    import shapefile
-    from iterable.datatypes.shapefile import shape_to_geojson
-
-    encoding = "utf-8"
-    with zipfile.ZipFile(filename) as zf:
-        names = zf.namelist()
-        shp = next((n for n in names if n.lower().endswith(".shp")), None)
-        cpg = next((n for n in names if n.lower().endswith(".cpg")), None)
-        if cpg:
-            declared = zf.read(cpg).decode("ascii", "replace").strip()
-            try:
-                encoding = codecs.lookup(declared).name
-            except LookupError:
-                logger.debug("Unknown .cpg encoding %s", declared)
-    target = filename if shp is None or "/" not in shp else f"{filename}/{shp}"
-    reader = shapefile.Reader(target, encoding=encoding, encodingErrors="replace")
-    try:
-        for shape_record in reader.iterShapeRecords():
-            yield shape_to_geojson(shape_record, shape_record.shape)
-    finally:
-        reader.close()
-
-
-def unwrap_members(records: Iterable[Any]) -> Iterator[Any]:
-    """``{"apotheke": {...}}`` -> ``{...}`` for GML feature members read as XML."""
-    for record in records:
-        if isinstance(record, dict):
-            values = [v for k, v in record.items() if not str(k).startswith("@")]
-            if len(values) == 1 and isinstance(values[0], dict):
-                inner = dict(values[0])
-                for k, v in record.items():
-                    if str(k).startswith("@") and k not in inner:
-                        inner[k] = v
-                yield inner
-                continue
-        yield record

@@ -20,7 +20,7 @@ import qddate.patterns
 
 from iterable.helpers.detect import open_iterable
 
-from metacrafter.file_inputs import RecordSource, prepare_input, unwrap_members
+from metacrafter.file_inputs import RecordSource, prepare_input
 
 from metacrafter.classify.processor import RulesProcessor, BASE_URL, match_rank_key
 from metacrafter.classify.stats import Analyzer, DEFAULT_DICT_SHARE, DEFAULT_EMPTY_VALUES
@@ -1818,14 +1818,12 @@ class CrafterCmd(object):
             discovered = xml_quick_analyzer(filename)
             if discovered:
                 iterableargs["tagname"] = discovered["short"]
-        # Encoding, header offset, JSON record key, PC-Axis metadata, GTFS .txt, GML members.
+        # Encoding, header offset, JSON records, sheet choice, PC-Axis metadata, GTFS .txt.
         plan = prepare_input(str(filename), iterableargs)
         iterableargs = plan.iterableargs
         try:
             if plan.records is not None:
                 data_file = RecordSource(plan.records, "json")
-            elif plan.opener is not None:
-                data_file = plan.opener()
             else:
                 data_file = _open_data_file(filename, iterableargs)
         except UnicodeDecodeError as e:
@@ -1860,20 +1858,6 @@ class CrafterCmd(object):
         try:
             try:
                 items, provenance = self._read_records(data_file, filename, plan, limit, sampling, seed)
-                if not items and plan.fallback is not None:
-                    # GML feature members the GML reader did not find (wfs:member,
-                    # namespaced featureMember): read the members as XML records.
-                    from metacrafter.classify.utils import xml_quick_analyzer
-
-                    discovered = xml_quick_analyzer(filename)
-                    if discovered:
-                        fallback = dict(plan.fallback, tagname=discovered["short"])
-                        data_file.close()
-                        data_file = _open_data_file(filename, fallback)
-                        records, provenance = self._read_records(
-                            data_file, filename, plan, limit, sampling, seed
-                        )
-                        items = list(unwrap_members(records))
             except Exception as e:  # noqa: BLE001 - only decoding errors are handled here
                 decode_error = _decode_error(e)
                 if decode_error is None:
