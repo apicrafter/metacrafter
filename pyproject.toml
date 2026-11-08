@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "metacrafter"
-version = "2.0.0"
+version = "2.1.0"
 description = "Metacrafter metadata classification tool"
 readme = "README.md"
 requires-python = ">=3.10"

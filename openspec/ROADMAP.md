@@ -67,6 +67,13 @@ pattern-record detectors (apicrafter/metacrafter#39) and `--llm-verify`
 (apicrafter/metacrafter#40) are implemented; apicrafter/metacrafter#38 (`--pack`) was closed
 without a `--pack` option.
 
+**Status (2026-11-08):** release 2.1.0 is prepared. It follows bug-fix work only, so no
+OpenSpec change was opened or archived: input preparation for open data files
+(apicrafter/metacrafter#81-#89, #91), iterabledata 1.2 (#90, released as
+datenoio/iterabledata v1.2.0), and the rule pack metacrafter-rules v0.0.11 with registry
+1.3.0 at 4dceeb8 (#93), all from the 128-file metacrafter-testdata set. No OpenSpec change is
+open.
+
 Open items:
 
 | Item | Issue | Owner |
@@ -74,6 +81,7 @@ Open items:
 | Named entity recognition | apicrafter/metacrafter#1 | metacrafter |
 | `latitudevalue` and `longitudevalue` miss negative, one-digit and >= 100 coordinates | apicrafter/metacrafter-rules#34 | metacrafter-rules |
 | `isrcvalue` can never match (14-character pattern, maxlen 12) | apicrafter/metacrafter-rules#37 | metacrafter-rules |
+| Normalize field names for text rules and strip values before matching | apicrafter/metacrafter#73 | metacrafter |
 
 Distribution (decided 2026-11-05, `update-ecosystem-distribution`): neither
 `metacrafter-rules` nor `metacrafter-registry` is published on PyPI. The rule pack is a
@@ -163,6 +171,7 @@ set, apicrafter/metacrafter-rules#52) is the pinned rule pack since 2026-11-08.
 | 0.3.0 | Phase 2 + example-based rule tests |
 | 1.0.0 | Phases 3–4; report v2 by default |
 | 2.0.0 | Precise scan defaults (confidence 50, `checksum` registry detectors); rule pack v0.0.8 |
+| 2.1.0 | Input preparation for open data files, iterabledata 1.2; rule pack v0.0.11, registry 1.3.0 (4dceeb8) |
 
 ## Cross-repository prerequisites
 

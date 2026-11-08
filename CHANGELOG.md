@@ -7,56 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [2.1.0] - 2026-11-08
 
-- **Workbooks: the first sheet that holds a table is scanned** (#89). Statistics offices
-  put notes, a title page or contents first (INSEE, Destatis); `scan file` read only the
-  first sheet and got one or two fields. It now takes the first of up to 20 sheets with at
-  least three columns and three rows below the header, and logs which one. An explicit
-  sheet in `iterableargs` (`page`) is kept.
-- **Multi-row headers** in CSV files and sheets: upper header rows (merged group headings,
-  reference dates) are joined into the column names, as in `Ensemble 0 à 19 ans` or
-  `Stichtag 31.12.2025 Insgesamt`; years and dates count as column labels; a letterhead
-  of two narrow cells above a wide table counts as a title row. Text rows that follow a
-  header with the same shape stay data.
-- **JSON tables split into column names and rows** are scanned as records:
-  `{"columns": [...], "data": [[...]]}` and `{"indices": [...], "data": {"id": [...]}}`.
-  They were one record with thousands of fields.
-
-- **Open data files that iterabledata 1.1 misreads are scanned** (#81-#87). Before opening a
-  file, `scan file` reads its first megabyte (decompressed) and fills in what is missing
-  (`metacrafter/file_inputs.py`); explicit `--delimiter`, `--encoding` and `--tagname` win:
-  - CSV/TSV/TXT get their encoding from the decompressed bytes, so cp1252 or cp932
-    `.csv.gz` files open (#81). Single-byte Latin text gets the code page whose letters fit
-    one alphabet: short cp1252 files are no longer read as MacTurkish (`Straße` was
-    `Straşe`), Polish and Czech get cp1250, Lithuanian cp1257, Turkish cp1254.
-  - PC-Axis files are read in the encoding of their `CODEPAGE` (or cp1252 for
-    `CHARSET="ANSI"`), and the `_KEYWORD` metadata copies are no longer reported as fields
-    (#82).
-  - JSON with an object at the root is scanned: the longest list of objects (up to three
-    levels deep, e.g. OData `value`, JSON-LD `@graph`, CKAN `result.records`) gives the
-    records, else the object is one record (#83). It failed with `Error: 0`.
-  - GML feature collections from WFS (`wfs:member`, namespaced `featureMember`) that the GML
-    reader returns empty are read as XML members (#84). A file that gives no records now
-    logs a warning.
-  - Delimited `.txt` files such as GTFS `stops.txt` are read as CSV (#85).
-  - An Excel `sep=;` first line sets the delimiter, and title or note rows above the header
-    (GENESIS, statistics offices) are skipped, in CSV files and in the first sheet of XLSX
-    and XLS workbooks; the header is the first row with the body's column count (#87).
-  - Zipped Shapefiles (`.shp.zip`) are read with pyshp, in the DBF encoding of their
-    `.cpg` member; iterabledata 1.1 cannot open them (#86).
-- A decoding error is reported as such, with a hint to pass `--encoding`, instead of
-  "Unsupported file type" (#81). Unhandled errors name the exception when its text is not
-  enough (`Error: KeyError: 0`).
-- The `formats` extra installs `pyshp` and `odfpy`, so zipped Shapefiles and ODS
-  spreadsheets open (#86); the supported formats list names GeoJSON, TopoJSON, KML, GML,
-  Shapefile, ODS, PC-Axis and delimited TXT.
-
-### Added
-
-- `metacrafter rules lint` lists field rules without `priority` under `warnings`: their
-  name-only match scores 36, below the default confidence 50, so they report only together
-  with a value match (380 rules in metacrafter-rules v0.0.9). `--strict` fails on them.
+Open data files that iterabledata 1.1 misread are scanned (encodings, header offsets, JSON
+records under a key, WFS GML, GTFS `.txt`, zipped Shapefiles, the sheet that holds a table,
+multi-row headers), iterabledata 1.2 is required, and the default rule pack is
+metacrafter-rules v0.0.11 with the registry snapshot 1.3.0 at 4dceeb8. Migration guide:
+`docs/docs/getting-started/migration.md`.
 
 ### Changed
 
@@ -114,7 +71,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - In the benchmark, the `currency` column reports `currency` and `iso4217curcode`
     (precision and recall 1.0) instead of the false `okvalpha`.
 
+### Added
+
+- `metacrafter rules lint` lists field rules without `priority` under `warnings`: their
+  name-only match scores 36, below the default confidence 50, so they report only together
+  with a value match (380 rules in metacrafter-rules v0.0.9). `--strict` fails on them.
+
 ### Fixed
+
+- **Workbooks: the first sheet that holds a table is scanned** (#89). Statistics offices
+  put notes, a title page or contents first (INSEE, Destatis); `scan file` read only the
+  first sheet and got one or two fields. It now takes the first of up to 20 sheets with at
+  least three columns and three rows below the header, and logs which one. An explicit
+  sheet in `iterableargs` (`page`) is kept.
+- **Multi-row headers** in CSV files and sheets: upper header rows (merged group headings,
+  reference dates) are joined into the column names, as in `Ensemble 0 à 19 ans` or
+  `Stichtag 31.12.2025 Insgesamt`; years and dates count as column labels; a letterhead
+  of two narrow cells above a wide table counts as a title row. Text rows that follow a
+  header with the same shape stay data.
+- **JSON tables split into column names and rows** are scanned as records:
+  `{"columns": [...], "data": [[...]]}` and `{"indices": [...], "data": {"id": [...]}}`.
+  They were one record with thousands of fields.
+
+- **Open data files that iterabledata 1.1 misreads are scanned** (#81-#87). Before opening a
+  file, `scan file` reads its first megabyte (decompressed) and fills in what is missing
+  (`metacrafter/file_inputs.py`); explicit `--delimiter`, `--encoding` and `--tagname` win:
+  - CSV/TSV/TXT get their encoding from the decompressed bytes, so cp1252 or cp932
+    `.csv.gz` files open (#81). Single-byte Latin text gets the code page whose letters fit
+    one alphabet: short cp1252 files are no longer read as MacTurkish (`Straße` was
+    `Straşe`), Polish and Czech get cp1250, Lithuanian cp1257, Turkish cp1254.
+  - PC-Axis files are read in the encoding of their `CODEPAGE` (or cp1252 for
+    `CHARSET="ANSI"`), and the `_KEYWORD` metadata copies are no longer reported as fields
+    (#82).
+  - JSON with an object at the root is scanned: the longest list of objects (up to three
+    levels deep, e.g. OData `value`, JSON-LD `@graph`, CKAN `result.records`) gives the
+    records, else the object is one record (#83). It failed with `Error: 0`.
+  - GML feature collections from WFS (`wfs:member`, namespaced `featureMember`) that the GML
+    reader returns empty are read as XML members (#84). A file that gives no records now
+    logs a warning.
+  - Delimited `.txt` files such as GTFS `stops.txt` are read as CSV (#85).
+  - An Excel `sep=;` first line sets the delimiter, and title or note rows above the header
+    (GENESIS, statistics offices) are skipped, in CSV files and in the first sheet of XLSX
+    and XLS workbooks; the header is the first row with the body's column count (#87).
+  - Zipped Shapefiles (`.shp.zip`) are read with pyshp, in the DBF encoding of their
+    `.cpg` member; iterabledata 1.1 cannot open them (#86).
+- A decoding error is reported as such, with a hint to pass `--encoding`, instead of
+  "Unsupported file type" (#81). Unhandled errors name the exception when its text is not
+  enough (`Error: KeyError: 0`).
+- The `formats` extra installs `pyshp` and `odfpy`, so zipped Shapefiles and ODS
+  spreadsheets open (#86); the supported formats list names GeoJSON, TopoJSON, KML, GML,
+  Shapefile, ODS, PC-Axis and delimited TXT.
 
 - `scan file` detects the CSV delimiter again. iterabledata 1.1 reads CSV with a comma
   unless detection is requested, so semicolon- and pipe-separated files were scanned as
