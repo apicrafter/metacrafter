@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`_id` is a field** (#96): file scans report the `_id` field of MongoDB exports (JSONL,
+  JSON) and CKAN DataStore dumps (CSV) like any other field (`mongodbid` for ObjectIds);
+  `dict_generator` and the statistics no longer drop it. `scan mongodb` still leaves the
+  collection ids out.
+
 ## [2.1.0] - 2026-11-08
 
 Open data files that iterabledata 1.1 misread are scanned (encodings, header offsets, JSON

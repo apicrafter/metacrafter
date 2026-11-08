@@ -122,6 +122,19 @@ def scan_duckdb(service, connectstr, schema, limit, options):
     return reports, errors
 
 
+def without_object_ids(value):
+    """A MongoDB document without its ``_id`` keys (at any depth).
+
+    ``scan mongodb`` has never reported collection ids (``ObjectId`` values); files keep
+    their ``_id`` field since #96.
+    """
+    if isinstance(value, dict):
+        return {k: without_object_ids(v) for k, v in value.items() if k != "_id"}
+    if isinstance(value, list):
+        return [without_object_ids(v) for v in value]
+    return value
+
+
 def scan_mongo(
     service, host, port, dbname, username, password, limit, options, batch_size=1000
 ):
@@ -137,7 +150,7 @@ def scan_mongo(
                 with database[name].find().batch_size(batch_size).limit(
                     limit
                 ) as cursor:
-                    items = list(cursor)
+                    items = [without_object_ids(doc) for doc in cursor]
                 report = scan_items(service, items, limit, options)
                 report.update(source=source, table=source)
                 report["sampling"].update(

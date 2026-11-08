@@ -178,13 +178,12 @@ class TestAnalyzer:
             assert isinstance(n_uniq, int)
             assert isinstance(share_uniq, float)
 
-    def test_analyze_ignores_id(self):
+    def test_analyze_keeps_id(self):
         analyzer = Analyzer(nodates=True)
         items = [{"_id": "123", "name": "John"}]
         result = analyzer.analyze(itemlist=items)
-        # _id should be ignored
-        if result:
-            assert not any("_id" in str(row[0]) for row in result)
+        # _id is a field like any other (#96).
+        assert [row[0] for row in result] == ["_id", "name"]
 
     def test_analyze_jsonl_file(self):
         analyzer = Analyzer(nodates=True)
