@@ -395,6 +395,9 @@ def match_rank_key(match: "RuleResult") -> Tuple[float, float]:
     return (-float(match.confidence or 0.0), -match_name_score(match))
 
 
+#: A time of day after a date: "2016-01-01 10:00", "2024-01-01T10:00:00" (not "(бывш. 25.01.2008)").
+_TIME_AFTER_DATE = re.compile(r"^[T\s,]*\d{1,2}:\d{2}")
+
 #: A character class with a range of letters ([A-Z0-9], [0-9B-DF-HJ-NP-Z]) in a regexp.
 _LETTER_CLASS = re.compile(r"\[[^\]]*[A-Za-z]-[A-Za-z][^\]]*\]")
 
@@ -406,15 +409,16 @@ def date_pattern_match(dateparser: Any, value: str) -> Optional[Tuple[str, bool]
     ``:t_right`` patterns), so ``18-2-023909`` read as 18 February 0239 with ``09``
     left over. A date must end the value or be followed by a character that is
     neither a letter nor a digit, and its values must form a date. ``has_time`` is
-    True when digits follow the date (``2016-01-01 00:00:00``): the value is a date
-    and time, not a date. qddate reports a time it read as a ``:time_N`` suffix of the key.
+    True when a time of day follows the date (``2016-01-01 00:00:00``): the value is a
+    date and time, not a date. A note after the date (``30.09.2016 (бывш. 25.01.2008)``)
+    is not a time. qddate reports a time it read as a ``:time_N`` suffix of the key.
     """
     match_typed = getattr(dateparser, "match_typed", None)
     if match_typed is None:
         res = dateparser.match(value, noyear=False)
         if not res:
             return None
-        return res["pattern"]["key"], len(value.strip()) > 10 and any(ch.isdigit() for ch in value[10:])
+        return res["pattern"]["key"], bool(re.search(r"\d{1,2}:\d{2}", value))
     found = match_typed(value, allow_no_year=False)
     if found is None:
         return None
@@ -422,7 +426,7 @@ def date_pattern_match(dateparser: Any, value: str) -> Optional[Tuple[str, bool]
     if end < len(value) and value[end].isalnum():
         return None
     # match_typed reads a time after the date too (dt:date:date_9:time_1).
-    return found.pattern_key, ":time" in found.pattern_key or any(ch.isdigit() for ch in value[end:])
+    return found.pattern_key, ":time" in found.pattern_key or bool(_TIME_AFTER_DATE.match(value[end:]))
 
 
 def date_pattern_key(dateparser: Any, value: str) -> Optional[str]:

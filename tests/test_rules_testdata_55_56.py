@@ -89,6 +89,7 @@ def test_values_with_a_time_are_datetimes(processor, dateparser):
 def test_date_pattern_match_reports_the_time(dateparser):
     assert date_pattern_match(dateparser, "2016-01-01 10:00")[1] is True
     assert date_pattern_match(dateparser, "2016-01-01")[1] is False
+    assert date_pattern_match(dateparser, "30.09.2016 (бывш. 25.01.2008)")[1] is False
 
 
 def test_date_name_with_datetime_values(processor, dateparser):
