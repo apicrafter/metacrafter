@@ -42,6 +42,9 @@ SAMPLE_BYTES = 1 << 20
 JSON_MAX_BYTES = 256 << 20
 SAMPLE_RECORDS = 60
 MAX_HEADER_OFFSET = 30
+MAX_SHEETS = 20
+MIN_TABLE_COLUMNS = 3
+MIN_TABLE_ROWS = 3
 CODEC_EXTENSIONS = {"gz", "bz2", "xz", "zst", "zip", "lz4", "br"}
 TABLE_EXTENSIONS = {"csv", "tsv", "psv", "tab", "txt"}
 DELIMITERS = (",", ";", "\t", "|")
@@ -57,6 +60,8 @@ _SEP_HINT = re.compile(r"^sep=(.)\s*$", re.IGNORECASE)
 _PX_CODEPAGE = re.compile(rb'CODEPAGE\s*=\s*"([\w\-]+)"', re.IGNORECASE)
 _PX_CHARSET = re.compile(rb'CHARSET\s*=\s*"([\w\-]+)"', re.IGNORECASE)
 _NUMBER = re.compile(r"^[\s+\-]?[\d\s.,]+%?$")
+_YEAR = re.compile(r"^(?:1[89]|20)\d{2}\s*[*¹²³)]*$")
+_DATE = re.compile(r"^(?:\d{1,2}[./]\d{1,2}[./]\d{4}|\d{4}-\d{2}-\d{2})$")
 
 
 def _alphabet(letters: str) -> frozenset:
@@ -306,7 +311,7 @@ class TableLayout:
     delimiter: Optional[str]
     columns: int
     header_index: int  # non-empty records before the header
-    header: List[str]
+    header: List[str]  # column names (upper header rows joined in)
     sep_hint: bool
     consistent: float  # share of sampled records that have ``columns`` fields
 
@@ -329,37 +334,101 @@ def _width(row: List[str]) -> int:
     return 0
 
 
-def _looks_like_header(row: List[str], columns: int) -> bool:
+def _is_label(cell: str) -> bool:
+    """A header cell: text, a year or a date (statistics tables use them as column labels)."""
+    return bool(cell) and (not _NUMBER.match(cell) or bool(_YEAR.match(cell)) or bool(_DATE.match(cell)))
+
+
+def _signature(row: List[str], columns: int) -> Tuple[bool, ...]:
+    return tuple(_is_label(str(c).strip()) for c in row[:columns])
+
+
+def _looks_like_header(row: List[str], columns: int, following: Optional[List[str]] = None) -> bool:
+    """Wide enough, mostly labels, and not shaped like the record after it (then it is data)."""
     cells = [str(c).strip() for c in row[:columns]]
     filled = [c for c in cells if c]
-    if _width(row) != columns or len(filled) < max(2, math.ceil(columns / 2)):
+    if abs(_width(row) - columns) > max(1, columns // 10) or len(filled) < max(2, math.ceil(columns / 2)):
         return False
-    numeric = sum(1 for c in filled if _NUMBER.match(c))
-    return numeric <= len(filled) / 2
+    if sum(1 for c in filled if _is_label(c)) <= len(filled) / 2:
+        return False
+    if following is not None and any(not _is_label(c) for c in filled):
+        # "1;A;x" above "2;B;y": the same mix of numbers and text in every column is data.
+        return _signature(row, columns) != _signature(following, columns)
+    return True
 
 
-def _is_title_row(row: List[str]) -> bool:
-    """Blank, one filled cell ("Tabelle 1: ..."), or a note like "Quelle:;Statistisches Amt"."""
+def _filled(row: List[str]) -> int:
+    return sum(1 for c in row if str(c).strip())
+
+
+def _is_title_row(row: List[str], columns: int = 0) -> bool:
+    """Blank, one filled cell ("Tabelle 1: ..."), a note like "Quelle:;Statistisches Amt",
+    or two cells far narrower than the table (a letterhead: address and date)."""
     filled = [str(c).strip() for c in row if str(c).strip()]
-    return len(filled) <= 1 or (len(filled) == 2 and filled[0].endswith(":"))
+    if len(filled) <= 1:
+        return True
+    return len(filled) == 2 and (filled[0].endswith(":") or (columns >= 8 and _width(row) <= columns // 4))
 
 
-def header_row(rows: List[List[str]]) -> Tuple[int, int]:
-    """(index of the header row, body column count) of the first rows of a table.
+def _is_band_row(row: List[str]) -> bool:
+    """An upper header row: two or more label cells and no numbers (merged group headings)."""
+    filled = [str(c).strip() for c in row if str(c).strip()]
+    return len(filled) >= 2 and all(_is_label(c) for c in filled) and not _is_title_row(row)
 
-    The header is the first row with the body's column count (the most common width) when
-    every row above it is a title or note row; otherwise it is the first row.
+
+def _combine_header(band: List[List[str]], header: List[str], columns: int) -> List[str]:
+    """Column names from upper header rows (merged cells filled to the right) and the header."""
+    filled_band = []
+    for row in band:
+        cells, last = [], ""
+        for i in range(columns):
+            cell = str(row[i]).strip() if i < len(row) else ""
+            last = cell or last
+            cells.append(last)
+        filled_band.append(cells)
+    names = []
+    for i in range(columns):
+        parts = [cells[i] for cells in filled_band] + [str(header[i]).strip() if i < len(header) else ""]
+        words: List[str] = []
+        for part in parts:
+            if part and part not in words:
+                words.append(part)
+        names.append(" ".join(words))
+    return names
+
+
+def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
+    """(header row index, body column count, combined names or None) of the first table rows.
+
+    The header is the first row with the body's column count (the most common width), if
+    every row above it is a title or note row, or an upper header row (merged group
+    headings) directly above it; then the names join the upper rows and the header row.
+    Otherwise the header is the first row.
     """
     widths = Counter(w for w in (_width(r) for r in rows) if w > 1)
     if not widths:
-        return 0, 0
+        return 0, 0, None
     columns = max(widths.items(), key=lambda kv: (kv[1], kv[0]))[0]
     for index, row in enumerate(rows[: MAX_HEADER_OFFSET + 1]):
-        if _looks_like_header(row, columns):
-            if all(_is_title_row(r) for r in rows[:index]):
-                return index, columns
-            break
-    return 0, columns
+        following = next((r for r in rows[index + 1:] if _width(r) > 1), None)
+        if not _looks_like_header(row, columns, following):
+            continue
+        top = index
+        while top > 0 and _is_band_row(rows[top - 1]):
+            top -= 1
+        # Header rows below it (GENESIS: "Stichtag" / "31.12.2025" / "Insgesamt"): label
+        # rows with fewer filled cells than the first data row continue the header.
+        while index + 1 < len(rows) and _is_band_row(rows[index + 1]):
+            data = next((r for r in rows[index + 2:] if _width(r) > 1 and not _is_band_row(r)), None)
+            if data is None or _filled(rows[index + 1]) >= _filled(data):
+                break
+            index += 1
+        if all(_is_title_row(r, columns) for r in rows[:top]):
+            if top < index:
+                return index, columns, _combine_header(rows[top:index], rows[index], columns)
+            return index, columns, None
+        break
+    return 0, columns, None
 
 
 def table_layout(text: str, delimiter: Optional[str] = None, truncated: bool = True) -> Optional[TableLayout]:
@@ -384,8 +453,8 @@ def table_layout(text: str, delimiter: Optional[str] = None, truncated: bool = T
     if best is None:
         return None
     columns, freq, delim, rows = best
-    header_index, _ = header_row(rows)
-    header = rows[header_index] if rows else []
+    header_index, _, names = header_row(rows)
+    header = names or (rows[header_index] if rows else [])
     return TableLayout(delim, columns, header_index, header, sep_hint, freq / max(len(rows), 1))
 
 
@@ -418,6 +487,30 @@ def _records_path(obj: Any, depth: int = 0, path: Tuple[str, ...] = ()) -> Optio
     return best
 
 
+def _split_table(obj: dict) -> Optional[Tuple[list, str]]:
+    """Records of a column-split table: a list of column names next to rows as lists.
+
+    Shapes: ``{"columns": [...], "data": [[...], ...]}`` (pandas ``split``, many APIs) and
+    ``{"indices": [...], "data": {"id": [...], ...}}`` (Umweltbundesamt).
+    """
+    names = [(k, v) for k, v in obj.items()
+             if isinstance(v, list) and len(v) >= 2 and all(isinstance(x, str) for x in v)
+             and len(set(v)) == len(v)]
+    for row_key, rows in obj.items():
+        if isinstance(rows, dict):
+            rows = list(rows.values())
+        if not isinstance(rows, list) or not rows or not all(isinstance(r, list) for r in rows[:50]):
+            continue
+        for name_key, columns in names:
+            if name_key == row_key:
+                continue
+            head = rows[:50]
+            if sum(1 for r in head if len(r) == len(columns)) >= 0.8 * len(head):
+                records = [dict(zip(columns, r)) for r in rows if isinstance(r, list)]
+                return records, f"rows under {row_key} with the column names under {name_key}"
+    return None
+
+
 def json_records(data: bytes) -> Optional[Tuple[list, str]]:
     """Records of a JSON document whose root is an object, and where they were found."""
     encoding = detect_encoding(data, truncated=False)
@@ -430,6 +523,9 @@ def json_records(data: bytes) -> Optional[Tuple[list, str]]:
         return None
     found = _records_path(obj)
     if found is None:
+        split = _split_table(obj)
+        if split is not None:
+            return split
         return [obj], "the root object as one record"
     node: Any = obj
     for key in found[1]:
@@ -527,26 +623,78 @@ def sheet_rows(filename: str, ext: str, page: int = 0, limit: int = SAMPLE_RECOR
         return None
 
 
+def sheet_names(filename: str, ext: str) -> List[str]:
+    """Sheet names of a workbook, [] when they cannot be read."""
+    try:
+        if ext == "xlsx":
+            import openpyxl
+
+            workbook = openpyxl.load_workbook(filename, read_only=True)
+            try:
+                return list(workbook.sheetnames)
+            finally:
+                workbook.close()
+        import xlrd
+
+        book = xlrd.open_workbook(filename, on_demand=True)
+        try:
+            return list(book.sheet_names())
+        finally:
+            book.release_resources()
+    except Exception as exc:  # noqa: BLE001 - best effort
+        logger.debug("Could not list the sheets of %s: %s", filename, exc)
+        return []
+
+
+def _is_table(rows: List[List[str]], index: int, columns: int) -> bool:
+    """At least three columns and three filled rows below the header."""
+    body = [r for r in rows[index + 1:] if _width(r) > 1]
+    return columns >= MIN_TABLE_COLUMNS and len(body) >= MIN_TABLE_ROWS
+
+
 def _plan_sheet(filename: str, ext: str, plan: InputPlan) -> None:
-    rows = sheet_rows(filename, ext, int(plan.iterableargs.get("page") or 0))
-    if not rows:
+    given = plan.iterableargs.get("page")
+    if given is not None:
+        if not str(given).isdigit():
+            return  # a sheet name: leave it to iterabledata
+        candidates = [int(given)]
+    else:
+        # Notes, a title page or contents often come first (INSEE, Destatis): scan the
+        # first sheet that holds a table (#89).
+        candidates = list(range(max(1, min(len(sheet_names(filename, ext)), MAX_SHEETS))))
+    page, rows, index, names = candidates[0], None, 0, None
+    for candidate in candidates:
+        found = sheet_rows(filename, ext, candidate)
+        if not found:
+            continue
+        found_index, columns, found_names = header_row(found)
+        if rows is None:
+            page, rows, index, names = candidate, found, found_index, found_names
+        if given is not None or _is_table(found, found_index, columns):
+            page, rows, index, names = candidate, found, found_index, found_names
+            break
+    if rows is None or (not index and page == 0):
         return
-    index, _ = header_row(rows)
-    if not index:
-        return
-    page = int(plan.iterableargs.get("page") or 0)
+    if page != 0:
+        titles = sheet_names(filename, ext)
+        name = titles[page] if page < len(titles) else str(page)
+        plan.notes.append(f"scanned sheet {page + 1} ({name}), the first one that holds a table")
     # iterabledata 1.1 ignores start_line in iterableargs (datenoio/iterabledata#45), so the
     # reader is created directly. XLSX skips start_line rows and takes the next non-blank
     # row as the header; XLS takes row start_line.
+    # With combined names the readers get them as keys and start at the first data row.
+    keys = _unique(names) if names else None
+    start = index + 1 if keys else index
     if ext == "xlsx":
         from iterable.datatypes.xlsx import XLSXIterable
 
-        plan.opener = lambda: XLSXIterable(filename, start_line=index, page=page)
+        plan.opener = lambda: XLSXIterable(filename, keys=keys, start_line=start, page=page)
     else:
         from iterable.datatypes.xls import XLSIterable
 
-        plan.opener = lambda: XLSIterable(filename, start_line=index, page=page)
-    plan.notes.append(f"header on sheet row {index + 1}; skipped {index} row(s) above it")
+        plan.opener = lambda: XLSIterable(filename, keys=keys, start_line=start, page=page)
+    if index:
+        plan.notes.append(f"header on sheet row {index + 1}; skipped {index} row(s) above it")
 
 
 def _plan_px(filename: str, codec: Optional[str], plan: InputPlan) -> None:

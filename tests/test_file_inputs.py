@@ -253,3 +253,80 @@ def test_zipped_shapefile(tmp_path):
             zf.write(tmp_path / f"points.{ext}", f"points.{ext}")
     fields = _fields(_scan(archive))
     assert "properties.name" in fields and "email" in fields["properties.email"]
+
+
+# ---------------------------------------------------------------- #89 sheets, multi-row headers
+def test_multi_row_header_is_joined():
+    text = ("GENESIS-Tabelle: 12411-0018\nBevölkerung: Gemeinden\n"
+            ";;Stichtag;Stichtag;Stichtag\n;;31.12.2025;31.12.2025;31.12.2025\n;;Insgesamt;männlich;weiblich\n"
+            "01001;Flensburg, Stadt;92550;45614;46936\n01002;Kiel, Landeshauptstadt;248873;121032;127841\n")
+    layout = table_layout(text, truncated=False)
+    assert layout.header_index == 4
+    assert layout.header[2:] == ["Stichtag 31.12.2025 Insgesamt", "Stichtag 31.12.2025 männlich",
+                                 "Stichtag 31.12.2025 weiblich"]
+
+
+def test_years_as_column_labels():
+    text = "Tabelle 3\n\nIndikator;Einheit;2019;2020;2021\nA;t;1;2;3\nB;t;4;5;6\n"
+    layout = table_layout(text, truncated=False)
+    assert layout.header_index == 1 and layout.header == ["Indikator", "Einheit", "2019", "2020", "2021"]
+
+
+def test_text_rows_below_the_header_are_data():
+    layout = table_layout("name;city\nAlice;Berlin\nBob;Hamburg\nCarol;Köln\n", truncated=False)
+    assert layout.header_index == 0 and layout.header == ["name", "city"]
+
+
+def test_letterhead_above_a_wide_table():
+    columns = 12
+    rows = ["KG PSP Warszawa;dn. 22-01-2021" + ";" * (columns - 2), ";" * (columns - 1),
+            ";".join(f"col{i}" for i in range(columns))]
+    rows += [";".join(str(i * j) for j in range(columns)) for i in range(1, 5)]
+    layout = table_layout("\n".join(rows) + "\n", truncated=False)
+    assert layout.header_index == 2 and layout.header[0] == "col0"
+
+
+def test_first_sheet_with_a_table_is_scanned(tmp_path):
+    openpyxl = pytest.importorskip("openpyxl")
+    workbook = openpyxl.Workbook()
+    notes = workbook.active
+    notes.title = "Deckblatt"
+    notes.append(["Statistisches Bundesamt"])
+    notes.append(["Erschienen am 08.11.2026"])
+    data = workbook.create_sheet("Kreise")
+    data.append(["Kreise nach Fläche und Bevölkerung"])
+    data.append(["Schlüssel", "Kreis", "Einwohner", "E-Mail"])
+    for i in range(6):
+        data.append([f"0{1001 + i}", f"Kreis {i}", 1000 * i, f"info{i}@kreis.de"])
+    path = tmp_path / "kreise.xlsx"
+    workbook.save(path)
+    plan = prepare_input(str(path), {})
+    assert any("sheet 2 (Kreise)" in note for note in plan.notes)
+    fields = _fields(_scan(path))
+    assert list(fields) == ["Schlüssel", "Kreis", "Einwohner", "E-Mail"] and "email" in fields["E-Mail"]
+
+
+def test_sheet_with_two_header_rows(tmp_path):
+    openpyxl = pytest.importorskip("openpyxl")
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["Estimation de population"])
+    sheet.append([])
+    sheet.append(["Départements", None, "Ensemble", None, "Hommes", None])
+    sheet.append([None, None, "0 à 19 ans", "20 ans et plus", "0 à 19 ans", "20 ans et plus"])
+    for i in range(5):
+        sheet.append([f"0{i + 1}", f"Dep {i}", 10 * i, 20 * i, 5 * i, 9 * i])
+    path = tmp_path / "pop.xlsx"
+    workbook.save(path)
+    assert list(_fields(_scan(path)))[2:] == ["Ensemble 0 à 19 ans", "Ensemble 20 ans et plus",
+                                              "Hommes 0 à 19 ans", "Hommes 20 ans et plus"]
+
+
+def test_json_column_split_tables():
+    pandas_split = {"columns": ["id", "email"], "data": [[1, "a@b.de"], [2, "c@d.de"]]}
+    records, where = json_records(json.dumps(pandas_split).encode())
+    assert records == [{"id": 1, "email": "a@b.de"}, {"id": 2, "email": "c@d.de"}] and "data" in where
+    keyed = {"indices": ["station id", "station latitude"], "data": {"3": ["3", "52.41"], "8": ["8", "51.6"]},
+             "count": 2}
+    assert json_records(json.dumps(keyed).encode())[0] == [
+        {"station id": "3", "station latitude": "52.41"}, {"station id": "8", "station latitude": "51.6"}]
