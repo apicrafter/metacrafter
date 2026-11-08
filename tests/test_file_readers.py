@@ -72,3 +72,23 @@ def test_mongodb_scan_still_leaves_collection_ids_out(monkeypatch):
     reports, errors = sources.scan_mongo(cmd, "localhost", 27017, "db", None, None, 10, {})
     assert not errors
     assert [f["field"] for f in reports["db.users"]["data"]] == ["email", "tags.name"]
+
+
+# ---------------------------------------------------------------- #103 field names
+def test_field_names_are_stripped(tmp_path):
+    path = tmp_path / "spaces.csv"
+    path.write_text("stop_id,stop_name       ,wheelchair_boarding   ,stop  desc\n1,A,0,x\n2,B,1,y\n")
+    report = _scan(path)
+    assert list(_fields(report)) == ["stop_id", "stop_name", "wheelchair_boarding", "stop  desc"]
+    entries = {f["field"]: f for f in report["data"]}
+    assert entries["wheelchair_boarding"]["name_in_source"] == "wheelchair_boarding   "
+    assert "name_in_source" not in entries["stop_id"]
+
+
+def test_stripping_keeps_names_apart_and_nested_paths():
+    from metacrafter.cmd.helpers import strip_key_whitespace
+
+    items = [{"a ": 1, "a": 2, " ": 3, "props": {" NAME ": "x"}, "list": [{"k ": 1}]}]
+    renamed = strip_key_whitespace(items)
+    assert items == [{"a ": 1, "a": 2, " ": 3, "props": {"NAME": "x"}, "list": [{"k": 1}]}]
+    assert renamed == {"props.NAME": "props. NAME ", "list.k": "list.k "}

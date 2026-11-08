@@ -97,6 +97,7 @@ from metacrafter.cmd.helpers import (  # noqa: E402
     split_option_list as _split_option_list,
     resolve_output_target as _resolve_output_target,
     strip_bom_from_keys as _strip_bom_from_keys,
+    strip_key_whitespace as _strip_key_whitespace,
 )
 
 
@@ -137,6 +138,24 @@ def _print_decode_error(filename, encoding, error):
         f"Pass the file's encoding with --encoding (for example cp1252, cp1251, cp932).",
         file=sys.stderr,
     )
+
+
+def _annotate_fields(report, renamed, field_info=None):
+    """Add what the file says about its fields to the report's field entries.
+
+    ``name_in_source``: the header before surrounding spaces were removed (#103); other keys
+    come from the reader (SPSS variable and value labels).
+    """
+    if not renamed and not field_info:
+        return
+    for entry in report.get("data") or []:
+        if not isinstance(entry, dict):
+            continue
+        name = entry.get("field")
+        if name in renamed:
+            entry["name_in_source"] = renamed[name]
+        for key, value in ((field_info or {}).get(renamed.get(name, name)) or {}).items():
+            entry.setdefault(key, value)
 
 
 app = typer.Typer(
@@ -1865,6 +1884,7 @@ class CrafterCmd(object):
                 _print_decode_error(filename, iterableargs.get("encoding"), decode_error)
                 return []
             _strip_bom_from_keys(items)
+            renamed = _strip_key_whitespace(items)
             if not items:
                 logging.warning(f"No records were read from {filename}")
                 if not self.quiet and output_format != "table":
@@ -1916,6 +1936,7 @@ class CrafterCmd(object):
                     print("Stats-only mode is not available for remote scans.")
                     return
             report.update(source=str(filename), table=str(filename), sampling=provenance)
+            _annotate_fields(report, renamed, plan.field_info)
             self._write_results(
                 report,
                 filename,

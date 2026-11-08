@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   JSON) and CKAN DataStore dumps (CSV) like any other field (`mongodbid` for ObjectIds);
   `dict_generator` and the statistics no longer drop it. `scan mongodb` still leaves the
   collection ids out.
+- **Field names are stripped** (#103): leading and trailing spaces of header cells (GTFS
+  `wheelchair_boarding   `, sheet headers ending in a space) are removed from the reported
+  field name, so name rules match it; inner runs of spaces stay. The field entry keeps the
+  header as it was in `name_in_source`. A name that would become empty or equal to another
+  field keeps its spaces.
 
 ## [2.1.0] - 2026-11-08
 

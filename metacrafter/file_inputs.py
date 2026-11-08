@@ -35,7 +35,7 @@ import re
 import zipfile
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any, Iterable, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterable, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +101,8 @@ class InputPlan:
     skip_records: int = 0
     records: Optional[list] = None
     notes: List[str] = field(default_factory=list)
+    # What the file says about its fields, by field name (SPSS labels), for the report.
+    field_info: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     def apply(self, records: Iterable[Any]) -> Iterator[Any]:
         """Skip the title and header lines read as records."""
