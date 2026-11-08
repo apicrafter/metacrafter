@@ -50,10 +50,12 @@ CODEC_EXTENSIONS = {"gz", "bz2", "xz", "zst", "zip", "lz4", "br"}
 TABLE_EXTENSIONS = {"csv", "tsv", "psv", "tab", "txt"}
 DELIMITERS = (",", ";", "\t", "|")
 # Code pages tried for text that is not UTF-8. Mac and DOS code pages are left out on
-# purpose: detectors pick them for short Western samples ("Straße" -> "Straşe").
+# purpose: detectors pick them for short Western samples ("Straße" -> "Straşe"). Big5 text is
+# tried as cp950, the Windows superset that Taiwanese files are written in: strict big5
+# fails on its extensions (0xF9D6-0xF9FE) and the file came out in a Latin code page (#99).
 CANDIDATE_ENCODINGS = (
     "cp1252", "cp1250", "cp1251", "cp1253", "cp1254", "cp1255", "cp1256", "cp1257",
-    "cp932", "euc_jp", "cp949", "big5", "gb18030", "koi8_r",
+    "cp932", "euc_jp", "cp949", "cp950", "gb18030", "koi8_r",
 )
 _LATIN_NAMES = {"cp1252", "cp1250", "cp1254", "cp1257", "latin_1", "iso8859_1", "iso8859_2", "iso8859_4",
                 "iso8859_9", "iso8859_13", "iso8859_15"}

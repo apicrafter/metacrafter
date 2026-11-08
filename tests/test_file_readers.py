@@ -92,3 +92,17 @@ def test_stripping_keeps_names_apart_and_nested_paths():
     renamed = strip_key_whitespace(items)
     assert items == [{"a ": 1, "a": 2, " ": 3, "props": {"NAME": "x"}, "list": [{"k": 1}]}]
     assert renamed == {"props.NAME": "props. NAME ", "list.k": "list.k "}
+
+
+# ---------------------------------------------------------------- #99 Big5 / CP950
+def test_big5_csv_with_cp950_characters(tmp_path):
+    from metacrafter.file_inputs import detect_encoding
+
+    # 碁 (0xF9D6) is one of the cp950 characters strict big5 cannot decode.
+    text = "販賣業許可證,統一編號,公司名稱,公司地址\n" + "".join(
+        f"北市動藥販字{i:04d},0495092{i},丞泰企業有限公司,台北市碁盤路{i}號\n" for i in range(10))
+    data = text.encode("cp950")
+    assert data.decode(detect_encoding(data, truncated=False)) == text
+    path = tmp_path / "sellers.csv"
+    path.write_bytes(data)
+    assert list(_fields(_scan(path))) == ["販賣業許可證", "統一編號", "公司名稱", "公司地址"]

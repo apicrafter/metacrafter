@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   field name, so name rules match it; inner runs of spaces stay. The field entry keeps the
   header as it was in `name_in_source`. A name that would become empty or equal to another
   field keeps its spaces.
+- **Big5 files in cp950** (#99): encoding detection tries cp950 instead of strict big5. Taiwanese
+  files use the cp950 extensions (`碁`, 0xF9D6), on which big5 fails, and such a file was
+  decoded as cp1250 (`łc˝ć·~` instead of `販賣業`).
 
 ## [2.1.0] - 2026-11-08
 
