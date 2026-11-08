@@ -1,8 +1,38 @@
 ---
 title: "Migration guide"
-description: "Breaking changes in 2.0 and 1.0 and how to adapt"
+description: "Changes in 2.1, 2.0 and 1.0 and how to adapt"
 ---
 # Migration guide
+
+## 2.0 to 2.1: input preparation, iterabledata 1.2, rule pack v0.0.11
+
+2.1.0 has no breaking API change, but scans of some files give other fields and labels:
+
+- **iterabledata 1.2 is required.** `pip install -U metacrafter` upgrades it. The `formats`
+  extra now also installs `pyshp` (zipped Shapefiles) and `odfpy` (ODS).
+- **More files open, with other fields.** Before iterabledata opens a file, `scan file` reads
+  its first megabyte and fills in what is missing (`metacrafter/file_inputs.py`):
+  - the encoding of compressed and short Latin text files;
+  - the header row when title rows, an Excel `sep=` line or multi-row headers come first;
+  - the list of records in JSON with an object at the root;
+  - the first workbook sheet that holds a table;
+  - `.txt` files with a delimiter, read as CSV;
+  - PC-Axis without its metadata keywords.
+
+  Explicit `--delimiter`, `--encoding` and `--tagname` still win. A field list that was one
+  column (`Tabelle 1: ...`, `sep=`) or one record with thousands of fields is now the real
+  table; GML features are reported as `properties.<name>`.
+- **Rule pack metacrafter-rules v0.0.11** (2.0.0: v0.0.8; v0.0.9 and v0.0.10 were pinned in
+  between) and registry 1.3.0 at 4dceeb8.
+  - `postcode` matches are reported as `postindex`: `postcode` is now an alias of it (it was
+    the Chinese postal code).
+  - The value rules of foreign passports, the Spanish CIF, the Russian KPP, the Saudi Iqama
+    and German vehicle plates need their field names, so codes that only look like them are
+    no longer labelled.
+  - New field names in several languages are labelled (coordinates, postal codes, amounts,
+    region codes).
+
+  The CHANGELOG lists the changes by rule pack release.
 
 ## 1.0 to 2.0: precise defaults
 
