@@ -21,6 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Big5 files in cp950** (#99): encoding detection tries cp950 instead of strict big5. Taiwanese
   files use the cp950 extensions (`碁`, 0xF9D6), on which big5 fails, and such a file was
   decoded as cp1250 (`łc˝ć·~` instead of `販賣業`).
+- **Headers below metadata rows** (#98), in CSV, TSV, XLSX and XLS:
+  - exports of Mexico's Plataforma Nacional de Transparencia (SIPOT): the header is the line
+    after `Tabla Campos`, below the format id, title, type code and field id rows;
+  - headings over the row label columns only (`Batken oblast` above `Items;1990;1991`) are
+    section titles: they are skipped, not joined into the column names; group headings over
+    value columns are still joined;
+  - a title with a unit note (`（２）年齢別人口 … 単位：人`) is a title row;
+  - XLS numbers are read as the sheet shows them for the header search and the column names
+    (`1990`, not `1990.0`).
 
 ## [2.1.0] - 2026-11-08
 

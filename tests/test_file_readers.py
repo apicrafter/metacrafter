@@ -106,3 +106,95 @@ def test_big5_csv_with_cp950_characters(tmp_path):
     path = tmp_path / "sellers.csv"
     path.write_bytes(data)
     assert list(_fields(_scan(path))) == ["販賣業許可證", "統一編號", "公司名稱", "公司地址"]
+
+
+# ---------------------------------------------------------------- #98 headers below metadata rows
+def _sipot_text(columns=12, records=5):
+    pad = "\t" * (columns - 1)
+    lines = ["59828" + pad,
+             "TÍTULO\t\t\tNOMBRE CORTO\t\t\tDESCRIPCIÓN" + "\t" * (columns - 7),
+             "Resultados de adjudicación directa\t\t\t28 LGT_Art_70_Fr_XXVIII\t\t\tLa información" + "\t" * (columns - 7),
+             "\t".join(str(1 + i % 9) for i in range(columns)),
+             "\t".join(str(586933 + i) for i in range(columns)),
+             "Tabla Campos" + pad,
+             "\t".join(["Ejercicio", "Fecha de inicio del periodo", "Denominación o razón social", "RFC"]
+                       + [f"Campo {i}" for i in range(4, columns)])]
+    for r in range(records):
+        lines.append("\t".join(["2025", "01/07/2025", f"Proveedora {r} S.A. de C.V.", f"ABC0101{r:02d}XY{r}"]
+                               + [f"valor {r} {i}" for i in range(4, columns)]))
+    return "\n".join(lines) + "\n"
+
+
+def test_sipot_export_header_after_tabla_campos(tmp_path):
+    from metacrafter.file_inputs import table_layout
+
+    text = _sipot_text()
+    layout = table_layout(text, "\t", truncated=False)
+    assert layout.header_index == 6 and layout.header[:2] == ["Ejercicio", "Fecha de inicio del periodo"]
+    path = tmp_path / "sipot.tsv"
+    path.write_bytes(text.encode("cp1252"))
+    fields = list(_fields(_scan(path)))
+    assert fields[:4] == ["Ejercicio", "Fecha de inicio del periodo", "Denominación o razón social", "RFC"]
+    assert len(fields) == 12
+
+
+def _trilingual_rows():
+    years = [str(y) for y in range(1990, 2000)]
+    blank = [""] * 13
+    rows = [
+        ["1.05.02.13 Малдын саны", "1.05.02.13 Поголовье скота", "1.05.02.13 Livestock"] + [""] * 10,
+        list(blank),
+        ["(жылдын аягына карата)", "(на конец года, голов)", "(at the end of the year)"] + [""] * 10,
+        ["Баткен облусу", "Баткенская область", "Batken oblast"] + [""] * 10,
+        ["Көрсөткүчтөрдүн аталышы ", "Наименование показателей", "Items"] + years,
+        list(blank),
+        ["Бардык чарбалар", "Хозяйства всех категорий", "Total farms"] + [""] * 10,
+    ]
+    for name in ("Cattle", "Cows", "Pigs", "Sheep and goats", "Horses"):
+        rows.append([name + " (ky)", name + " (ru)", name] + [str(1000 + 7 * i) for i in range(10)])
+    return rows
+
+
+def test_section_headings_above_a_header_of_years():
+    from metacrafter.file_inputs import header_row
+
+    index, columns, names = header_row(_trilingual_rows())
+    # "Batken oblast" heads the row labels only: a section title, not part of the names.
+    assert (index, columns, names) == (4, 13, None)
+
+
+def test_group_headings_over_value_columns_are_still_joined():
+    from metacrafter.file_inputs import header_row
+
+    rows = [["Region", "", "Population", "", "Area", ""],
+            ["", "", "2020", "2021", "km2", "mi2"]]
+    rows += [[f"R{i}", f"Name {i}", str(10 * i), str(11 * i), str(i), str(i)] for i in range(1, 6)]
+    index, _, names = header_row(rows)
+    assert index == 1 and names[2:] == ["Population 2020", "Population 2021", "Area km2", "Area mi2"]
+
+
+def test_title_with_a_unit_note_is_not_a_header_row():
+    from metacrafter.file_inputs import header_row
+
+    rows = [[""] * 8, ["（２）年齢（各歳）、男女別人口", "", "", "", "", "", "    単位：人", ""],
+            ["年   齢", "総   数", "男", "女", "年   齢", "総   数", "男", "女"], [""] * 8]
+    rows += [[f"{a}歳", str(100 + a), str(50 + a), str(50), f"{a + 50}歳", "90", "40", "50"] for a in range(6)]
+    assert header_row(rows) == (2, 8, None)
+
+
+def test_xls_numbers_read_as_the_sheet_shows_them():
+    from metacrafter.file_inputs import _xls_cell
+
+    assert [_xls_cell(v) for v in (1990.0, 78.47, "Items", "")] == ["1990", "78.47", "Items", ""]
+
+
+def test_xlsx_with_trilingual_titles_and_sections(tmp_path):
+    openpyxl = __import__("pytest").importorskip("openpyxl")
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    for row in _trilingual_rows():
+        sheet.append([int(c) if c.isdigit() else (c or None) for c in row])
+    path = tmp_path / "livestock.xlsx"
+    workbook.save(path)
+    fields = list(_fields(_scan(path)))
+    assert fields[:4] == ["Көрсөткүчтөрдүн аталышы", "Наименование показателей", "Items", "1990"]

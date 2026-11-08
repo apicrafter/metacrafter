@@ -65,6 +65,13 @@ _PX_CHARSET = re.compile(rb'CHARSET\s*=\s*"([\w\-]+)"', re.IGNORECASE)
 _NUMBER = re.compile(r"^[\s+\-]?[\d\s.,]+%?$")
 _YEAR = re.compile(r"^(?:1[89]|20)\d{2}\s*[*¹²³)]*$")
 _DATE = re.compile(r"^(?:\d{1,2}[./]\d{1,2}[./]\d{4}|\d{4}-\d{2}-\d{2})$")
+# A unit note next to a table title: "単位：人", "(Unit: persons)", "Einheit: 1000".
+_UNIT_NOTE = re.compile(r"^[\s(（]*(?:単位|单位|unit|units|einheit|unité|unidad|unidade|unità|единица|одиниця)\s*[:：]",
+                        re.IGNORECASE)
+# A line that announces the header on the next line: the field list of exports of Mexico's
+# Plataforma Nacional de Transparencia (SIPOT) follows a "Tabla Campos" line, after the format
+# id, title, type code and field id rows (#98).
+HEADER_MARKERS = {"tabla campos"}
 
 
 def _alphabet(letters: str) -> frozenset:
@@ -332,17 +339,45 @@ def _filled(row: List[str]) -> int:
 
 def _is_title_row(row: List[str], columns: int = 0) -> bool:
     """Blank, one filled cell ("Tabelle 1: ..."), a note like "Quelle:;Statistisches Amt",
-    or two cells far narrower than the table (a letterhead: address and date)."""
+    a title with its unit ("(2) 年齢別人口;単位：人"), or two cells far narrower than the
+    table (a letterhead: address and date)."""
     filled = [str(c).strip() for c in row if str(c).strip()]
     if len(filled) <= 1:
         return True
-    return len(filled) == 2 and (filled[0].endswith(":") or (columns >= 8 and _width(row) <= columns // 4))
+    return len(filled) == 2 and (filled[0].endswith((":", "：")) or any(_UNIT_NOTE.match(c) for c in filled)
+                                 or (columns >= 8 and _width(row) <= columns // 4))
 
 
 def _is_band_row(row: List[str]) -> bool:
     """An upper header row: two or more label cells and no numbers (merged group headings)."""
     filled = [str(c).strip() for c in row if str(c).strip()]
     return len(filled) >= 2 and all(_is_label(c) for c in filled) and not _is_title_row(row)
+
+
+def _text_columns(body: List[List[str]], columns: int) -> set:
+    """Columns whose filled body cells are mostly text (the row labels of a statistics table)."""
+    out = set()
+    for i in range(columns):
+        cells = [str(r[i]).strip() for r in body if i < len(r) and str(r[i]).strip()]
+        if cells and sum(1 for c in cells if not _NUMBER.match(c)) > len(cells) / 2:
+            out.add(i)
+    return out
+
+
+def _is_section_row(row: List[str], text_columns: set) -> bool:
+    """A heading over the row labels only ("Batken oblast" above "Items;1990;1991"): a section
+    or table title, not a group heading, which spans value columns."""
+    cells = [i for i, c in enumerate(row) if str(c).strip()]
+    return bool(cells) and bool(text_columns) and all(i in text_columns for i in cells)
+
+
+def _marker_header(rows: List[List[str]]) -> Optional[int]:
+    """Index of the row after a header marker line (SIPOT exports: "Tabla Campos")."""
+    for index, row in enumerate(rows[:MAX_HEADER_OFFSET]):
+        filled = [str(c).strip() for c in row if str(c).strip()]
+        if len(filled) == 1 and filled[0].casefold() in HEADER_MARKERS and index + 1 < len(rows):
+            return index + 1
+    return None
 
 
 def _combine_header(band: List[List[str]], header: List[str], columns: int) -> List[str]:
@@ -370,20 +405,26 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
     """(header row index, body column count, combined names or None) of the first table rows.
 
     The header is the first row with the body's column count (the most common width), if
-    every row above it is a title or note row, or an upper header row (merged group
-    headings) directly above it; then the names join the upper rows and the header row.
-    Otherwise the header is the first row.
+    every row above it is a title or note row, a section heading over the row label columns
+    ("Batken oblast"), or an upper header row (merged group headings) directly above it;
+    then the names join the upper rows and the header row. A header marker line ("Tabla
+    Campos") puts the header on the next row. Otherwise the header is the first row.
     """
     widths = Counter(w for w in (_width(r) for r in rows) if w > 1)
     if not widths:
         return 0, 0, None
     columns = max(widths.items(), key=lambda kv: (kv[1], kv[0]))[0]
+    marked = _marker_header(rows)
+    if marked is not None:
+        return marked, columns, None
     for index, row in enumerate(rows[: MAX_HEADER_OFFSET + 1]):
         following = next((r for r in rows[index + 1:] if _width(r) > 1), None)
         if not _looks_like_header(row, columns, following):
             continue
+        # Headings over the row label columns only are section titles (#98).
+        text_columns = _text_columns([r for r in rows[index + 1:] if _width(r) > 1], columns)
         top = index
-        while top > 0 and _is_band_row(rows[top - 1]):
+        while top > 0 and _is_band_row(rows[top - 1]) and not _is_section_row(rows[top - 1], text_columns):
             top -= 1
         # Header rows below it (GENESIS: "Stichtag" / "31.12.2025" / "Insgesamt"): label
         # rows with fewer filled cells than the first data row continue the header.
@@ -392,7 +433,7 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
             if data is None or _filled(rows[index + 1]) >= _filled(data):
                 break
             index += 1
-        if all(_is_title_row(r, columns) for r in rows[:top]):
+        if all(_is_title_row(r, columns) or _is_section_row(r, text_columns) for r in rows[:top]):
             if top < index:
                 return index, columns, _combine_header(rows[top:index], rows[index], columns)
             return index, columns, None
@@ -576,12 +617,19 @@ def sheet_rows(filename: str, ext: str, page: int = 0, limit: int = SAMPLE_RECOR
         book = xlrd.open_workbook(filename, on_demand=True)
         try:
             sheet = book.sheet_by_index(page)
-            return [[str(v) for v in sheet.row_values(i)] for i in range(min(limit, sheet.nrows))]
+            return [[_xls_cell(v) for v in sheet.row_values(i)] for i in range(min(limit, sheet.nrows))]
         finally:
             book.release_resources()
     except Exception as exc:  # noqa: BLE001 - best effort; iterabledata reports real errors
         logger.debug("Could not read the first rows of %s: %s", filename, exc)
         return None
+
+
+def _xls_cell(value: Any) -> str:
+    """Cell text as the sheet shows it: xlrd gives every number as a float (1990.0)."""
+    if isinstance(value, float) and value.is_integer() and abs(value) < 1e15:
+        return str(int(value))
+    return str(value)
 
 
 def sheet_names(filename: str, ext: str) -> List[str]:
@@ -645,6 +693,10 @@ def _plan_sheet(filename: str, ext: str, plan: InputPlan) -> None:
     plan.iterableargs["page"] = page
     if names:
         plan.iterableargs["keys"] = _unique(names)
+        plan.iterableargs["start_line"] = index + 1
+    elif index and ext == "xls":
+        # The XLS reader names columns after str(cell): years in a header become "1990.0".
+        plan.iterableargs["keys"] = list(rows[index])
         plan.iterableargs["start_line"] = index + 1
     elif index:
         plan.iterableargs["start_line"] = index
