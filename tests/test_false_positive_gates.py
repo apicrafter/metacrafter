@@ -382,7 +382,9 @@ def test_scan_reports_named_datatype_as_primary(tmp_path):
     field = next(f for f in report["data"] if f["field"] == "okpd2")
     assert field["matches"][0]["dataclass"] == "okpd"
     assert field["datatype_url"].endswith("/okpd")
-    assert {"okpd", "ipv4"} <= {m["dataclass"] for m in field["matches"]}
+    # The default pack's OKPD rule runs only on fields named for it and matches every code, so
+    # the IPv4 look-alike without field-name evidence is dropped (metacrafter-rules #66).
+    assert {m["dataclass"] for m in field["matches"]} == {"okpd"}
 
 
 # apicrafter/metacrafter#62: a value-only PII match outranked by a named non-PII datatype.
@@ -473,8 +475,10 @@ def test_scan_does_not_report_named_non_pii_field_as_pii(tmp_path):
     fields = okpd_scan(tmp_path)
     okpd2 = fields["okpd2"]
     assert okpd2["matches"][0]["dataclass"] == "okpd"
-    ipv4 = next(m for m in okpd2["matches"] if m["dataclass"] == "ipv4")
-    assert ipv4["is_pii"] is False and ipv4["pii_outranked_by"] == "okpd"
+    # The guarded OKPD rule of the default pack matched every code: the IPv4 look-alike is dropped
+    # rather than demoted (metacrafter-rules #66); test_named_datatype_demotes_value_only_pii_match
+    # covers the demotion.
+    assert all(m["dataclass"] != "ipv4" for m in okpd2["matches"])
     assert okpd2["pii"] == {"is_pii": False, "datatypes": []}
     # Without field-name evidence for okpd the same values stay PII.
     assert fields["ip"]["pii"]["is_pii"] is True

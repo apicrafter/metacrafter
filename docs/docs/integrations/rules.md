@@ -235,7 +235,12 @@ Curated rules follow two similar rules when `--country-codes` is not set:
   same confidence: GUIDs report `uuid`, not also `rufias`;
 - a registry detector match without field-name evidence is dropped when a value rule whose
   field rule names the field matched it too: Czech RÚIAN address point codes (`AdresniBod`)
-  pass the IČO check digit, and the RÚIAN rule names them.
+  pass the IČO check digit, and the RÚIAN rule names them;
+- a value match without field-name evidence is dropped when a value rule with a field guard
+  (`fieldrule`), which runs only on fields named for it, matched at least as many of the
+  values: NTEE codes in `NTEE_CD` also have the shape of ICD-10 codes, OKPD2 codes in `okpd2`
+  that of IPv4 addresses. Matches beside a value rule that a field rule backs (without a
+  guard) are kept.
 
 Values also veto field-name matches: a field rule with a `validator` keeps its match only
 when at least half of the non-empty sampled values pass it (`orgname` needs names, not the
