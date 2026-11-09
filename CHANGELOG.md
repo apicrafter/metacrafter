@@ -61,6 +61,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `category`;
   - a registry detector without field-name evidence is dropped when a value rule whose field
     rule names the field matched it: RÚIAN address point codes pass the IČO check digit.
+- **A guarded value rule beats an unnamed look-alike** (apicrafter/metacrafter-rules#66): a
+  value match without field-name evidence is dropped when a value rule with a field guard
+  (`fieldrule`) matched at least as many of the values. NTEE codes of an IRS `NTEE_CD` column
+  (B71Z, J40) are no longer also reported as ICD-10 codes, OKPD2 codes in `okpd2` not as IPv4
+  addresses (until now kept and demoted from PII), and the Rostock `gemeinde_schluessel`
+  (`de_ars`) not as a Russian INN. A rule that matched more values, and the matches beside a
+  value rule that only a field rule backs (`uuid` beside `rufias`), are kept.
 - **Dates are `date`, not `datetime`** (apicrafter/metacrafter-rules#55): the qddate patterns
   are dates, so a field of `01.01.1974`, `2020/8/5` or `26/07/2005` is labelled `date` (with
   the registry pattern, as before); it is `datetime` only when the values carry a time after

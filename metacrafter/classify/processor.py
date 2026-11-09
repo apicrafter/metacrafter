@@ -1391,25 +1391,52 @@ class RulesProcessor:
         return out
 
     def _drop_unnamed_detectors(self, found, m_result: ColumnMatchResult, explain: bool) -> None:
-        """Drop registry detector matches without field-name evidence when the field name
-        names another type that its values also match.
+        """Drop value matches without field-name evidence when the field name names another type
+        that its values also match.
 
-        RÚIAN address point codes pass the IČO check digit (the same modulo 11), so the
-        ``cz_ico`` detector reports ``AdresniBod``; a value rule for the RÚIAN code whose field
-        rule names the field is the better evidence (metacrafter-rules #61, #63). Applies when
-        no scan country is set.
+        A value rule has field-name evidence when a field rule of its type matched the name or
+        when its field guard (``fieldrule``) let it run on this field.
+
+        - A registry detector without such evidence is dropped: RÚIAN address point codes pass
+          the IČO check digit (the same modulo 11), so the ``cz_ico`` detector reports
+          ``AdresniBod``; a value rule for the RÚIAN code whose field rule names the field is the
+          better evidence (metacrafter-rules #61, #63).
+        - A value rule without such evidence is dropped when a value rule with a field guard
+          matched at least as many of the values. A guarded rule runs only on fields named for
+          it, because its values alone are ambiguous: NTEE codes (B71Z, J40) of an ``NTEE_CD``
+          column also have the shape of ICD-10 codes, and the guarded NTEE rule matches all of
+          them (metacrafter-rules #66). A value rule that matched more values is kept, and so are
+          the matches beside a value rule that a field-name rule backs: ``uuid`` stays with
+          ``rufias`` on ``aoguid``, ``ipv4`` with ``okpd`` on ``okpd2``.
+
+        Applies when no scan country is set.
         """
         if self.preset_countries or not found:
             return
-        named = {rule["key"] for rule, match, name_weight in found if name_weight and not rule.get("derived")}
+        named = set()
+        guarded = []
+        for rule, match, name_weight in found:
+            if rule.get("derived") or match not in m_result.matches:
+                continue
+            if name_weight or "f_compiled" in rule:
+                named.add(rule["key"])
+            if "f_compiled" in rule:
+                guarded.append(match.confidence)
         if not named:
             return
+        best = max(guarded) if guarded else None
         for rule, match, name_weight in found:
-            if not rule.get("derived") or name_weight or rule["key"] in named or match not in m_result.matches:
+            if name_weight or rule["key"] in named or match not in m_result.matches:
                 continue
+            if rule.get("derived"):
+                reason = "The field name names another type that the values match"
+            elif best is None or "f_compiled" in rule or match.confidence > best:
+                continue
+            else:
+                reason = "The field name names another type whose value rule matched at least as many values"
             m_result.matches.remove(match)
             if explain:
-                m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": match.confidence, "matched_count": match.evidence.get("matched_count", 0) if match.evidence else 0, "considered_count": match.evidence.get("considered_count", 0) if match.evidence else 0, "reason": "The field name names another type that the values match"})
+                m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": match.confidence, "matched_count": match.evidence.get("matched_count", 0) if match.evidence else 0, "considered_count": match.evidence.get("considered_count", 0) if match.evidence else 0, "reason": reason})
 
     # --- matching helpers ---------------------------------------------------
 
