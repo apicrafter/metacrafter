@@ -1,6 +1,7 @@
 version: 1
 default_min_recall: 0.0
 min_recall:
+  abaroutingvalue: 1.0
   ae_pii_aeemiratesidvalue: 1.0
   aebankaccountvalue: 0.0
   aecityvalue: 1.0
@@ -36,6 +37,7 @@ min_recall:
   cabuslicvalue: 1.0
   cacharityvalue: 1.0
   cacorpvalue: 1.0
+  cacracharitycategoryvalue: 1.0
   caextraProvvalue: 0.75
   cagstvalue: 1.0
   caprogramvalue: 1.0
@@ -89,7 +91,7 @@ min_recall:
   eg_pii_egpassportvalue: 1.0
   egbankaccountvalue: 0.0
   egcityvalue: 1.0
-  egibanvalue: 0.0
+  egibanvalue: 1.0
   egnationalidvalue: 1.0
   egpassportvalue: 1.0
   egtaxnumbervalue: 1.0
@@ -120,6 +122,7 @@ min_recall:
   eui48: 0.3333
   euidvalue: 1.0
   eulaucodevalue: 1.0
+  euorganisationactivitytypevalue: 1.0
   eupicvalue: 1.0
   evconnectortypevalue: 1.0
   excelserialdatevalue: 1.0
@@ -143,6 +146,8 @@ min_recall:
   gadmgidvalue: 1.0
   gbdfelacodevalue: 1.0
   gbnaptanatcovalue: 1.0
+  gbpostcodevalue: 0.0
+  gleifentitycategoryvalue: 1.0
   gleifracodevalue: 1.0
   glnvalue: 1.0
   gridbyvalue: 0.5
@@ -167,11 +172,11 @@ min_recall:
   icaoairportcodevalue: 1.0
   iccidvalue: 0.6667
   id_pii_iddriverlicvalue: 1.0
-  id_pii_idnikvalue: 0.0
+  id_pii_idnikvalue: 1.0
   id_pii_idpassportvalue: 1.0
   idbankaccountvalue: 1.0
   iddriverlicvalue: 1.0
-  idnikvalue: 0.0
+  idnikvalue: 1.0
   idnpsnvalue: 1.0
   idnpwpvalue: 0.0
   idpassportvalue: 1.0
@@ -213,6 +218,7 @@ min_recall:
   jpdateeravalue: 1.0
   jpestattimecodevalue: 1.0
   jpyeareravalue: 1.0
+  jsontextbyvalue: 1.0
   keccak256hash: 1.0
   keccak512hash: 1.0
   kemflcodevalue: 1.0
@@ -223,6 +229,7 @@ min_recall:
   leivalue: 1.0
   ltevrkvalue: 1.0
   ltkvrcodevalue: 1.0
+  ltlegalformcodevalue: 1.0
   ltmunicipalityvalue: 1.0
   lvbisregistervalue: 1.0
   lvmedicinenumbervalue: 1.0
@@ -268,7 +275,9 @@ min_recall:
   phonebyvalue: 1.0
   pladevalue: 1.0
   plexcisenumbervalue: 1.0
+  plibanvalue: 1.0
   plnipvalue: 0.0
+  plpostcodevalue: 1.0
   programminglangbyvalue: 1.0
   ptinegeocodevalue: 1.0
   qabusinessactivityvalue: 1.0
@@ -298,6 +307,7 @@ min_recall:
   registry:fips52: 1.0
   registry:fips64: 1.0
   registry:flightnumber: 1.0
+  registry:geonamesid: 1.0
   registry:govlicaccount: 1.0
   registry:gtin02: 1.0
   registry:icd10: 1.0
@@ -334,6 +344,7 @@ min_recall:
   registry:rusecreg: 1.0
   registry:sctcrypto: 1.0
   registry:sedol: 1.0
+  registry:sepersonnummer: 1.0
   registry:siretcode: 1.0
   registry:tld: 1.0
   registry:toid: 1.0
@@ -346,6 +357,7 @@ min_recall:
   registry:usfain: 1.0
   registry:uspiid: 1.0
   registry:vatin: 1.0
+  registry:viafid: 1.0
   registry:what3words: 1.0
   registry:wkt: 1.0
   richpeheaderhashbyvalue: 1.0
@@ -393,6 +405,7 @@ min_recall:
   russianswiftcode: 0.0
   rustimerangebypat: 0.5
   ruvehicleplatevalue: 0.0
+  saibanvalue: 0.0
   science_isnivalue: 0.5
   selanskodvalue: 1.0
   selibrisidvalue: 1.0
@@ -420,6 +433,7 @@ min_recall:
   timerangebypat: 0.3333
   tlshbyvalue: 0.0
   torrentinfohashvalue: 1.0
+  tribanvalue: 1.0
   trikinvalue: 1.0
   twrocdatevalue: 1.0
   twrocyearmonthvalue: 1.0
@@ -445,6 +459,10 @@ min_recall:
   uscmsccnvalue: 1.0
   useinvalue: 0.0
   useruuidvalue: 1.0
+  usirsactivityvalue: 1.0
+  usirsfoundationvalue: 1.0
+  usirsgroupexemptionvalue: 1.0
+  usirssubsectionvalue: 1.0
   usnpivalue: 1.0
   usnteecodevalue: 1.0
   usnycbblvalue: 1.0
@@ -461,6 +479,8 @@ min_recall:
   wifaddruncomp: 1.0
   wikidataidvalue: 1.0
   winregkeybyvalue: 0.0
+  wkbbyvalue: 1.0
+  xmltextbyvalue: 1.0
   yearbydatafiltered: 1.0
   yearbydataimprecise: 0.5
   zaemisnumbervalue: 1.0

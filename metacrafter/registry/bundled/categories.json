@@ -14,31 +14,31 @@
   {
     "id": "common",
     "name": "Common",
-    "count": 197,
+    "count": 387,
     "url": "https://registry.apicrafter.io/category/common"
   },
   {
     "id": "companies",
     "name": "Companies/business/organizations",
-    "count": 257,
+    "count": 269,
     "url": "https://registry.apicrafter.io/category/companies"
   },
   {
     "id": "cryptocurrency",
     "name": "Cryptocurrency",
-    "count": 30,
+    "count": 31,
     "url": "https://registry.apicrafter.io/category/cryptocurrency"
   },
   {
     "id": "cryptography",
     "name": "Cryptographic identifiers",
-    "count": 51,
+    "count": 52,
     "url": "https://registry.apicrafter.io/category/cryptography"
   },
   {
     "id": "datetime",
     "name": "Date and time",
-    "count": 92,
+    "count": 118,
     "url": "https://registry.apicrafter.io/category/datetime"
   },
   {
@@ -56,7 +56,7 @@
   {
     "id": "education",
     "name": "Education",
-    "count": 33,
+    "count": 34,
     "url": "https://registry.apicrafter.io/category/education"
   },
   {
@@ -68,25 +68,25 @@
   {
     "id": "environment",
     "name": "Environment (protected areas, biodiversity, water, weather, emissions, waste)",
-    "count": 68,
+    "count": 72,
     "url": "https://registry.apicrafter.io/category/environment"
   },
   {
     "id": "finances",
     "name": "Finances and banking",
-    "count": 260,
+    "count": 276,
     "url": "https://registry.apicrafter.io/category/finances"
   },
   {
     "id": "geo",
     "name": "Geographic identifiers",
-    "count": 448,
+    "count": 455,
     "url": "https://registry.apicrafter.io/category/geo"
   },
   {
     "id": "government",
     "name": "Government related",
-    "count": 193,
+    "count": 205,
     "url": "https://registry.apicrafter.io/category/government"
   },
   {
@@ -98,25 +98,25 @@
   {
     "id": "identifiers",
     "name": "Universal unique identifiers",
-    "count": 46,
+    "count": 50,
     "url": "https://registry.apicrafter.io/category/identifiers"
   },
   {
     "id": "industry",
     "name": "Industry",
-    "count": 53,
+    "count": 54,
     "url": "https://registry.apicrafter.io/category/industry"
   },
   {
     "id": "internet",
     "name": "Internet",
-    "count": 49,
+    "count": 52,
     "url": "https://registry.apicrafter.io/category/internet"
   },
   {
     "id": "legal",
     "name": "Legal and compliance",
-    "count": 38,
+    "count": 40,
     "url": "https://registry.apicrafter.io/category/legal"
   },
   {
@@ -128,7 +128,7 @@
   {
     "id": "medical",
     "name": "Medical/pharma identifiers",
-    "count": 99,
+    "count": 100,
     "url": "https://registry.apicrafter.io/category/medical"
   },
   {
@@ -140,19 +140,19 @@
   {
     "id": "persons",
     "name": "Person related",
-    "count": 278,
+    "count": 286,
     "url": "https://registry.apicrafter.io/category/persons"
   },
   {
     "id": "pii",
     "name": "Personally identifiable information",
-    "count": 434,
+    "count": 641,
     "url": "https://registry.apicrafter.io/category/pii"
   },
   {
     "id": "publishing",
     "name": "Publishing and print",
-    "count": 69,
+    "count": 70,
     "url": "https://registry.apicrafter.io/category/publishing"
   },
   {
@@ -164,13 +164,13 @@
   {
     "id": "science",
     "name": "Scientific",
-    "count": 124,
+    "count": 130,
     "url": "https://registry.apicrafter.io/category/science"
   },
   {
     "id": "secrets",
     "name": "Secrets and credentials (passwords, keys, tokens)",
-    "count": 71,
+    "count": 122,
     "url": "https://registry.apicrafter.io/category/secrets"
   },
   {
@@ -182,13 +182,13 @@
   {
     "id": "software",
     "name": "Software development",
-    "count": 53,
+    "count": 58,
     "url": "https://registry.apicrafter.io/category/software"
   },
   {
     "id": "telecom",
     "name": "Telecommunications",
-    "count": 25,
+    "count": 217,
     "url": "https://registry.apicrafter.io/category/telecom"
   },
   {
@@ -200,13 +200,13 @@
   {
     "id": "transport",
     "name": "Transportation",
-    "count": 57,
+    "count": 69,
     "url": "https://registry.apicrafter.io/category/transport"
   },
   {
     "id": "useraccounts",
     "name": "User accounts in products and services",
-    "count": 19,
+    "count": 20,
     "url": "https://registry.apicrafter.io/category/useraccounts"
   },
   {
