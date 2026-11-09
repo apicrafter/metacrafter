@@ -1,5 +1,5 @@
 # Vendored from metacrafter-registry (https://github.com/apicrafter/metacrafter-registry),
-# src/metacrafter_registry/checksums.py at commit 4dceeb820c1027b2db1c8745b7ac9a3415e90d19,
+# src/metacrafter_registry/checksums.py at commit a453ed906675ca1fbe577514fef885e63fc73510,
 # Apache-2.0. Metacrafter does not depend on the registry package; record ``checksum`` names
 # refer to the keys of ALGORITHMS below. The weekly ecosystem workflow checks that every
 # checksum name used by the registry exists here. Do not edit by hand: re-copy instead.

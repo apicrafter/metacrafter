@@ -18,6 +18,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (the log notes that `--sheet all` reads the others). `CrafterCmd.scan_file(sheet=...)` takes
   the same values. A sheet given by name now gets the header search too.
 
+### Changed
+
+- **Default rule pack is metacrafter-rules v0.0.12**, and the registry snapshot is 1.3.0 at
+  a453ed9. From the 237-file metacrafter-testdata scan, apicrafter/metacrafter-rules#58, #64
+  and apicrafter/metacrafter-registry#160, #169, #170:
+  - Rules for 114 more registry datatypes: national region, municipality and
+    address codes (EHAK, LAU, HDX P-codes, RÚIAN address points, KVR, Bulgarian NSI codes),
+    school, library, health facility and bank codes, EU grant and PIC numbers, GBIF/Darwin
+    Core terms, content licenses, EV connector types, era years and Excel serial dates.
+  - `category`, `city` and `orgname` by name need their word in the last part of a flattened
+    name (ROR `external_ids.type.grid.all` is no category), and field rules of names, places,
+    dates, licenses, ISBN-10 and BICs carry a value `validator` (see Fixed).
+  - Value rules that labelled other codes check the value: ISRC rejects ISINs, and a RINF
+    operational point id needs its country prefix.
+  - On metacrafter-testdata (237 files, with the registry ids of the new types in the
+    expected types), typed precision 0.957 -> 0.991 and recall 0.446 -> 0.465 (measured before
+    the RINF fix, which drops one label). Registry-example thresholds: 114 new rules, 110 at
+    1.0, none lowered; four entries of registry detectors whose types now have rules or are
+    aliases are removed.
+
 ### Fixed
 
 - **Headers below two title rows** (#105): when the records of a sheet leave their last
