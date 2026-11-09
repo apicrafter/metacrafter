@@ -14,13 +14,13 @@
   {
     "id": "common",
     "name": "Common",
-    "count": 196,
+    "count": 197,
     "url": "https://registry.apicrafter.io/category/common"
   },
   {
     "id": "companies",
     "name": "Companies/business/organizations",
-    "count": 250,
+    "count": 257,
     "url": "https://registry.apicrafter.io/category/companies"
   },
   {
@@ -38,7 +38,7 @@
   {
     "id": "datetime",
     "name": "Date and time",
-    "count": 83,
+    "count": 92,
     "url": "https://registry.apicrafter.io/category/datetime"
   },
   {
@@ -56,37 +56,37 @@
   {
     "id": "education",
     "name": "Education",
-    "count": 21,
+    "count": 33,
     "url": "https://registry.apicrafter.io/category/education"
   },
   {
     "id": "energy",
     "name": "Energy (electricity, gas, metering)",
-    "count": 11,
+    "count": 15,
     "url": "https://registry.apicrafter.io/category/energy"
   },
   {
     "id": "environment",
     "name": "Environment (protected areas, biodiversity, water, weather, emissions, waste)",
-    "count": 67,
+    "count": 68,
     "url": "https://registry.apicrafter.io/category/environment"
   },
   {
     "id": "finances",
     "name": "Finances and banking",
-    "count": 250,
+    "count": 260,
     "url": "https://registry.apicrafter.io/category/finances"
   },
   {
     "id": "geo",
     "name": "Geographic identifiers",
-    "count": 414,
+    "count": 448,
     "url": "https://registry.apicrafter.io/category/geo"
   },
   {
     "id": "government",
     "name": "Government related",
-    "count": 158,
+    "count": 193,
     "url": "https://registry.apicrafter.io/category/government"
   },
   {
@@ -104,7 +104,7 @@
   {
     "id": "industry",
     "name": "Industry",
-    "count": 47,
+    "count": 53,
     "url": "https://registry.apicrafter.io/category/industry"
   },
   {
@@ -116,7 +116,7 @@
   {
     "id": "legal",
     "name": "Legal and compliance",
-    "count": 37,
+    "count": 38,
     "url": "https://registry.apicrafter.io/category/legal"
   },
   {
@@ -128,7 +128,7 @@
   {
     "id": "medical",
     "name": "Medical/pharma identifiers",
-    "count": 92,
+    "count": 99,
     "url": "https://registry.apicrafter.io/category/medical"
   },
   {
@@ -146,25 +146,25 @@
   {
     "id": "pii",
     "name": "Personally identifiable information",
-    "count": 432,
+    "count": 434,
     "url": "https://registry.apicrafter.io/category/pii"
   },
   {
     "id": "publishing",
     "name": "Publishing and print",
-    "count": 67,
+    "count": 69,
     "url": "https://registry.apicrafter.io/category/publishing"
   },
   {
     "id": "realestate",
     "name": "Real estate",
-    "count": 24,
+    "count": 26,
     "url": "https://registry.apicrafter.io/category/realestate"
   },
   {
     "id": "science",
     "name": "Scientific",
-    "count": 121,
+    "count": 124,
     "url": "https://registry.apicrafter.io/category/science"
   },
   {
@@ -182,7 +182,7 @@
   {
     "id": "software",
     "name": "Software development",
-    "count": 52,
+    "count": 53,
     "url": "https://registry.apicrafter.io/category/software"
   },
   {
@@ -200,7 +200,7 @@
   {
     "id": "transport",
     "name": "Transportation",
-    "count": 48,
+    "count": 57,
     "url": "https://registry.apicrafter.io/category/transport"
   },
   {
@@ -212,7 +212,7 @@
   {
     "id": "values",
     "name": "All measurable values (percentage, amount and e.t.c)",
-    "count": 22,
+    "count": 23,
     "url": "https://registry.apicrafter.io/category/values"
   }
 ]

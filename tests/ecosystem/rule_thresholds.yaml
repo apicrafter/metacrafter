@@ -14,16 +14,24 @@ min_recall:
   amssnvalue: 1.0
   amtinvalue: 1.0
   amvehicleplatevalue: 1.0
+  arcgisobjectidvalue: 1.0
+  armonthvalue: 1.0
   asnbyprefixname: 0.25
   asnbyvalue: 0.75
   asnbyvalueandpostfix: 0.75
+  atbezirkvalue: 1.0
   atcvalue: 1.0
   authentihashbyvalue: 1.0
+  bgkmetstvocodevalue: 1.0
+  bgoblastcodevalue: 1.0
+  bgobshtinacodevalue: 1.0
   bikcodepat: 0.0
   bip32addr_xprv: 0.5
   bip32addr_xpub: 0.5
   blake2b256hash: 1.0
   blake2b512hash: 1.0
+  branpauthorizationvalue: 1.0
+  brsiafimunicipalityvalue: 1.0
   cabnvalue: 1.0
   cabuslicvalue: 1.0
   cacharityvalue: 1.0
@@ -31,34 +39,52 @@ min_recall:
   caextraProvvalue: 0.75
   cagstvalue: 1.0
   caprogramvalue: 1.0
+  caqcmunicipalitycodevalue: 1.0
   ch_pii_chahvvalue: 0.0
   ch_pii_chpassportvalue: 1.0
   chahvvalue: 0.0
   chbankaccountvalue: 0.0
+  chbfsbezirkvalue: 1.0
   chibanvalue: 0.0
   chpassportvalue: 1.0
   chuidvalue: 0.0
+  clregionvalue: 1.0
   clrutvalue: 1.0
+  codivipolavalue: 1.0
+  contentlicensevalue: 1.0
   contractawardvalue: 1.0
+  corepscodevalue: 1.0
   crc32: 1.0
   currencycodebyvalue: 1.0
   cusipvalue: 1.0
+  czlibraryregnumvalue: 1.0
+  czruianaddresspointvalue: 1.0
   datasizebyvalue: 0.0
+  datedmonyyvalue: 1.0
   de_pii_ibanvalue: 1.0
   de_pii_steueridvalue: 0.6667
+  deagsarsknown: 1.0
+  deagsknown: 1.0
   decountrynamebyvalue: 1.0
   dehrbvalue: 1.0
   deicd10value: 1.0
   deopsvalue: 0.0
+  deschulnummervalue: 1.0
   detaxidvalue: 0.6667
   deustvalue: 1.0
   devehicleplatevalue: 1.0
   doibydata: 0.6667
   doivalue: 1.0
   dunsvalue: 1.0
+  dwcbasisofrecordvalue: 1.0
+  dwctaxonomicstatusvalue: 1.0
+  dwctaxonrankvalue: 1.0
   ean13value: 1.0
   ean8value: 0.0
   eanvalue: 1.0
+  eeadsadridvalue: 1.0
+  eeaeoistationcodevalue: 1.0
+  eeehakvalue: 1.0
   eg_pii_egnationalidvalue: 1.0
   eg_pii_egpassportvalue: 1.0
   egbankaccountvalue: 0.0
@@ -80,7 +106,9 @@ min_recall:
   ensnomedvalue: 1.0
   enukprnvalue: 1.0
   enukurnvalue: 1.0
+  erarinfopidvalue: 1.0
   es_tax_esnifvalue: 0.6667
+  esadifstationvalue: 1.0
   escifvalue: 1.0
   escupvalue: 0.6667
   esicd10value: 1.0
@@ -88,22 +116,40 @@ min_recall:
   esyearbydatafiltered: 1.0
   ethereum_address: 1.0
   eu_tax_ibanvalue: 1.0
+  eugrantagreementvalue: 1.0
   eui48: 0.3333
   euidvalue: 1.0
+  eulaucodevalue: 1.0
+  eupicvalue: 1.0
+  evconnectortypevalue: 1.0
+  excelserialdatevalue: 1.0
   figivalue: 1.0
   fileextensionbyvalue: 1.0
   filenamebyvalue: 1.0
   filesizebyvalue: 0.0
+  fioppilaitosnumerovalue: 1.0
+  fiwellbeingcountyvalue: 1.0
   fiytunnusvalue: 1.0
   fqdnbyvalidators: 1.0
   frccamvalue: 0.0
   fricd10value: 1.0
+  frirveidvalue: 1.0
+  frmerimeevalue: 1.0
+  frmuseofilevalue: 1.0
+  frpdlvalue: 1.0
   frsirenvalue: 1.0
   frsiretvalue: 1.0
   frvatvalue: 1.0
+  gadmgidvalue: 1.0
+  gbdfelacodevalue: 1.0
+  gbnaptanatcovalue: 1.0
+  gleifracodevalue: 1.0
   glnvalue: 1.0
   gridbyvalue: 0.5
+  grschoolcodevalue: 1.0
   gs1_glnvalue: 1.0
+  gtfslocationtypevalue: 1.0
+  gtfswheelchairboardingvalue: 1.0
   gtin12value: 0.0
   gtin13value: 0.0
   gtin14value: 0.0
@@ -111,8 +157,12 @@ min_recall:
   gtinvalue: 0.0
   gtinwithai01value: 0.0
   guid: 0.25
+  hdxpcodevalue: 1.0
   hscodebyvalue: 1.0
   httpstatuscodevalue: 1.0
+  hugirocodevalue: 1.0
+  hujarascodevalue: 1.0
+  huneakcodevalue: 1.0
   ibanvalue: 1.0
   icaoairportcodevalue: 1.0
   iccidvalue: 0.6667
@@ -122,10 +172,13 @@ min_recall:
   idbankaccountvalue: 1.0
   iddriverlicvalue: 1.0
   idnikvalue: 0.0
+  idnpsnvalue: 1.0
   idnpwpvalue: 0.0
   idpassportvalue: 1.0
   idprovincevalue: 1.0
+  idpuskesmascodevalue: 1.0
   ieeircodevalue: 1.0
+  ifoptstopidvalue: 1.0
   ifscvalue: 1.0
   imeivalue: 0.6667
   imeivaluewithdashes: 0.3333
@@ -135,6 +188,7 @@ min_recall:
   inchibyvalue: 1.0
   inchikeybyvalue: 1.0
   incotermsbyvalue: 1.0
+  inmicrvalue: 1.0
   inreplytovalue: 1.0
   ipv4: 1.0
   ipv6: 0.25
@@ -156,10 +210,24 @@ min_recall:
   isrcvalue: 0.0
   issnvalue: 1.0
   issnvaluewithoutdash: 1.0
+  jpdateeravalue: 1.0
+  jpestattimecodevalue: 1.0
+  jpyeareravalue: 1.0
   keccak256hash: 1.0
   keccak512hash: 1.0
+  kemflcodevalue: 1.0
+  kradmindongcodevalue: 1.0
+  krbusstoparsvalue: 1.0
+  kzkpvedvalue: 1.0
   languagetag: 1.0
   leivalue: 1.0
+  ltevrkvalue: 1.0
+  ltkvrcodevalue: 1.0
+  ltmunicipalityvalue: 1.0
+  lvbisregistervalue: 1.0
+  lvmedicinenumbervalue: 1.0
+  lvregistrationnumbervalue: 0.8333
+  lvvaraddresscodevalue: 1.0
   macaddressvalue: 0.6667
   magnetlinkvalue: 1.0
   md5hash: 1.0
@@ -167,17 +235,26 @@ min_recall:
   messageidvalue: 1.0
   mimetypebyvalue: 1.0
   mmsivalue: 1.0
+  mongodbidfield: 1.0
   mongodbidvalue: 1.0
   msisdnvalue: 1.0
+  mxinegimunicipalityvalue: 1.0
+  nlbevoegdgezagvalue: 1.0
+  nlbrinvestigingvalue: 1.0
   nlbsnvalue: 1.0
   nlbtwvalue: 0.0
+  nlcbsregionyearvalue: 1.0
+  nlcoropvalue: 1.0
+  nldatepattern: 0.0
   nldatetimepattern: 0.0
   nlkvkvalue: 1.0
   nlrsinvalue: 1.0
   nutsvalue: 1.0
+  nzcompanynumbervalue: 1.0
   objectdimensionsvalue: 1.0
   objects_doivalue: 0.0
   objects_glnvalue: 1.0
+  objects_gtinfield: 0.0
   objects_isrcvalue: 0.75
   objects_issnvalue: 1.0
   oidvalue: 1.0
@@ -189,8 +266,12 @@ min_recall:
   p2wpkhaddr: 0.0
   p2wshaddr: 0.0
   phonebyvalue: 1.0
+  pladevalue: 1.0
+  plexcisenumbervalue: 1.0
   plnipvalue: 0.0
   programminglangbyvalue: 1.0
+  ptinegeocodevalue: 1.0
+  qabusinessactivityvalue: 1.0
   registry:abn: 1.0
   registry:aepassport: 1.0
   registry:am_postal_code: 1.0
@@ -208,22 +289,18 @@ min_recall:
   registry:cpvcode: 1.0
   registry:crossref_funder_id: 1.0
   registry:cz_ico: 1.0
-  registry:de_ags: 1.0
-  registry:de_ars: 1.0
   registry:de_kreisschluessel: 1.0
   registry:de_wkn: 1.0
   registry:dedriverlic: 1.0
   registry:depersonalausweis: 1.0
   registry:doiprefix: 1.0
   registry:ensoc: 1.0
-  registry:eunuts: 1.0
   registry:fips52: 1.0
   registry:fips64: 1.0
   registry:flightnumber: 1.0
   registry:govlicaccount: 1.0
   registry:gtin02: 1.0
   registry:icd10: 1.0
-  registry:idpostcode: 1.0
   registry:inseecode: 1.0
   registry:ipaddr: 1.0
   registry:ipsubnet: 1.0
@@ -273,7 +350,12 @@ min_recall:
   registry:wkt: 1.0
   richpeheaderhashbyvalue: 1.0
   ripemd160hash: 1.0
+  rolmicodevalue: 1.0
   roridbyvalue: 1.0
+  rosiiircodevalue: 1.0
+  rosiruescodevalue: 1.0
+  rsjispidvalue: 1.0
+  rucbrregnumvalue: 1.0
   rucountrycode: 1.0
   rucountrycodepat: 1.0
   rudriverlicensevalue: 0.0
@@ -281,6 +363,7 @@ min_recall:
   ruesklpcodevalue: 1.0
   rufiasvalue: 1.0
   rugoskatalogregnumvalue: 1.0
+  ruifnscodevalue: 1.0
   ruinn: 1.0
   rukadastrbypat: 1.0
   rukadastrvalue: 1.0
@@ -297,6 +380,7 @@ min_recall:
   ruokoguname: 0.5
   ruokpdcodepat: 1.0
   ruokpdcodepatimprecise: 1.0
+  ruokvknown: 0.5
   ruookvedcodepat: 1.0
   ruookvedcodepatimprecise: 1.0
   ruregioncode: 1.0
@@ -310,14 +394,19 @@ min_recall:
   rustimerangebypat: 0.5
   ruvehicleplatevalue: 0.0
   science_isnivalue: 0.5
+  selanskodvalue: 1.0
+  selibrisidvalue: 1.0
   semverbyvalue: 1.0
   seorgnumbervalue: 1.0
+  seskolenhetskodvalue: 1.0
+  sessykvalue: 1.0
   sha1hash: 1.0
   sha1hashbyvalue: 1.0
   sha256hash: 1.0
   sha256hashbyvalue: 1.0
   sha384hash: 1.0
   sha512hash: 1.0
+  sharepointcontenttypeidvalue: 1.0
   sirenvalue: 1.0
   slugvalue: 1.0
   spdxlicensebyvalue: 1.0
@@ -327,9 +416,18 @@ min_recall:
   ssscvalue: 1.0
   tednoticevalue: 1.0
   telfhashbyvalue: 0.0
+  thyearbevalue: 1.0
   timerangebypat: 0.3333
   tlshbyvalue: 0.0
   torrentinfohashvalue: 1.0
+  trikinvalue: 1.0
+  twrocdatevalue: 1.0
+  twrocyearmonthvalue: 1.0
+  uabudgetcodevalue: 1.0
+  uafkvkvalue: 1.0
+  uakekvvalue: 1.0
+  uakpkvkvalue: 1.0
+  uamfovalue: 1.0
   ulidvalue: 1.0
   unitcodebyvalue: 1.0
   unixtimevalue: 1.0
@@ -340,13 +438,24 @@ min_recall:
   us_orgs_encompanynamebypostfix: 0.0
   us_persons_useinvalue: 0.0
   us_persons_usnpivalue: 1.0
+  uscensusdivisionvalue: 1.0
+  uscensuslsadvalue: 1.0
+  uscensusregionvalue: 1.0
+  uscensussumlevvalue: 1.0
+  uscmsccnvalue: 1.0
   useinvalue: 0.0
   useruuidvalue: 1.0
   usnpivalue: 1.0
+  usnteecodevalue: 1.0
+  usnycbblvalue: 1.0
+  usnycbinvalue: 1.0
+  usnycntavalue: 1.0
   uuidbyvalue: 0.75
+  uyiso3166compactvalue: 1.0
   vatvalue: 1.0
   vhashbyvalue: 0.0
   vimeovideoidvalue: 1.0
+  vnkcbcodevalue: 1.0
   wbregionbyvalue: 1.0
   wifaddrcomp: 0.0
   wifaddruncomp: 1.0
@@ -354,4 +463,5 @@ min_recall:
   winregkeybyvalue: 0.0
   yearbydatafiltered: 1.0
   yearbydataimprecise: 0.5
+  zaemisnumbervalue: 1.0
 negative_exceptions: {}
