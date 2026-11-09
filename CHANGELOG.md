@@ -20,8 +20,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Default rule pack is metacrafter-rules v0.0.12**, and the registry snapshot is 1.3.0 at
-  a453ed9. From the 237-file metacrafter-testdata scan, apicrafter/metacrafter-rules#58, #64
+- **Default rule pack is metacrafter-rules v0.0.13**, and the registry snapshot is 1.3.0 at
+  2dced68 (apicrafter/metacrafter-rules#67, #68; apicrafter/metacrafter-registry#175, #176,
+  #177):
+  - Rules for 31 more registry datatypes from the third metacrafter-testdata pass: legal forms
+    and Lithuanian legal form codes, GLEIF entity categories, IRS EO BMF subsection, foundation,
+    group exemption and activity codes, CRA charity categories, CORDIS participant types,
+    Spanish budget lines, ISTAT province, Hungarian and Romanian county, RÚIAN part of
+    municipality codes, Bundestag constituencies, telephone area codes, NEAK specialty codes,
+    open access status, higher taxon names, Darwin Core and GTFS ids, school years, Wi-Fi
+    SSIDs, file formats, JSON and XML documents in a text field, WKB and GML coordinates;
+    `unit_of_measure` by more field names (`単位`, `Единица`).
+  - The registry snapshot adds the 306 datatypes of apicrafter/metacrafter-registry#175; the
+    EUID, CUSIP, Handelsregister and Egyptian IBAN rules follow its changed examples.
+  - `checksum_algorithms.py` is re-copied from the registry: Bech32 checks the human-readable
+    part as written (age secret keys start with `AGE-SECRET-KEY-1`).
+  - On metacrafter-testdata (237 files, with the new ids in the expected types), typed
+    precision 0.991 -> 0.993 and recall 0.466 -> 0.478 (with apicrafter/metacrafter#108).
+    Registry-example thresholds: 20 new rules, 3 raised to 1.0, none lowered.
+- **metacrafter-rules v0.0.12** (pinned on 2026-11-09, with the registry snapshot 1.3.0 at
+  a453ed9). From the 237-file metacrafter-testdata scan, apicrafter/metacrafter-rules#58, #64
   and apicrafter/metacrafter-registry#160, #169, #170:
   - Rules for 114 more registry datatypes: national region, municipality and
     address codes (EHAK, LAU, HDX P-codes, RÚIAN address points, KVR, Bulgarian NSI codes),

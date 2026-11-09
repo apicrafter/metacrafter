@@ -1,5 +1,5 @@
 # Vendored from metacrafter-registry (https://github.com/apicrafter/metacrafter-registry),
-# src/metacrafter_registry/checksums.py at commit a453ed906675ca1fbe577514fef885e63fc73510,
+# src/metacrafter_registry/checksums.py at commit 2dced6899e6295e8a578f49dd7d942227f63a25d,
 # Apache-2.0. Metacrafter does not depend on the registry package; record ``checksum`` names
 # refer to the keys of ALGORITHMS below. The weekly ecosystem workflow checks that every
 # checksum name used by the registry exists here. Do not edit by hand: re-copy instead.
@@ -19,6 +19,7 @@ from collections.abc import Callable
 from datetime import date
 
 _SEPARATORS = re.compile(r"[\s\-.]")
+_WHITESPACE = re.compile(r"\s")
 
 
 def _compact(value: str) -> str:
@@ -504,8 +505,13 @@ def _bech32_verify(value: str, constant: int) -> bool:
 
     Upper or lower case, never mixed. The 90-character limit of BIP-173 is not
     enforced: Lightning invoices and Cardano addresses use longer strings.
+    The human-readable part (HRP) is checked as written, because hyphens and
+    dots are valid HRP characters that the checksum covers: age secret keys
+    start with AGE-SECRET-KEY-1. Separators are ignored in the data part only.
     """
-    compact = _compact(value)
+    text = _WHITESPACE.sub("", str(value))
+    pos = text.rfind("1")
+    compact = text[: pos + 1] + _compact(text[pos + 1 :]) if pos >= 0 else text
     if not compact or any(not 33 <= ord(c) <= 126 for c in compact):
         return False
     if compact != compact.lower() and compact != compact.upper():
