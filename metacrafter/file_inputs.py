@@ -289,7 +289,53 @@ def detect_encoding(sample: bytes, truncated: bool = True) -> str:
         detected = codecs.lookup(detected).name.replace("-", "_")
     if detected is None or detected in _LATIN_NAMES or detected.startswith(("mac", "cp8")):
         return _latin_choice(sample)
+    if detected in _KOREAN_NAMES and not _HANGUL.search(lines.decode(detected, errors="ignore")):
+        return _non_latin_choice(lines) or detected
     return detected
+
+
+# Korean code pages, and the Hangul that every Korean text has. A few bytes of another script
+# decode as Hanja in EUC-KR: the Hebrew header "מספר מקלט" in cp1255 came out as "前初 展麟",
+# because detectors guess on so few bytes (#105).
+_KOREAN_NAMES = {"euc_kr", "cp949", "johab"}
+_HANGUL = re.compile("[ᄀ-ᇿ㄰-㆏가-힣]")
+# Hebrew final letters (kaf, mem, nun, pe, tsadi) end a word; their other forms never do.
+_HEBREW_FINAL = "ךםןףץ"
+_HEBREW_MEDIAL = "כמנפצ"
+# Single-byte code pages of non-Latin scripts and the Unicode range of their letters.
+_NON_LATIN_PAGES = (("cp1255", "א", "ת"), ("cp1256", "ؠ", "ۿ"),
+                    ("cp1253", "Ά", "ώ"), ("cp1251", "Ѐ", "ӿ"))
+_GREEK_VOWELS = set("αεηιουωάέήίόύώϊϋΑΕΗΙΟΥΩΆΈΉΊΌΎΏ")
+
+
+def _hebrew_words(words: List[str]) -> bool:
+    """Words that keep the Hebrew rule of final letters: a final form at the end only."""
+    return all(not any(ch in _HEBREW_FINAL for ch in w[:-1]) and w[-1] not in _HEBREW_MEDIAL for w in words)
+
+
+def _non_latin_choice(sample: bytes) -> Optional[str]:
+    """Single-byte code page whose decoding of ``sample`` is the letters of one script.
+
+    Hebrew, Arabic, Greek and Cyrillic are tried in that order. Each non-ASCII character must
+    be a letter of the code page's script, Hebrew words must keep the rule of final letters
+    (Cyrillic text in cp1251 breaks it: н, к, у and п are final forms in cp1255, о and р
+    medial ones), and Greek words need a vowel. None fits: None.
+    """
+    for encoding, first, last in _NON_LATIN_PAGES:
+        try:
+            text = sample.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        words = re.findall(r"[^\x00-\x7f]+", text)
+        letters = "".join(words)
+        if not letters or not all(first <= ch <= last and ch.isalpha() for ch in letters):
+            continue
+        if encoding == "cp1255" and not _hebrew_words(words):
+            continue
+        if encoding == "cp1253" and not all(_GREEK_VOWELS & set(w) for w in words if len(w) > 1):
+            continue
+        return encoding
+    return None
 
 
 # ---------------------------------------------------------------- CSV layout
@@ -450,7 +496,31 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
                 return index, columns, _combine_header(rows[top:index], rows[index], columns)
             return index, columns, None
         break
+    wide = _wide_header(rows, columns)
+    if wide is not None:
+        return wide[0], wide[1], None
     return 0, columns, None
+
+
+def _wide_header(rows: List[List[str]], columns: int) -> Optional[Tuple[int, int]]:
+    """(index, width) of a header below title rows that is wider than most records.
+
+    The records of a sheet may leave their last cells empty: in the KSH gazetteer the 13
+    columns of minority self-governments are blank in most rows, so the most common width is
+    12 of 26 and the header row does not have it (#105). The header is then the first row
+    after the title rows, if it is at least as wide as every row below it and looks like a
+    header for its own width. A first row that is no title is the header anyway.
+    """
+    for index, row in enumerate(rows[: MAX_HEADER_OFFSET + 1]):
+        if _is_title_row(row, columns):
+            continue
+        width = _width(row)
+        below = [r for r in rows[index + 1:] if _width(r) > 1]
+        if index and width > columns and below and width >= max(_width(r) for r in below):
+            if _looks_like_header(row, width, below[0]):
+                return index, width
+        return None
+    return None
 
 
 def table_layout(text: str, delimiter: Optional[str] = None, truncated: bool = True) -> Optional[TableLayout]:
