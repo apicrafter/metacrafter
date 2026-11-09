@@ -425,3 +425,74 @@ def test_cli_sheet_all_writes_an_aggregate(tmp_path):
     result = CliRunner().invoke(app, ["scan", "file", str(path), "--sheet", "all", "--output-format", "md",
                                       "--stdout", "--quiet"])
     assert result.exit_code == 0 and f"## {path}: Candidaturas" in result.output
+
+
+# ---------------------------------------------------------------- #105 wide header, short Hebrew header
+def _gazetteer_rows(records=8):
+    """KSH gazetteer layout: a title, a group heading over the last columns, a header of 20
+    columns, and records that leave the last eight columns empty."""
+    header = ["Helység megnevezése", "Helység KSH kódja", "Helység jogállása", "Megye megnevezése",
+              "Járás kódja", "Járás neve", "Járás székhelye", "Terület (hektár)", "Lakó-népesség",
+              "Lakások száma", "Becsült", "Kód"] + ["bolgár", "görög", "horvát", "lengyel", "német",
+                                                     "örmény", "roma", "román"]
+    rows = [["A helységek részletes adatai 2026. január 1. állapot szerint"] + [""] * 19,
+            [""] * 12 + ["Nemzetiségi önkormányzat"] + [""] * 7,
+            header]
+    for i in range(records):
+        rows.append([f"Helység {i}", str(17376 + i), "község", "Fejér", "085 0", "Székesfehérvári",
+                     "Székesfehérvár", str(8805 + i), str(4362 + i), str(1571 + i), "", str(i)] + [""] * 8)
+    rows[5][19] = "1"  # one record with a minority self-government is as wide as the header
+    return rows
+
+
+def test_header_below_two_title_rows_wider_than_the_records():
+    from metacrafter.file_inputs import header_row
+
+    index, columns, names = header_row(_gazetteer_rows())
+    assert (index, columns, names) == (2, 20, None)
+
+
+def test_wide_header_needs_title_rows_above_it():
+    from metacrafter.file_inputs import header_row
+
+    rows = _gazetteer_rows()[2:]
+    assert header_row(rows)[0] == 0
+
+
+def test_xlsx_header_below_a_title_and_a_group_heading(tmp_path):
+    openpyxl = __import__("pytest").importorskip("openpyxl")
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    for row in _gazetteer_rows():
+        sheet.append([c or None for c in row])
+    path = tmp_path / "gazetteer.xlsx"
+    workbook.save(path)
+    fields = list(_fields(_scan(path)))
+    assert fields[:5] == ["Helység megnevezése", "Helység KSH kódja", "Helység jogállása", "Megye megnevezése",
+                          "Járás kódja"]
+
+
+def test_short_hebrew_header_in_cp1255(tmp_path):
+    from metacrafter.file_inputs import detect_encoding
+
+    text = "OBJECTID\tמספר מקלט\tx\ty\r\n" + "".join(
+        f"{200 + i}\t{600 + i}\t220814.8384\t633859.7105\r\n" for i in range(20))
+    data = text.encode("cp1255")
+    # Detectors guess EUC-KR on these eight bytes ("前初 展麟"): Korean text has Hangul.
+    assert detect_encoding(data, truncated=False) == "cp1255"
+    path = tmp_path / "shelters.csv"
+    path.write_bytes(data)
+    assert list(_fields(_scan(path))) == ["OBJECTID", "מספר מקלט", "x", "y"]
+
+
+def test_korean_and_cyrillic_samples_keep_their_code_pages():
+    from metacrafter.file_inputs import _non_latin_choice, detect_encoding
+
+    korean = ("주소,업체명\n" + "".join(f"서울특별시 {i}번지,주식회사 {i}\n" for i in range(5))).encode("cp949")
+    assert detect_encoding(korean, truncated=False) in ("cp949", "euc_kr")
+    # Russian words break the Hebrew rule of final letters when read as cp1255 (н and к are
+    # final forms there), so they decode as Cyrillic.
+    assert _non_latin_choice("номер участка".encode("cp1251")) == "cp1251"
+    assert _non_latin_choice("שם הרחוב".encode("cp1255")) == "cp1255"
+    assert _non_latin_choice("Αριθμός μητρώου".encode("cp1253")) == "cp1253"
+    assert _non_latin_choice(b"plain ascii") is None

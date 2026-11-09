@@ -1042,6 +1042,11 @@ class RulesProcessor:
                         break
                 if field_found:
                     break
+            data = data_columns[field]
+            slice = data[0:limit]
+            # Name rules whose values do not fit go first, so that they do not cover the
+            # country-specific rules (provincia of codes: it_province_code, not province).
+            field_found = self._drop_unfit_field_rules(field_found, slice, empty_values, m_result, explain)
             field_found = self._drop_country_name_variants(field_found, m_result, explain)
             field_hits: Dict[str, float] = {}
             for rule in field_found:
@@ -1063,8 +1068,6 @@ class RulesProcessor:
                         },
                     )
                 )
-            data = data_columns[field]
-            slice = data[0:limit]
             min_len = 0
             max_len = 0
             if datastats:
@@ -1072,6 +1075,12 @@ class RulesProcessor:
                 # float fields are skipped from further rule matching
                 if field in datastats.keys():
                     if datastats[field]["ftype"] == "bool":
+                        # A column of JSON booleans holds yes/no flags: a field name such as
+                        # status or type does not make it a category (#60 of metacrafter-rules).
+                        for match in [m for m in m_result.matches if m.ruletype == "field" and m.dataclass != "boolean"]:
+                            m_result.matches.remove(match)
+                            if explain:
+                                m_result.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": "Boolean values"})
                         m_result.add(
                             RuleResult(
                                 ruleid="_int_fieldtype_boolean",
@@ -1233,6 +1242,7 @@ class RulesProcessor:
                     elif explain:
                         m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": result, "matched_count": success, "considered_count": considered, "reason": "No matching values" if not success else "Below confidence threshold"})
                 self._drop_shadowed_country_matches(data_found, m_result, explain)
+                self._drop_unnamed_detectors(data_found, m_result, explain)
 
             # Date patterns run when no value rule matched. A field-name match alone
             # (``created``, ``birth_date``) does not skip them: the values then add evidence.
@@ -1333,6 +1343,73 @@ class RulesProcessor:
                 m_result.matches.remove(match)
                 if explain:
                     m_result.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": "Contradicted by the values of the field"})
+
+    def _drop_unfit_field_rules(
+        self, found: List[Dict[str, Any]], values: List[Any], empty_values: Any, m_result: ColumnMatchResult,
+        explain: bool,
+    ) -> List[Dict[str, Any]]:
+        """Field-name rules whose values fit them: a field rule's ``validator`` checks the values.
+
+        A field rule may name a validator that its values must pass: an organization name or
+        a city has letters (``ORGANIZATION`` that holds the codes 1, 2, 5 is not one, nor a
+        ``city`` of numeric city ids), and a license that is a URL is not a software license
+        (metacrafter-rules #60). The match is dropped when fewer than half of the non-empty
+        sampled values pass. Rules without a validator, and fields without values, keep it,
+        except country-specific rules of the same type as a universal rule that the values
+        failed: the values do not fit that type in any country. Country rules of other types
+        stay (a ``provincia`` of codes is ``it_province_code``, not ``province``).
+        """
+        if not any("vfunc" in rule for rule in found):
+            return found
+        texts = [str(v).strip() for v in values if v not in empty_values and v is not None]
+        texts = [t for t in texts if t]
+        if not texts:
+            return found
+        kept, unfit = [], set()
+        for rule in found:
+            if "vfunc" in rule:
+                passed = 0
+                for text in texts:
+                    try:
+                        passed += bool(rule["vfunc"](text))
+                    except Exception:  # noqa: BLE001 - a failing validator rejects the value
+                        pass
+                if passed * 2 < len(texts):
+                    if not self._rule_countries(rule):
+                        unfit.add(rule["key"])
+                    if explain:
+                        m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": 0.0, "matched_count": passed, "considered_count": len(texts), "reason": "Values do not fit the field-name rule"})
+                    continue
+            kept.append(rule)
+        out = []
+        for rule in kept:
+            if rule["key"] in unfit and "vfunc" not in rule and self._rule_countries(rule):
+                if explain:
+                    m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": 0.0, "matched_count": 0, "considered_count": len(texts), "reason": "Values do not fit the field-name rule of this type"})
+                continue
+            out.append(rule)
+        return out
+
+    def _drop_unnamed_detectors(self, found, m_result: ColumnMatchResult, explain: bool) -> None:
+        """Drop registry detector matches without field-name evidence when the field name
+        names another type that its values also match.
+
+        RÚIAN address point codes pass the IČO check digit (the same modulo 11), so the
+        ``cz_ico`` detector reports ``AdresniBod``; a value rule for the RÚIAN code whose field
+        rule names the field is the better evidence (metacrafter-rules #61, #63). Applies when
+        no scan country is set.
+        """
+        if self.preset_countries or not found:
+            return
+        named = {rule["key"] for rule, match, name_weight in found if name_weight and not rule.get("derived")}
+        if not named:
+            return
+        for rule, match, name_weight in found:
+            if not rule.get("derived") or name_weight or rule["key"] in named or match not in m_result.matches:
+                continue
+            m_result.matches.remove(match)
+            if explain:
+                m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": match.confidence, "matched_count": match.evidence.get("matched_count", 0) if match.evidence else 0, "considered_count": match.evidence.get("considered_count", 0) if match.evidence else 0, "reason": "The field name names another type that the values match"})
 
     # --- matching helpers ---------------------------------------------------
 

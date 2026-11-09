@@ -55,7 +55,7 @@ Invalid rules are skipped with a diagnostic, never loaded as unchecked patterns.
 | `type` | `field` (column names) or `data` (values) |
 | `match` | `text`, `ppr`, `func`, `regex` or `registry` (see below) |
 | `rule` | Pattern, keyword list, function path or registry id |
-| `validator` | Dotted path to `(value) -> bool`, or `checksum:<algorithm>` |
+| `validator` | Dotted path to `(value) -> bool`, or `checksum:<algorithm>`. On a field rule it checks the values: the name match is kept when at least half of the non-empty sampled values pass |
 | `priority` | 1 (strongest) to 3; weights field-name evidence |
 | `minlen`, `maxlen` | Value length bounds (honoured for every match type) |
 | `fieldrule`, `fieldrulematch` | Field-name guard (`text` or `ppr`) for data and field rules |
@@ -232,7 +232,15 @@ Curated rules follow two similar rules when `--country-codes` is not set:
   and `trcity`;
 - a value match from a country-specific rule without a validator and without field-name
   evidence is dropped when a universal rule matched the same values with at least the
-  same confidence: GUIDs report `uuid`, not also `rufias`.
+  same confidence: GUIDs report `uuid`, not also `rufias`;
+- a registry detector match without field-name evidence is dropped when a value rule whose
+  field rule names the field matched it too: Czech RÚIAN address point codes (`AdresniBod`)
+  pass the IČO check digit, and the RÚIAN rule names them.
+
+Values also veto field-name matches: a field rule with a `validator` keeps its match only
+when at least half of the non-empty sampled values pass it (`orgname` needs names, not the
+codes 1, 2, 5 or URLs), and a column of JSON booleans gets `boolean` only (a `status` of
+`true`/`false` is not a `category`).
 
 ## Confidence scoring
 

@@ -20,6 +20,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Headers below two title rows** (#105): when the records of a sheet leave their last
+  cells empty, the most common row width is narrower than the header, and the header was not
+  found. The KSH gazetteer (`hu_ksh_gazetteer_2026.xlsx`: a title, a group heading, then the
+  header of 26 columns; most records fill 12) read as two fields. The header is now the first
+  row after the title rows that is at least as wide as every row below it and looks like a
+  header; a first row that is not a title is still the header.
+- **Short Hebrew headers in cp1255** (#105): detectors guess EUC-KR on a few non-ASCII bytes
+  (`מספר מקלט` came out as `前初 展麟`). A Korean guess whose text has no Hangul now falls back
+  to the single-byte code page whose decoding is the letters of one script: Hebrew (with
+  final letters only at the ends of words), Arabic, Greek (with vowels) or Cyrillic.
+- **Values veto field-name labels** (apicrafter/metacrafter-rules#60, #61, #63):
+  - a field rule may have a `validator`: the name match is kept only when at least half of
+    the non-empty sampled values pass it. The rule pack uses it for organization names (not
+    the codes of an IRS `ORGANIZATION` column or OpenAlex URLs), cities and provinces (not
+    numeric ids, two-letter codes or free-text localities), dates (not bare years),
+    licenses (a Creative Commons URL is not a software license or a number plate), ISBN-10
+    and BICs by name;
+  - a column of JSON booleans gets `boolean` only: a `status` of `true`/`false` is no
+    `category`;
+  - a registry detector without field-name evidence is dropped when a value rule whose field
+    rule names the field matched it: RÚIAN address point codes pass the IČO check digit.
 - **Dates are `date`, not `datetime`** (apicrafter/metacrafter-rules#55): the qddate patterns
   are dates, so a field of `01.01.1974`, `2020/8/5` or `26/07/2005` is labelled `date` (with
   the registry pattern, as before); it is `datetime` only when the values carry a time after
