@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Stata, SAS, dBase, R data, GeoPackage, SQLite and iCalendar files open** (#110). The
+  `formats` extra adds `dbfread`, `icalendar`, `pyreadr` and pandas (pyreadr returns data
+  frames; it is the only reader that needs pandas). `file_inputs.py` reads:
+  - Stata `.dta` and SAS `.sas7bdat` / `.xpt` with pyreadstat's dict output in chunks, as
+    SPSS files (iterabledata's readers ask for pandas), with variable and value labels;
+  - dBase `.dbf` in the code page of its `.cpg` file, else of its language driver id, else
+    detected from the records (a file without a language driver id was read as UTF-8 and
+    failed: the cp1251 budget form of `ua_vinnytsia_transport_budget_form2.dbf`);
+  - GeoPackage `.gpkg` with sqlite3, without fiona or GDAL: the first feature table that
+    `gpkg_contents` lists (else the first attribute table), as GeoJSON-like features
+    (`properties.<name>`, `geometry` decoded from the GeoPackage binary and WKB, the
+    primary key left out as fiona does). A GeoPackage named `.db` or `.sqlite` is read the
+    same way; in another SQLite database the first data table by name is scanned instead of
+    a metadata table (`gpkg_contents`, SpatiaLite `geometry_columns`, R-tree indexes), and
+    the log names the tables not scanned;
+  - iCalendar `.ics` with icalendar: one record per event, keyed by its own lower-case
+    property names; iterabledata's reader added `begin` / `end` fields (`b'VEVENT'`) to every
+    event and merged the properties of nested alarms.
+  R data files (`.rda`, `.rds`) are read by iterabledata with pyreadr. On
+  metacrafter-testdata the seven files of the issue open and give 20 right labels.
 - **`scan file --sheet NAME|NUMBER|all`** (#102) for XLSX, XLS and ODS workbooks. `all` scans
   every sheet that holds a table (a header and three rows below it; every non-empty sheet of
   an ODS file) as a table of its own and writes an aggregate report, one source per sheet
@@ -20,6 +40,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Field-name matches are scored by how well the values fit** (#111). A field-name-only
+  match scored 60 × priority weight whatever the values, so a confidence threshold could only
+  switch name rules off. The values now move it (`evidence.value_fit`, see
+  `metacrafter/engine/scoring.py`): the checks of the datatype are its value rules (imprecise
+  ones included), the regexps of its registry record and pattern records with their
+  checksums, and the field rule's validator; each has a pass rate on up to 200 distinct values
+  and a background broadness. A specific check that passes the values adds up to 30 (a field
+  `email` of e-mail addresses: 90); values that fail even a broad check take up to 10 (word
+  positions `58`, `226` under the key `year`: 50). Datatypes without checks (`name`,
+  `category`, `id`) keep 60 × priority weight, and a priority 1 name match stays at the
+  default threshold: the checks do not cover every form of a datatype (phone numbers in
+  brackets, country names where the registry has country codes). Priority 2 and 3 matches
+  whose values fit are now reported at the default threshold (`station latitude`, `vatNumber`,
+  `stop_timezone`). On metacrafter-testdata (279 files, rules v0.0.13, with #110 and the
+  geopoint fix below), name-rule labels go from 0.931 / 0.245 (1153 right, 86 wrong) to
+  0.942 / 0.252 (1200 right, 74 wrong), and the confidence threshold trades precision for
+  recall: at 60, 0.947 / 0.424 -> 0.957 / 0.418; at 70, 0.972 / 0.231 -> 0.974 / 0.249; at
+  80, 0.973 / 0.227 -> 0.974 / 0.241; at 90, 0.973 / 0.222 -> 0.973 / 0.229.
 - **Default rule pack is metacrafter-rules v0.0.13**, and the registry snapshot is 1.3.0 at
   2dced68 (apicrafter/metacrafter-rules#67, #68; apicrafter/metacrafter-registry#175, #176,
   #177):
@@ -58,6 +96,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`geopoint` on shapes and projected coordinates** (apicrafter/metacrafter-rules#69): a
+  `geopoint` match on `coordinates` is dropped when the GeoJSON `type` beside them is mostly
+  a line or a polygon (district boundaries, bicycle paths; a layer of points with a few
+  building outlines keeps it), and on coordinates of which most numbers lie outside
+  -180..180 (national grids, Web Mercator). The check runs before float columns leave the
+  value rules. On metacrafter-testdata 16 wrong `geopoint` labels go, none of the 25 right
+  ones. Typed precision 0.946 -> 0.951 and recall 0.420 -> 0.424 with #110 and #111.
 - **Headers below two title rows** (#105): when the records of a sheet leave their last
   cells empty, the most common row width is narrower than the header, and the header was not
   found. The KSH gazetteer (`hu_ksh_gazetteer_2026.xlsx`: a title, a group heading, then the

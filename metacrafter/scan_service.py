@@ -65,6 +65,17 @@ SUPPORTED_FILE_TYPES = [
     "px",       # PC-Axis statistics cube
     "sav",      # SPSS data file (pyreadstat, in the formats extra)
     "zsav",     # compressed SPSS data file
+    "dta",      # Stata data file (pyreadstat)
+    "sas7bdat", # SAS data set (pyreadstat)
+    "xpt",      # SAS transport file (pyreadstat)
+    "dbf",      # dBase table (dbfread, in the formats extra)
+    "gpkg",     # GeoPackage (read with sqlite3)
+    "db",       # SQLite database
+    "sqlite",   # SQLite database
+    "rda",      # R workspace (pyreadr and pandas, in the formats extra)
+    "rdata",    # R workspace
+    "rds",      # R object
+    "ics",      # iCalendar events (icalendar, in the formats extra)
 ]
 CODECS = ["lz4", 'gz', 'xz', 'bz2', 'zst', 'br', 'snappy', 'zip']
 BINARY_DATA_FORMATS = ["bson", "parquet", "avro", "orc", "pickle", "pkl", "xls", "xlsx"]

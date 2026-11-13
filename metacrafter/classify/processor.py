@@ -5,13 +5,16 @@ import importlib
 import ast
 import re
 import logging
+import math
 import warnings
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Union, Set, Callable, Tuple
 
 import yaml
 
+from metacrafter.engine.background import check_broadness
 from metacrafter.engine.registry_detectors import detector_name_evidence, detector_names_country_type
 from metacrafter.engine.scoring import data_score, field_score, priority_weight
 from pyparsing import (
@@ -401,6 +404,44 @@ _TIME_AFTER_DATE = re.compile(r"^[T\s,]*\d{1,2}:\d{2}")
 #: A character class with a range of letters ([A-Z0-9], [0-9B-DF-HJ-NP-Z]) in a regexp.
 _LETTER_CLASS = re.compile(r"\[[^\]]*[A-Za-z]-[A-Za-z][^\]]*\]")
 
+#: Distinct values of a field that the value-fit checks of a field-name match look at.
+FIT_SAMPLE = 200
+#: GeoJSON geometry types whose coordinates are positions of single points.
+POINT_GEOMETRIES = frozenset({"point", "multipoint"})
+#: GeoJSON geometry types whose coordinates are the vertices of a line or a polygon.
+SHAPE_GEOMETRIES = frozenset({"linestring", "multilinestring", "polygon", "multipolygon"})
+
+
+def fit_texts(values: List[Any], empty_values: Any) -> Counter:
+    """Counts of the texts of non-empty values, as value rules see them (whole floats as
+    integers: ``2023.0`` is ``2023``)."""
+    texts: Counter = Counter()
+    for value in values:
+        if value is None or isinstance(value, bool) or value in empty_values:
+            continue
+        if isinstance(value, float):
+            if math.isnan(value):
+                continue
+            text = str(int(value)) if value.is_integer() else str(value)
+        else:
+            text = str(value).strip()
+        if text:
+            texts[text] += 1
+    return texts
+
+
+def split_field_path(field: str) -> Tuple[str, str]:
+    """``(parent path, last name)`` of an escaped field path (``a.b\\.c`` -> ``("a", "b\\.c")``)."""
+    last, i = -1, 0
+    while i < len(field):
+        if field[i] == "\\":
+            i += 2
+            continue
+        if field[i] == ".":
+            last = i
+        i += 1
+    return (field[:last], field[last + 1:]) if last >= 0 else ("", field)
+
 
 def date_pattern_match(dateparser: Any, value: str) -> Optional[Tuple[str, bool]]:
     """``(qddate pattern key, has_time)`` of the date that starts ``value``, or None.
@@ -552,6 +593,10 @@ class RulesProcessor:
         self.diagnostics = []
         self.data_rules: List[Dict[str, Any]] = []
         self.field_rules: List[Dict[str, Any]] = []
+        # Value-fit checks of field-name matches: broadness by check id, registry checks by datatype.
+        self._fit_broadness: Dict[str, float] = {}
+        self._registry_fit: Optional[Dict[str, List[Dict[str, Any]]]] = None
+        self._registry_patterns: Dict[str, List[Dict[str, Any]]] = {}
         self.__rule_keys: List[str] = []
         self.langs: Dict[str, int] = {}
         self.contexts: Dict[str, int] = {}
@@ -811,6 +856,7 @@ class RulesProcessor:
         from metacrafter.engine.registry_detectors import add_registry_detectors, bind_registry_rules
 
         self.registry = adapter
+        self._registry_fit = None
         bind_registry_rules(self, adapter)
         return add_registry_detectors(self, adapter, detectors)
 
@@ -1007,6 +1053,12 @@ class RulesProcessor:
 
         data_columns = dict_to_columns(data)
         fields = resolve_field_names(fields, data_columns)
+        # Value rules by datatype, imprecise ones included: with a field name for their type
+        # they check whether the values fit it (see field_score).
+        fit_rules: Dict[str, List[Dict[str, Any]]] = {}
+        if not legacy_scoring:
+            for rule in self.get_filtered_rules(RULE_TYPE_DATA, filter_contexts, filter_langs, False, include_deprecated):
+                fit_rules.setdefault(rule["key"], []).append(rule)
         nonstr = []
         if datastats:
             for field in datastats.keys():
@@ -1049,25 +1101,32 @@ class RulesProcessor:
             field_found = self._drop_unfit_field_rules(field_found, slice, empty_values, m_result, explain)
             field_found = self._drop_country_name_variants(field_found, m_result, explain)
             field_hits: Dict[str, float] = {}
+            texts = fit_texts(slice, empty_values) if field_found and not legacy_scoring else None
             for rule in field_found:
                 field_hits[rule["key"]] = max(
                     field_hits.get(rule["key"], 0.0), priority_weight(rule.get("priority"))
                 )
+                fit = self._value_fit(rule, texts, fit_rules) if texts else None
+                evidence = {
+                    "scoring_model": "legacy" if legacy_scoring else "v1",
+                    "name_score": priority_weight(rule.get("priority")),
+                    "rule_source": rule.get("source"),
+                }
+                if fit:
+                    evidence["value_fit"] = fit
                 m_result.add(
                     RuleResult(
                         ruleid=rule["id"],
-                        confidence=field_score(rule.get("priority"), legacy=legacy_scoring),
+                        confidence=field_score(rule.get("priority"), legacy=legacy_scoring, fit=fit),
                         dataclass=rule["key"],
                         ruletype="field",
                         is_pii=rule_is_pii(rule),
                         pii_source=rule_pii_source(rule),
-                        evidence={
-                            "scoring_model": "legacy" if legacy_scoring else "v1",
-                            "name_score": priority_weight(rule.get("priority")),
-                            "rule_source": rule.get("source"),
-                        },
+                        evidence=evidence,
                     )
                 )
+            # Before the float columns leave the loop: coordinates are floats.
+            self._drop_unfit_geopoints(field, data_columns, slice, empty_values, m_result, explain)
             min_len = 0
             max_len = 0
             if datastats:
@@ -1300,6 +1359,7 @@ class RulesProcessor:
                         date_match.pattern = self.qddate_pattern(date_format)
                     m_result.add(date_match)
             self._drop_contradicted_matches(m_result, slice, empty_values, explain)
+            self._drop_unfit_geopoints(field, data_columns, slice, empty_values, m_result, explain)
             results.add(m_result)
         return results
 
@@ -1343,6 +1403,156 @@ class RulesProcessor:
                 m_result.matches.remove(match)
                 if explain:
                     m_result.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": "Contradicted by the values of the field"})
+
+    def _drop_unfit_geopoints(
+        self, field: str, columns: Dict[str, List[Any]], values: List[Any], empty_values: Any,
+        m_result: ColumnMatchResult, explain: bool,
+    ) -> None:
+        """Drop ``geopoint`` matches on coordinates that are not a longitude / latitude point.
+
+        - The ``coordinates`` of GeoJSON geometries whose ``type`` beside them is mostly a line
+          or a polygon are the vertices of shapes (``geometry.coordinates`` of district
+          boundaries and bicycle paths), not points. A layer of points with a few building
+          outlines (OpenStreetMap exports) keeps its label.
+        - Coordinates of which most numbers lie outside -180..180 are projected (metres of a
+          national grid, Web Mercator): a point, but not in degrees.
+        """
+        found = [m for m in m_result.matches if m.dataclass == "geopoint"]
+        if not found:
+            return
+        reason = None
+        parent, last = split_field_path(field)
+        if unescape_field_path(last) == "coordinates":
+            kinds = Counter(v.strip().lower() for v in columns.get(f"{parent}.type" if parent else "type", [])
+                            if isinstance(v, str))
+            shapes = sum(n for kind, n in kinds.items() if kind in SHAPE_GEOMETRIES)
+            if shapes * 2 > shapes + sum(n for kind, n in kinds.items() if kind in POINT_GEOMETRIES):
+                reason = "Coordinates of lines or polygons, not of points"
+        if reason is None:
+            numbers = []
+            for value in values:
+                if value is None or isinstance(value, bool) or value in empty_values:
+                    continue
+                try:
+                    number = float(value)
+                except (TypeError, ValueError):
+                    continue
+                if not math.isnan(number):
+                    numbers.append(number)
+            if numbers and sum(abs(n) > 180 for n in numbers) * 2 > len(numbers):
+                reason = "Projected coordinates, outside the longitude / latitude range"
+        if reason is None:
+            return
+        for match in found:
+            m_result.matches.remove(match)
+            if explain:
+                m_result.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": reason})
+
+    # --- value fit of field-name matches ------------------------------------
+
+    def _fit_check(self, check_id: str, test: Callable[[str], bool], dictionary: bool) -> Dict[str, Any]:
+        """A value check with its background broadness (computed once per check id)."""
+        broadness = self._fit_broadness.get(check_id)
+        if broadness is None:
+            broadness = check_broadness(test)[0]
+            self._fit_broadness[check_id] = broadness
+        return {"id": check_id, "test": test, "dictionary": dictionary, "broadness": broadness}
+
+    def _rule_fit_check(self, rule: Dict[str, Any]) -> Dict[str, Any]:
+        minlen, maxlen = rule["minlen"], rule["maxlen"]
+
+        def test(text: str) -> bool:
+            return minlen <= len(text) <= maxlen and self._value_check(rule, text)[1]
+
+        return self._fit_check(rule["id"], test, dictionary=rule["match"] == "text")
+
+    def _registry_fit_checks(self, key: str) -> List[Dict[str, Any]]:
+        """Checks of datatype ``key`` from the registry: the regexps of its record and of the
+        pattern records of the datatype (``semantic_type``), each with its checksum."""
+        adapter = self.registry
+        if adapter is None or not getattr(adapter, "available", False):
+            return []
+        if self._registry_fit is None:
+            self._registry_fit = {}
+            patterns: Dict[str, List[Dict[str, Any]]] = {}
+            for record in adapter.registry:
+                if (record.get("kind") == "pattern" and record.get("semantic_type") and record.get("regexp")
+                        and record.get("status") != "deprecated"):
+                    target = adapter.resolve(record["semantic_type"]).canonical_id or record["semantic_type"]
+                    patterns.setdefault(target, []).append(record)
+            self._registry_patterns = patterns
+        canonical = adapter.resolve(key).canonical_id or key
+        if canonical in self._registry_fit:
+            return self._registry_fit[canonical]
+        from metacrafter.engine.checksums import checksum_validator
+
+        record = adapter.record(canonical)
+        records = [record] if record and record.get("regexp") and record.get("status") != "deprecated" else []
+        checks = []
+        for record in records + self._registry_patterns.get(canonical, []):
+            try:
+                compiled = re.compile(record["regexp"])
+            except re.error:
+                continue
+            vfunc = checksum_validator("checksum:" + record["checksum"]) if record.get("checksum") else None
+
+            def test(text: str, compiled=compiled, vfunc=vfunc) -> bool:
+                return compiled.fullmatch(text) is not None and (vfunc is None or bool(vfunc(text)))
+
+            checks.append(self._fit_check(f"registry:{record['id']}", test, dictionary=False))
+        self._registry_fit[canonical] = checks
+        return checks
+
+    def _value_fit(self, rule: Dict[str, Any], texts: Counter, fit_rules: Dict[str, List[Dict[str, Any]]]
+                   ) -> Optional[Dict[str, Any]]:
+        """How well the values fit the datatype of a field-name match (see ``field_score``).
+
+        The checks are the value rules of the rule's key, its registry regexps and the
+        validator of the field rule. None when the datatype has no checks.
+        """
+        checks = [self._rule_fit_check(r) for r in fit_rules.get(rule["key"], ())]
+        checks += self._registry_fit_checks(rule["key"])
+        if "vfunc" in rule:
+            vfunc = rule["vfunc"]
+            checks.append(self._fit_check(f"{rule['id']}:validator", lambda text: bool(vfunc(text)), dictionary=False))
+        if not checks or not texts:
+            return None
+        sample = list(texts.items())[:FIT_SAMPLE]
+        considered = sum(n for _, n in sample)
+        passed_shape = [False] * len(sample)
+        best = (-1.0, None, 0.0)
+        shape_broadness = None
+        for check in checks:
+            hits = 0
+            for i, (text, n) in enumerate(sample):
+                try:
+                    ok = check["test"](text)
+                except Exception:  # noqa: BLE001 - a failing check rejects the value
+                    ok = False
+                if ok:
+                    hits += n
+                    if not check["dictionary"]:
+                        passed_shape[i] = True
+            rate = hits / considered
+            support = rate * (1.0 - check["broadness"])
+            if support > best[0]:
+                best = (support, check, rate)
+            if not check["dictionary"]:
+                shape_broadness = max(shape_broadness or 0.0, check["broadness"])
+        fit = {
+            "considered_count": considered,
+            "checks": len(checks),
+            "support": round(best[0], 4),
+            "misfit": 0.0,
+            "check": best[1]["id"],
+            "rate": round(best[2], 4),
+            "broadness": best[1]["broadness"],
+        }
+        if shape_broadness is not None:
+            shape_rate = sum(n for (_, n), ok in zip(sample, passed_shape) if ok) / considered
+            fit.update(misfit=round((1.0 - shape_rate) * shape_broadness, 4), shape_rate=round(shape_rate, 4),
+                       shape_broadness=shape_broadness)
+        return fit
 
     def _drop_unfit_field_rules(
         self, found: List[Dict[str, Any]], values: List[Any], empty_values: Any, m_result: ColumnMatchResult,

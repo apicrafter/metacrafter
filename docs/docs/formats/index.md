@@ -44,6 +44,12 @@ is gzip-compressed CSV).
 | OpenDocument spreadsheet | `.ods` (needs `odfpy`, in the `formats` extra) |
 | Pickle | `.pickle`, `.pkl` |
 | SPSS | `.sav`, `.zsav` (needs `pyreadstat` 1.3.1 or later, in the `formats` extra; no pandas). Variable labels and value labels are reported with each field (`label`, `value_labels`) |
+| Stata, SAS | `.dta`, `.sas7bdat`, `.xpt` (read like SPSS files, with `pyreadstat` and without pandas; labels as for SPSS) |
+| dBase | `.dbf` (needs `dbfread`, in the `formats` extra). The code page comes from a `.cpg` file next to it, else from the language driver id, else from the text |
+| R data | `.rda`, `.rdata`, `.rds` (needs `pyreadr` and pandas, in the `formats` extra) |
+| SQLite | `.db`, `.sqlite`: the first data table by name; metadata tables of GeoPackage and SpatiaLite are skipped and the other data tables are named in the log |
+| GeoPackage | `.gpkg` (and GeoPackage files named `.db` or `.sqlite`): the first feature table listed in `gpkg_contents`, else the first attribute table; features are read as `properties.<name>` and `geometry` (no fiona or GDAL needed) |
+| iCalendar | `.ics` (needs `icalendar`, in the `formats` extra): one record per event, keyed by the lower-case property names (`dtstart`, `summary`, `uid`) |
 
 ## Compression codecs
 

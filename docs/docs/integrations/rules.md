@@ -257,10 +257,26 @@ Confidence is 0–100 (`scoring_model: v1`):
   (for registry detectors, also when the field name names the datatype).
 - **Country**: +5 / −10 for registry detectors when `--country-codes` is set.
 - **Draft penalty**: −5 for draft registry records.
-- **Field-name-only matches** score 60 × priority weight (1 → 60, 2 → 48, 3 → 36).
+- **Field-name-only matches** score 60 × priority weight (1 → 60, 2 → 48, 3 → 36),
+  moved by how well the values fit the datatype (`evidence.value_fit`). The checks of the
+  datatype are its value rules (imprecise ones included), the regexps of its registry record
+  and pattern records with their checksums, and the field rule's `validator`. Each check has
+  a pass rate on up to 200 distinct values and a background broadness `b` (the share of
+  ordinary tokens, numbers or words, that it passes):
+  - `support` = the best `rate × (1 − b)`: a specific check that passes the values adds up
+    to +30 (a field `email` of e-mail addresses: 90);
+  - `misfit` = the share of values that fail every shape check × the largest `b` of those
+    checks: values that even a broad check rejects take up to −10 (word positions `58`,
+    `226` under the key `year`: 50). Dictionary rules (`match: text`) only add support.
+
+  A datatype without checks (`name`, `category`, `id`) keeps 60 × priority weight. So
+  `--confidence 60` drops name matches whose values do not fit, and `--confidence 70`
+  keeps the name matches whose values do.
 
 Each match has an `evidence` object with `hit_rate`, `checksum_rate`, `specificity`,
-`name_score`, counts and `scoring_model`. `--legacy-scoring` restores the pre-1.0 scores
+`name_score`, counts and `scoring_model`; a field-name match with checks of its datatype
+also has `value_fit` (`support`, `misfit`, the best `check` with its `rate` and `broadness`,
+`shape_rate`, `considered_count`). `--legacy-scoring` restores the pre-1.0 scores
 (share of matching values; 100 for field-name matches).
 
 Confidence is a heuristic, not a calibrated probability.

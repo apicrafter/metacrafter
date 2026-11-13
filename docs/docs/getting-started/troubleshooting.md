@@ -20,7 +20,8 @@ output.
 - Confirm the rule loaded: `metacrafter rules list | grep my_key`
 - Check `--contexts`, `--langs`, and `--country-codes` are not filtering it out
 - Lower `--confidence` (default is 50.0). Field-name-only matches of priority 2 and 3
-  rules score 48 and 36, so they need `--confidence 30` or lower
+  rules score 48 and 36 (more when the values pass a check of the datatype, see
+  `evidence.value_fit`), so they may need `--confidence 30` or lower
 - Registry-derived detectors without a checksum run only with `--registry-detectors stable`
 - Imprecise rules are skipped unless you pass `--include-imprecise`
 - Duplicate rule `key`s are skipped with a warning; later copies do not load
