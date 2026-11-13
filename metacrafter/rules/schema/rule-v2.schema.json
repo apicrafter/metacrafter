@@ -48,6 +48,15 @@
         "disabled": {"type": "boolean"},
         "fieldrule": {"type": "string", "minLength": 1},
         "fieldrulematch": {"enum": ["text", "ppr"]},
+        "needs_values": {
+          "type": "boolean",
+          "description": "Field rules: drop the field-name match when the field has no non-empty values. Ignored by metacrafter 2.1 and earlier"
+        },
+        "fieldregex": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Field-name guard: a Python regular expression searched in the short field name, ignoring case. With fieldrule, either guard lets the rule run. Ignored by metacrafter 2.1 and earlier"
+        },
         "country_code": {
           "oneOf": [
             {"type": "string"},

@@ -1,17 +1,21 @@
 """Rules processor module for classifying and matching data types."""
 import glob
+import itertools
 import os
 import importlib
 import ast
 import re
 import logging
+import math
 import warnings
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Union, Set, Callable, Tuple
+from typing import List, Dict, Any, Iterable, Optional, Union, Set, Callable, Tuple
 
 import yaml
 
+from metacrafter.engine.background import check_broadness
 from metacrafter.engine.registry_detectors import detector_name_evidence, detector_names_country_type
 from metacrafter.engine.scoring import data_score, field_score, priority_weight
 from pyparsing import (
@@ -38,6 +42,7 @@ from .utils import (
     dict_to_columns,
     headers,
     resolve_field_names,
+    sparse_map_parents,
     strip_language_suffix,
     unescape_field_path,
     whole_number_texts,
@@ -401,6 +406,64 @@ _TIME_AFTER_DATE = re.compile(r"^[T\s,]*\d{1,2}:\d{2}")
 #: A character class with a range of letters ([A-Z0-9], [0-9B-DF-HJ-NP-Z]) in a regexp.
 _LETTER_CLASS = re.compile(r"\[[^\]]*[A-Za-z]-[A-Za-z][^\]]*\]")
 
+#: Distinct values of a field that the value-fit checks of a field-name match look at.
+FIT_SAMPLE = 200
+#: Datatypes of field-name matches that say only that a field holds text for people: the
+#: object a field belongs to decides what the text names (see _drop_generic_name_matches).
+GENERIC_TEXT_TYPES = frozenset({"name", "description", "title"})
+#: A short lower-case code (``wp``, ``en``, ``x1``), not text for people.
+_SHORT_CODE = re.compile(r"[a-z][a-z0-9_-]{0,3}")
+#: Values of a yes/no column that are no answer, besides the empty values of a scan.
+NO_ANSWER_VALUES = frozenset({"-", "\u2013", "\u2014", "?", "n/a", "na", "n.a.", "nd", "n.d.", "null", "none", "nan", "nil"})
+#: GeoJSON geometry types whose coordinates are positions of single points.
+POINT_GEOMETRIES = frozenset({"point", "multipoint"})
+#: GeoJSON geometry types whose coordinates are the vertices of a line or a polygon.
+SHAPE_GEOMETRIES = frozenset({"linestring", "multilinestring", "polygon", "multipolygon"})
+
+
+def geometry_kinds(field: str, columns: Dict[str, List[Any]]) -> Optional[Tuple[int, int]]:
+    """``(lines and polygons, points)``: counts of the GeoJSON geometry types in the ``type``
+    field beside a ``coordinates`` field; None for other fields or without such types."""
+    parent, last = split_field_path(field)
+    if unescape_field_path(last) != "coordinates":
+        return None
+    kinds = Counter(v.strip().lower() for v in columns.get(f"{parent}.type" if parent else "type", [])
+                    if isinstance(v, str))
+    shapes = sum(n for kind, n in kinds.items() if kind in SHAPE_GEOMETRIES)
+    points = sum(n for kind, n in kinds.items() if kind in POINT_GEOMETRIES)
+    return (shapes, points) if shapes + points else None
+
+
+def fit_texts(values: List[Any], empty_values: Any) -> Counter:
+    """Counts of the texts of non-empty values, as value rules see them (whole floats as
+    integers: ``2023.0`` is ``2023``)."""
+    texts: Counter = Counter()
+    for value in values:
+        if value is None or isinstance(value, bool) or value in empty_values:
+            continue
+        if isinstance(value, float):
+            if math.isnan(value):
+                continue
+            text = str(int(value)) if value.is_integer() else str(value)
+        else:
+            text = str(value).strip()
+        if text:
+            texts[text] += 1
+    return texts
+
+
+def split_field_path(field: str) -> Tuple[str, str]:
+    """``(parent path, last name)`` of an escaped field path (``a.b\\.c`` -> ``("a", "b\\.c")``)."""
+    last, i = -1, 0
+    while i < len(field):
+        if field[i] == "\\":
+            i += 2
+            continue
+        if field[i] == ".":
+            last = i
+        i += 1
+    return (field[:last], field[last + 1:]) if last >= 0 else ("", field)
+
 
 def date_pattern_match(dateparser: Any, value: str) -> Optional[Tuple[str, bool]]:
     """``(qddate pattern key, has_time)`` of the date that starts ``value``, or None.
@@ -552,6 +615,10 @@ class RulesProcessor:
         self.diagnostics = []
         self.data_rules: List[Dict[str, Any]] = []
         self.field_rules: List[Dict[str, Any]] = []
+        # Value-fit checks of field-name matches: broadness by check id, registry checks by datatype.
+        self._fit_broadness: Dict[str, float] = {}
+        self._registry_fit: Optional[Dict[str, List[Dict[str, Any]]]] = None
+        self._registry_patterns: Dict[str, List[Dict[str, Any]]] = {}
         self.__rule_keys: List[str] = []
         self.langs: Dict[str, int] = {}
         self.contexts: Dict[str, int] = {}
@@ -612,6 +679,9 @@ class RulesProcessor:
                 self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Invalid rule structure"})
                 continue
             rule["deprecated"] = rule.get("deprecated") is True
+            # A field rule that needs non-empty values (see _drop_unfit_field_rules); metacrafter
+            # 2.1 and earlier ignore the attribute.
+            rule["needs_values"] = rule.get("needs_values") is True
             declared_minlen = "minlen" in rule
             declared_maxlen = "maxlen" in rule
             try:
@@ -740,6 +810,17 @@ class RulesProcessor:
                     # Convert to set for O(1) membership testing instead of O(n) list lookup
                     rule["fieldkeywords"] = set(map(str.lower, keywords))
                     rule["f_compiled"] = None  # text guards match by set membership
+            if "fieldregex" in rule.keys():
+                # A field-name guard by regular expression, searched in the short field name
+                # without regard to case. Metacrafter versions before it ignore the attribute.
+                try:
+                    if not isinstance(rule["fieldregex"], str) or not rule["fieldregex"]:
+                        raise re.error("empty pattern")
+                    rule["f_regex"] = re.compile(rule["fieldregex"], re.IGNORECASE)
+                except re.error as e:
+                    logging.error(f"Failed to compile field regex of rule '{rulekey}': {e}. Skipping this rule.")
+                    self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Required field guard unavailable"})
+                    continue
             if rulekey in self.__rule_keys:
                 # Later rulepath entries override earlier ones for the same rule id
                 # (default pack first, then .metacrafter rulepath, then --rulepath).
@@ -811,6 +892,7 @@ class RulesProcessor:
         from metacrafter.engine.registry_detectors import add_registry_detectors, bind_registry_rules
 
         self.registry = adapter
+        self._registry_fit = None
         bind_registry_rules(self, adapter)
         return add_registry_detectors(self, adapter, detectors)
 
@@ -956,6 +1038,7 @@ class RulesProcessor:
         explain=False,
         legacy_scoring: bool = False,
         include_deprecated: bool = False,
+        lookahead: Optional[List[Dict[str, Any]]] = None,
     ) -> TableScanResult:
         """Match classification rules against a list of dictionaries.
         
@@ -983,7 +1066,12 @@ class RulesProcessor:
                 Defaults to True
             ignore_imprecise: If True, ignore rules marked as imprecise.
                 Defaults to True
-                
+            lookahead: Records of the source read after ``data`` (the head of a file). They
+                are not classified; a ``boolean`` match looks at their values for a third
+                answer (see ``_drop_contradicted_matches``), and field rules with
+                ``needs_values: true`` look at them when the sample has no values
+                (``_drop_unfit_field_rules``).
+
         Returns:
             TableScanResult containing classification results for all fields
             
@@ -1007,6 +1095,24 @@ class RulesProcessor:
 
         data_columns = dict_to_columns(data)
         fields = resolve_field_names(fields, data_columns)
+        # Nested objects whose keys are data (the words of an inverted index): their keys are
+        # not field names, so field-name rules and field guards do not look at them.
+        map_parents = sparse_map_parents(data)
+        lookahead_columns: Dict[str, List[Any]] = {}
+
+        def lookahead_values(name: str) -> List[Any]:
+            """Values of a field in the records read after the sample."""
+            if not lookahead:
+                return []
+            if not lookahead_columns:
+                lookahead_columns.update(dict_to_columns(lookahead))
+            return lookahead_columns.get(name, [])
+        # Value rules by datatype, imprecise ones included: with a field name for their type
+        # they check whether the values fit it (see field_score).
+        fit_rules: Dict[str, List[Dict[str, Any]]] = {}
+        if not legacy_scoring:
+            for rule in self.get_filtered_rules(RULE_TYPE_DATA, filter_contexts, filter_langs, False, include_deprecated):
+                fit_rules.setdefault(rule["key"], []).append(rule)
         nonstr = []
         if datastats:
             for field in datastats.keys():
@@ -1033,6 +1139,9 @@ class RulesProcessor:
             if base_field != name.strip() and base_name:
                 base = base_name
                 name_variants.append((base, base_field))
+            name_is_data = bool(map_parents) and split_field_path(field)[0] in map_parents
+            if name_is_data:
+                name_variants = []
             for short_name, full_name in name_variants:
                 for rule in field_rules:
                     if not self._field_rule_matches(rule, short_name, full_name):
@@ -1046,28 +1155,37 @@ class RulesProcessor:
             slice = data[0:limit]
             # Name rules whose values do not fit go first, so that they do not cover the
             # country-specific rules (provincia of codes: it_province_code, not province).
-            field_found = self._drop_unfit_field_rules(field_found, slice, empty_values, m_result, explain)
+            field_found = self._drop_unfit_field_rules(field_found, slice, empty_values, m_result, explain,
+                                                       more_values=lambda: lookahead_values(field))
             field_found = self._drop_country_name_variants(field_found, m_result, explain)
             field_hits: Dict[str, float] = {}
+            texts = fit_texts(slice, empty_values) if field_found and not legacy_scoring else None
             for rule in field_found:
                 field_hits[rule["key"]] = max(
                     field_hits.get(rule["key"], 0.0), priority_weight(rule.get("priority"))
                 )
+                fit = self._value_fit(rule, texts, fit_rules) if texts else None
+                evidence = {
+                    "scoring_model": "legacy" if legacy_scoring else "v1",
+                    "name_score": priority_weight(rule.get("priority")),
+                    "rule_source": rule.get("source"),
+                }
+                if fit:
+                    evidence["value_fit"] = fit
                 m_result.add(
                     RuleResult(
                         ruleid=rule["id"],
-                        confidence=field_score(rule.get("priority"), legacy=legacy_scoring),
+                        confidence=field_score(rule.get("priority"), legacy=legacy_scoring, fit=fit),
                         dataclass=rule["key"],
                         ruletype="field",
                         is_pii=rule_is_pii(rule),
                         pii_source=rule_pii_source(rule),
-                        evidence={
-                            "scoring_model": "legacy" if legacy_scoring else "v1",
-                            "name_score": priority_weight(rule.get("priority")),
-                            "rule_source": rule.get("source"),
-                        },
+                        evidence=evidence,
                     )
                 )
+            # Before the float columns leave the loop: coordinates are floats.
+            self._drop_unfit_geopoints(field, data_columns, slice, empty_values, m_result, explain)
+            self._add_geometry_match(field, data_columns, m_result)
             min_len = 0
             max_len = 0
             if datastats:
@@ -1148,18 +1266,9 @@ class RulesProcessor:
                     if (rule["minlen"] <= min_len <= rule["maxlen"]) or (
                         min_len <= rule["minlen"] <= max_len
                     ):
-                        if "f_compiled" in rule.keys():
-                            if rule["fieldrulematch"] == "ppr":
-                                try:
-                                    res = rule["f_compiled"].parseString(shortfield)
-                                    rules.append(rule)
-                                except ParseException as e:
-                                    pass
-                            elif rule["fieldrulematch"] == "text":
-                                # Cache lowercase conversion
-                                if shortfield.lower() in rule["fieldkeywords"]:
-                                    rules.append(rule)
-                        else:
+                        if not self._has_field_guard(rule) or (
+                            not name_is_data and self._field_guard_passes(rule, shortfield)
+                        ):
                             rules.append(rule)
                 #                print(field)
                 #                for rule in rules:
@@ -1168,8 +1277,10 @@ class RulesProcessor:
                 for rule in rules:
                     name_weight = field_hits.get(rule["key"], 0.0)
                     if rule.get("derived"):
-                        detector_weight = detector_name_evidence(rule, base) or detector_name_evidence(rule, shortfield)
-                        names_type = bool(name_weight) or detector_names_country_type(rule, shortfield)
+                        detector_weight = 0.0 if name_is_data else (
+                            detector_name_evidence(rule, base) or detector_name_evidence(rule, shortfield))
+                        names_type = bool(name_weight) or (
+                            not name_is_data and detector_names_country_type(rule, shortfield))
                         name_weight = name_weight or detector_weight
                         gate = self._detector_gate(rule, name_weight, names_type)
                         if gate:
@@ -1299,7 +1410,12 @@ class RulesProcessor:
                     if not with_time:
                         date_match.pattern = self.qddate_pattern(date_format)
                     m_result.add(date_match)
-            self._drop_contradicted_matches(m_result, slice, empty_values, explain)
+            more_values: List[Any] = []
+            if lookahead and any(m.dataclass == "boolean" and m.ruletype == "data" for m in m_result.matches):
+                more_values = lookahead_values(field)
+            self._drop_contradicted_matches(m_result, slice, empty_values, explain, more_values)
+            self._drop_generic_name_matches(m_result, slice, empty_values, explain)
+            self._drop_unfit_geopoints(field, data_columns, slice, empty_values, m_result, explain)
             results.add(m_result)
         return results
 
@@ -1307,14 +1423,21 @@ class RulesProcessor:
     MAX_BOOLEAN_VALUES = 3
 
     def _drop_contradicted_matches(
-        self, m_result: ColumnMatchResult, values: List[Any], empty_values: Any, explain: bool
+        self, m_result: ColumnMatchResult, values: List[Any], empty_values: Any, explain: bool,
+        more_values: Iterable[Any] = (),
     ) -> None:
         """Drop matches that the values of the field contradict.
 
         - A ``date`` match by field name when a value rule found dates with a time of day
           (``datetime``): a WordPress ``date`` holds ``2024-01-01T10:00:00``.
-        - A ``boolean`` match by values when the field has more distinct values than a
-          yes/no column: ``да``/``не``/``кран``/``бутон`` is a category.
+        - A ``boolean`` match by values when the field has more distinct answers than a
+          yes/no column (``да``/``не``/``кран``/``бутон`` is a category), or three answers that
+          each occur more than once, one of which no matched boolean rule accepts
+          (``Да``/``Нет``/``Частично``). Placeholders (``-``, ``n/a``, ``?``) are no answer.
+          ``more_values`` are values of the field read after the sample (see
+          ``match_dict(lookahead=...)``): a third answer may first appear below the head of a
+          file. Two answers stay a yes/no column even when the matched rule knows one of them
+          only (``SI``/``NO`` by an English yes/no rule, ``да``/``не``).
         - A ``name`` match by field name when every value is a number: a KML Placemark
           ``name`` that holds district numbers (17, 18).
         """
@@ -1328,25 +1451,253 @@ class RulesProcessor:
             drop += [m for m in m_result.matches if m.ruletype == "field" and m.dataclass == "date"]
         booleans = [m for m in m_result.matches if m.dataclass == "boolean" and m.ruletype == "data"]
         if booleans:
-            distinct = set()
-            for value in values:
-                if value in empty_values:
+            answers: Counter = Counter()
+            texts: Dict[str, str] = {}
+            for value in itertools.chain(values, more_values):
+                if value is None or value in empty_values:
                     continue
-                text = str(value).strip().lower()
-                if text and text != "-":
-                    distinct.add(text)
-                if len(distinct) > self.MAX_BOOLEAN_VALUES:
-                    drop += booleans
-                    break
+                text = str(value).strip()
+                key = text.lower()
+                if key and key not in NO_ANSWER_VALUES:
+                    answers[key] += 1
+                    texts.setdefault(key, text)
+            if len(answers) > self.MAX_BOOLEAN_VALUES:
+                drop += booleans
+            else:
+                # Three answers, each given more than once (a footnoted ``False [1]`` is not one),
+                # one of which the matched yes/no rules do not accept.
+                frequent = [key for key, count in answers.items() if count > 1]
+                if len(frequent) >= 3:
+                    ids = {m.ruleid for m in booleans}
+                    rules = [rule for rule in self.data_rules if rule.get("id") in ids]
+                    if any(self._third_answer(texts[key], rules) for key in frequent):
+                        drop += booleans
         for match in drop:
             if match in m_result.matches:
                 m_result.matches.remove(match)
                 if explain:
                     m_result.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": "Contradicted by the values of the field"})
 
+    def _drop_generic_name_matches(
+        self, m_result: ColumnMatchResult, values: List[Any], empty_values: Any, explain: bool
+    ) -> None:
+        """Drop field-name matches of generic text types (``name``, ``description``, ``title``)
+        that the field's values contradict.
+
+        A ``name`` key holds the name of whatever its object is: the ``name`` of a GBIF
+        ``usage`` is a scientific name, of a HAL ``curies`` link a CURIE prefix. The generic
+        match is dropped when:
+
+        - a value rule of another type matched with at least its confidence (``species`` 100
+          on ``classifications.*.usage.name``, ``encountryname`` on ``gadm.level0.name``);
+        - every non-empty value is a short lower-case code (``wp``, ``en``): text for people
+          is not written so.
+        """
+        generic = [m for m in m_result.matches if m.ruletype == "field" and m.dataclass in GENERIC_TEXT_TYPES]
+        if not generic:
+            return
+        best = max(float(m.confidence or 0.0) for m in generic)
+        reason = None
+        if any(m.ruletype != "field" and m.dataclass not in GENERIC_TEXT_TYPES and float(m.confidence or 0.0) >= best
+               for m in m_result.matches):
+            reason = "A value rule of a more specific type matched the field"
+        else:
+            texts = [str(v).strip() for v in values if v is not None and v not in empty_values and str(v).strip()]
+            if texts and all(_SHORT_CODE.fullmatch(t) for t in texts):
+                reason = "Every value is a short lower-case code"
+        if reason is None:
+            return
+        for match in generic:
+            m_result.matches.remove(match)
+            if explain:
+                m_result.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": reason})
+
+    @staticmethod
+    def _third_answer(text: str, rules: List[Dict[str, Any]]) -> bool:
+        """True when ``text`` is an answer that none of the boolean ``rules`` accepts: it has a
+        letter or a digit and fails each rule's length range, pattern and validator."""
+        if not any(ch.isalnum() for ch in text):
+            return False
+        for rule in rules:
+            if rule["minlen"] <= len(text) <= rule["maxlen"] and RulesProcessor._value_check(rule, text)[1]:
+                return False
+        return bool(rules)
+
+    def _drop_unfit_geopoints(
+        self, field: str, columns: Dict[str, List[Any]], values: List[Any], empty_values: Any,
+        m_result: ColumnMatchResult, explain: bool,
+    ) -> None:
+        """Drop ``geopoint`` matches on coordinates that are not a longitude / latitude point.
+
+        - The ``coordinates`` of GeoJSON geometries whose ``type`` beside them is mostly a line
+          or a polygon are the vertices of shapes (``geometry.coordinates`` of district
+          boundaries and bicycle paths), not points. A layer of points with a few building
+          outlines (OpenStreetMap exports) keeps its label.
+        - Coordinates of which most numbers lie outside -180..180 are projected (metres of a
+          national grid, Web Mercator): a point, but not in degrees.
+        """
+        found = [m for m in m_result.matches if m.dataclass == "geopoint"]
+        if not found:
+            return
+        reason = None
+        kinds = geometry_kinds(field, columns)
+        if kinds is not None and kinds[0] * 2 > sum(kinds):
+            reason = "Coordinates of lines or polygons, not of points"
+        if reason is None:
+            numbers = []
+            for value in values:
+                if value is None or isinstance(value, bool) or value in empty_values:
+                    continue
+                try:
+                    number = float(value)
+                except (TypeError, ValueError):
+                    continue
+                if not math.isnan(number):
+                    numbers.append(number)
+            if numbers and sum(abs(n) > 180 for n in numbers) * 2 > len(numbers):
+                reason = "Projected coordinates, outside the longitude / latitude range"
+        if reason is None:
+            return
+        for match in found:
+            m_result.matches.remove(match)
+            if explain:
+                m_result.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": reason})
+
+    @staticmethod
+    def _add_geometry_match(field: str, columns: Dict[str, List[Any]], m_result: ColumnMatchResult) -> None:
+        """Label the ``coordinates`` of GeoJSON lines and polygons ``geojson``.
+
+        The ``coordinates`` of a geometry whose ``type`` beside it is mostly a line or a
+        polygon (``geometry.coordinates`` of district boundaries, bicycle paths; in degrees or
+        projected) are the vertices of the geometry, read as one list of numbers: the field
+        is the geometry, not a point (``_drop_unfit_geopoints`` drops ``geopoint`` there).
+        Points keep their ``geopoint`` label; projected points get none (their numbers are an
+        easting and a northing together). The confidence is the share of lines and polygons
+        among the geometries.
+        """
+        kinds = geometry_kinds(field, columns)
+        if kinds is None or kinds[0] * 2 <= sum(kinds):
+            return
+        shapes, points = kinds
+        m_result.add(
+            RuleResult(
+                ruleid="_int_geometry_coordinates",
+                confidence=round(100.0 * shapes / (shapes + points), 2),
+                dataclass="geojson",
+                ruletype="fieldtype",
+                evidence={"matched_count": shapes, "considered_count": shapes + points},
+            )
+        )
+
+    # --- value fit of field-name matches ------------------------------------
+
+    def _fit_check(self, check_id: str, test: Callable[[str], bool], dictionary: bool) -> Dict[str, Any]:
+        """A value check with its background broadness (computed once per check id)."""
+        broadness = self._fit_broadness.get(check_id)
+        if broadness is None:
+            broadness = check_broadness(test)[0]
+            self._fit_broadness[check_id] = broadness
+        return {"id": check_id, "test": test, "dictionary": dictionary, "broadness": broadness}
+
+    def _rule_fit_check(self, rule: Dict[str, Any]) -> Dict[str, Any]:
+        minlen, maxlen = rule["minlen"], rule["maxlen"]
+
+        def test(text: str) -> bool:
+            return minlen <= len(text) <= maxlen and self._value_check(rule, text)[1]
+
+        return self._fit_check(rule["id"], test, dictionary=rule["match"] == "text")
+
+    def _registry_fit_checks(self, key: str) -> List[Dict[str, Any]]:
+        """Checks of datatype ``key`` from the registry: the regexps of its record and of the
+        pattern records of the datatype (``semantic_type``), each with its checksum."""
+        adapter = self.registry
+        if adapter is None or not getattr(adapter, "available", False):
+            return []
+        if self._registry_fit is None:
+            self._registry_fit = {}
+            patterns: Dict[str, List[Dict[str, Any]]] = {}
+            for record in adapter.registry:
+                if (record.get("kind") == "pattern" and record.get("semantic_type") and record.get("regexp")
+                        and record.get("status") != "deprecated"):
+                    target = adapter.resolve(record["semantic_type"]).canonical_id or record["semantic_type"]
+                    patterns.setdefault(target, []).append(record)
+            self._registry_patterns = patterns
+        canonical = adapter.resolve(key).canonical_id or key
+        if canonical in self._registry_fit:
+            return self._registry_fit[canonical]
+        from metacrafter.engine.checksums import checksum_validator
+
+        record = adapter.record(canonical)
+        records = [record] if record and record.get("regexp") and record.get("status") != "deprecated" else []
+        checks = []
+        for record in records + self._registry_patterns.get(canonical, []):
+            try:
+                compiled = re.compile(record["regexp"])
+            except re.error:
+                continue
+            vfunc = checksum_validator("checksum:" + record["checksum"]) if record.get("checksum") else None
+
+            def test(text: str, compiled=compiled, vfunc=vfunc) -> bool:
+                return compiled.fullmatch(text) is not None and (vfunc is None or bool(vfunc(text)))
+
+            checks.append(self._fit_check(f"registry:{record['id']}", test, dictionary=False))
+        self._registry_fit[canonical] = checks
+        return checks
+
+    def _value_fit(self, rule: Dict[str, Any], texts: Counter, fit_rules: Dict[str, List[Dict[str, Any]]]
+                   ) -> Optional[Dict[str, Any]]:
+        """How well the values fit the datatype of a field-name match (see ``field_score``).
+
+        The checks are the value rules of the rule's key, its registry regexps and the
+        validator of the field rule. None when the datatype has no checks.
+        """
+        checks = [self._rule_fit_check(r) for r in fit_rules.get(rule["key"], ())]
+        checks += self._registry_fit_checks(rule["key"])
+        if "vfunc" in rule:
+            vfunc = rule["vfunc"]
+            checks.append(self._fit_check(f"{rule['id']}:validator", lambda text: bool(vfunc(text)), dictionary=False))
+        if not checks or not texts:
+            return None
+        sample = list(texts.items())[:FIT_SAMPLE]
+        considered = sum(n for _, n in sample)
+        passed_shape = [False] * len(sample)
+        best = (-1.0, None, 0.0)
+        shape_broadness = None
+        for check in checks:
+            hits = 0
+            for i, (text, n) in enumerate(sample):
+                try:
+                    ok = check["test"](text)
+                except Exception:  # noqa: BLE001 - a failing check rejects the value
+                    ok = False
+                if ok:
+                    hits += n
+                    if not check["dictionary"]:
+                        passed_shape[i] = True
+            rate = hits / considered
+            support = rate * (1.0 - check["broadness"])
+            if support > best[0]:
+                best = (support, check, rate)
+            if not check["dictionary"]:
+                shape_broadness = max(shape_broadness or 0.0, check["broadness"])
+        fit = {
+            "considered_count": considered,
+            "checks": len(checks),
+            "support": round(best[0], 4),
+            "misfit": 0.0,
+            "check": best[1]["id"],
+            "rate": round(best[2], 4),
+            "broadness": best[1]["broadness"],
+        }
+        if shape_broadness is not None:
+            shape_rate = sum(n for (_, n), ok in zip(sample, passed_shape) if ok) / considered
+            fit.update(misfit=round((1.0 - shape_rate) * shape_broadness, 4), shape_rate=round(shape_rate, 4),
+                       shape_broadness=shape_broadness)
+        return fit
+
     def _drop_unfit_field_rules(
         self, found: List[Dict[str, Any]], values: List[Any], empty_values: Any, m_result: ColumnMatchResult,
-        explain: bool,
+        explain: bool, more_values: Optional[Callable[[], List[Any]]] = None,
     ) -> List[Dict[str, Any]]:
         """Field-name rules whose values fit them: a field rule's ``validator`` checks the values.
 
@@ -1354,17 +1705,38 @@ class RulesProcessor:
         a city has letters (``ORGANIZATION`` that holds the codes 1, 2, 5 is not one, nor a
         ``city`` of numeric city ids), and a license that is a URL is not a software license
         (metacrafter-rules #60). The match is dropped when fewer than half of the non-empty
-        sampled values pass. Rules without a validator, and fields without values, keep it,
-        except country-specific rules of the same type as a universal rule that the values
-        failed: the values do not fit that type in any country. Country rules of other types
-        stay (a ``provincia`` of codes is ``it_province_code``, not ``province``).
+        sampled values pass. A field without non-empty sampled values keeps its name matches
+        (an empty ``Rechtsvorm`` column is still ``legal_form``), except those of rules with
+        ``needs_values: true``: the name alone does not say what the values are (an empty
+        ``created_at`` column is not labelled by a rule that asks for Unix milliseconds). Such
+        a rule looks at the records read after the sample (``more_values``): it is kept when
+        they have values and at least half pass its validator.
+        Rules without a validator keep their match, except country-specific rules of the same
+        type as a universal rule that the values failed: the values do not fit that type in
+        any country. Country rules of other types stay (a ``provincia`` of codes is
+        ``it_province_code``, not ``province``).
         """
-        if not any("vfunc" in rule for rule in found):
+        if not any("vfunc" in rule or rule.get("needs_values") for rule in found):
             return found
         texts = [str(v).strip() for v in values if v not in empty_values and v is not None]
         texts = [t for t in texts if t]
         if not texts:
-            return found
+            # No values to veto by. Rules that need values look at the records after the sample.
+            if not any(rule.get("needs_values") for rule in found):
+                return found
+            later = [str(v).strip() for v in (more_values() if more_values is not None else ())
+                     if v not in empty_values and v is not None]
+            later = [t for t in later if t]
+            kept = []
+            for rule in found:
+                if rule.get("needs_values") and not (later and self._validator_passes(rule, later)):
+                    if explain:
+                        reason = ("The values do not fit the field-name rule" if later
+                                  else "The field-name rule needs values and the field has none")
+                        m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": 0.0, "matched_count": 0, "considered_count": len(later), "reason": reason})
+                    continue
+                kept.append(rule)
+            return kept
         kept, unfit = [], set()
         for rule in found:
             if "vfunc" in rule:
@@ -1390,12 +1762,26 @@ class RulesProcessor:
             out.append(rule)
         return out
 
+    @staticmethod
+    def _validator_passes(rule: Dict[str, Any], texts: List[str]) -> bool:
+        """True when the rule has no validator or at least half of ``texts`` pass it."""
+        vfunc = rule.get("vfunc")
+        if vfunc is None:
+            return True
+        passed = 0
+        for text in texts:
+            try:
+                passed += bool(vfunc(text))
+            except Exception:  # noqa: BLE001 - a failing validator rejects the value
+                pass
+        return passed * 2 >= len(texts)
+
     def _drop_unnamed_detectors(self, found, m_result: ColumnMatchResult, explain: bool) -> None:
         """Drop value matches without field-name evidence when the field name names another type
         that its values also match.
 
         A value rule has field-name evidence when a field rule of its type matched the name or
-        when its field guard (``fieldrule``) let it run on this field.
+        when its field guard (``fieldrule``, ``fieldregex``) let it run on this field.
 
         - A registry detector without such evidence is dropped: RÚIAN address point codes pass
           the IČO check digit (the same modulo 11), so the ``cz_ico`` detector reports
@@ -1418,9 +1804,9 @@ class RulesProcessor:
         for rule, match, name_weight in found:
             if rule.get("derived") or match not in m_result.matches:
                 continue
-            if name_weight or "f_compiled" in rule:
+            if name_weight or self._has_field_guard(rule):
                 named.add(rule["key"])
-            if "f_compiled" in rule:
+            if self._has_field_guard(rule):
                 guarded.append(match.confidence)
         if not named:
             return
@@ -1430,7 +1816,7 @@ class RulesProcessor:
                 continue
             if rule.get("derived"):
                 reason = "The field name names another type that the values match"
-            elif best is None or "f_compiled" in rule or match.confidence > best:
+            elif best is None or self._has_field_guard(rule) or match.confidence > best:
                 continue
             else:
                 reason = "The field name names another type whose value rule matched at least as many values"
@@ -1465,13 +1851,34 @@ class RulesProcessor:
             )
         if not hit:
             return False
-        if "f_compiled" in rule:
-            if rule.get("fieldrulematch") == "text":
-                return shortfield.lower() in rule.get("fieldkeywords", set())
-            try:
-                rule["f_compiled"].parseString(shortfield)
-            except ParseException:
-                return False
+        if RulesProcessor._has_field_guard(rule):
+            return RulesProcessor._field_guard_passes(rule, shortfield)
+        return True
+
+    @staticmethod
+    def _has_field_guard(rule: Dict[str, Any]) -> bool:
+        """True when a rule has a field-name guard: ``fieldrule`` or ``fieldregex``."""
+        return "f_compiled" in rule or "f_regex" in rule
+
+    @staticmethod
+    def _field_guard_passes(rule: Dict[str, Any], shortfield: str) -> bool:
+        """True when the short field name passes the rule's field-name guard.
+
+        A rule with both guards runs when either passes: a rule pack can keep a ``fieldrule``
+        keyword list for metacrafter versions that ignore ``fieldregex`` and add the regular
+        expression for the names the list does not hold.
+        """
+        pattern = rule.get("f_regex")
+        if pattern is not None and pattern.search(shortfield):
+            return True
+        if "f_compiled" not in rule:
+            return False
+        if rule.get("fieldrulematch") == "text":
+            return shortfield.lower() in rule.get("fieldkeywords", set())
+        try:
+            rule["f_compiled"].parseString(shortfield)
+        except ParseException:
+            return False
         return True
 
     @staticmethod

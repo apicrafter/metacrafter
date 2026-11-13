@@ -210,7 +210,7 @@ def test_spss_file_without_pandas(monkeypatch):
     import metacrafter.file_inputs as file_inputs
 
     # Chunks of 10 rows: the 25 records come from three reads.
-    monkeypatch.setattr(file_inputs, "SPSS_CHUNK_ROWS", 10)
+    monkeypatch.setattr(file_inputs, "STATS_CHUNK_ROWS", 10)
     plan = file_inputs.prepare_input(str(FIXTURES / "spss_survey.sav"), {})
     records = list(plan.records)
     assert len(records) == 25 and records[0] == {"id": 1.0, "sugu": 2.0, "email": "vastaja0@example.ee", "vanus": None}
@@ -496,3 +496,313 @@ def test_korean_and_cyrillic_samples_keep_their_code_pages():
     assert _non_latin_choice("שם הרחוב".encode("cp1255")) == "cp1255"
     assert _non_latin_choice("Αριθμός μητρώου".encode("cp1253")) == "cp1253"
     assert _non_latin_choice(b"plain ascii") is None
+
+
+# ---------------------------------------------------------------- #110 Stata, SAS, dBase, GeoPackage, iCalendar, R
+def test_stata_file_without_pandas(tmp_path, monkeypatch):
+    pytest = __import__("pytest")
+    pyreadstat = pytest.importorskip("pyreadstat")
+    pd = pytest.importorskip("pandas")  # only to write the fixture
+    import sys
+
+    import metacrafter.file_inputs as file_inputs
+
+    frame = pd.DataFrame({"anio": [2000.0 + i % 3 for i in range(25)],
+                          "email": [f"vastaja{i}@example.ee" for i in range(25)],
+                          "sugu": [1 + i % 2 for i in range(25)]})
+    path = tmp_path / "survey.dta"
+    pyreadstat.write_dta(frame, str(path), column_labels={"email": "E-post"},
+                         variable_value_labels={"sugu": {1: "Mees", 2: "Naine"}})
+    monkeypatch.setitem(sys.modules, "pandas", None)  # iterabledata's reader would need it
+    monkeypatch.setattr(file_inputs, "STATS_CHUNK_ROWS", 10)
+    plan = file_inputs.prepare_input(str(path), {})
+    records = list(plan.records)
+    assert plan.kind == "dta" and len(records) == 25
+    assert records[0] == {"anio": 2000.0, "email": "vastaja0@example.ee", "sugu": 1}
+    assert plan.field_info["sugu"]["value_labels"] == {"1": "Mees", "2": "Naine"}
+    report = _scan(path)
+    fields = _fields(report)
+    assert list(fields) == ["anio", "email", "sugu"] and "email" in fields["email"]
+    assert {f["field"]: f for f in report["data"]}["email"]["label"] == "E-post"
+
+
+def test_sas_files_are_read_with_pyreadstat(tmp_path, monkeypatch):
+    pytest = __import__("pytest")
+    pyreadstat = pytest.importorskip("pyreadstat")
+    pd = pytest.importorskip("pandas")
+    import metacrafter.file_inputs as file_inputs
+
+    # SAS transport: pyreadstat writes it, and reads it like a .sas7bdat data set.
+    path = tmp_path / "epci.xpt"
+    pyreadstat.write_xport(pd.DataFrame({"EPCI": ["200000172", "200000438"], "NB_C": [6.0, 9.0]}), str(path))
+    assert list(file_inputs.prepare_input(str(path), {}).records) == [
+        {"EPCI": "200000172", "NB_C": 6.0}, {"EPCI": "200000438", "NB_C": 9.0}]
+    # A .sas7bdat file goes to pyreadstat.read_sas7bdat with dict output and the given encoding.
+    calls = []
+
+    def read_sas7bdat(filename, **kwargs):
+        calls.append(kwargs)
+        meta = type("Meta", (), {"column_names": ["LIB_EPCI"], "number_columns": 1})()
+        return {"LIB_EPCI": ["CC des Quatre Rivières"]}, meta
+
+    monkeypatch.setattr(pyreadstat, "read_sas7bdat", read_sas7bdat)
+    sas = tmp_path / "epci.sas7bdat"
+    sas.write_bytes(b"")
+    plan = file_inputs.prepare_input(str(sas), {"encoding": "cp1252"})
+    assert plan.kind == "sas7bdat" and list(plan.records) == [{"LIB_EPCI": "CC des Quatre Rivières"}]
+    assert calls[0] == {"row_limit": file_inputs.STATS_CHUNK_ROWS, "output_format": "dict", "encoding": "cp1252"}
+
+
+def _dbf(fields, rows, encoding, ldid=0):
+    """A dBase III table of character fields."""
+    import struct
+
+    header_len = 32 + 32 * len(fields) + 1
+    record_len = 1 + sum(size for _, size in fields)
+    out = bytearray(struct.pack("<BBBBIHH", 3, 126, 1, 1, len(rows), header_len, record_len))
+    out += bytes(17) + bytes([ldid]) + bytes(2)
+    for name, size in fields:
+        out += name.encode("ascii").ljust(11, b"\0") + b"C" + bytes(4) + bytes([size, 0]) + bytes(14)
+    out += b"\r"
+    for row in rows:
+        out += b" " + b"".join(v.encode(encoding).ljust(size, b" ") for v, (_, size) in zip(row, fields))
+    return bytes(out + b"\x1a")
+
+
+DBF_FIELDS = [("NAME", 30), ("CITY", 20)]
+DBF_ROWS = [("Оплата праці", "Вінниця"), ("Поточні видатки", "Київ"), ("Нарахування на оплату", "Житомир")]
+
+
+def test_dbf_code_page_without_language_driver(tmp_path):
+    pytest = __import__("pytest")
+    pytest.importorskip("dbfread")
+    from metacrafter.file_inputs import dbf_encoding, prepare_input
+
+    path = tmp_path / "form2.dbf"
+    path.write_bytes(_dbf(DBF_FIELDS, DBF_ROWS, "cp1251"))
+    assert dbf_encoding(str(path)) == "cp1251"
+    plan = prepare_input(str(path), {})
+    assert plan.iterableargs["encoding"] == "cp1251"
+    from metacrafter.scan_service import _open_data_file
+
+    reader = _open_data_file(str(path), plan.iterableargs)
+    assert [dict(r) for r in reader] == [{"NAME": n, "CITY": c} for n, c in DBF_ROWS]
+    assert list(_fields(_scan(path))) == ["NAME", "CITY"]
+
+
+def test_dbf_language_driver_and_cpg_file(tmp_path):
+    from metacrafter.file_inputs import cpg_encoding, dbf_encoding
+
+    __import__("pytest").importorskip("dbfread")
+    path = tmp_path / "offices.dbf"
+    path.write_bytes(_dbf(DBF_FIELDS, [("Ufficio", "Pisa")], "cp1252", ldid=0x57))
+    assert dbf_encoding(str(path)) == "cp1252"
+    # A .cpg file next to it wins over the language driver id.
+    (tmp_path / "offices.cpg").write_text("ANSI 1251")
+    assert dbf_encoding(str(path)) == "cp1251"
+    assert [cpg_encoding(t) for t in ("UTF-8", "1251", "65001", "88591", "CP866", "", "nonsense")] == [
+        "utf-8", "cp1251", "utf-8", "iso8859-1", "cp866", None, None]
+
+
+def _wkb_point(x, y, big_endian=False):
+    import struct
+
+    order = ">" if big_endian else "<"
+    return bytes([0 if big_endian else 1]) + struct.pack(order + "Idd", 1, x, y)
+
+
+def _gpkg_blob(wkb, envelope=None):
+    import struct
+
+    flags = 0x01 | ((1 << 1) if envelope else 0)  # little-endian header, xy envelope
+    out = b"GP" + bytes([0, flags]) + struct.pack("<i", 4326)
+    if envelope:
+        out += struct.pack("<dddd", *envelope)
+    return out + wkb
+
+
+def _geopackage(path):
+    import sqlite3
+
+    db = sqlite3.connect(path)
+    db.executescript("""
+        CREATE TABLE gpkg_spatial_ref_sys (srs_name TEXT, srs_id INTEGER PRIMARY KEY, organization TEXT,
+            organization_coordsys_id INTEGER, definition TEXT, description TEXT);
+        CREATE TABLE gpkg_contents (table_name TEXT PRIMARY KEY, data_type TEXT, identifier TEXT,
+            description TEXT, last_change TEXT, min_x REAL, min_y REAL, max_x REAL, max_y REAL, srs_id INTEGER);
+        CREATE TABLE gpkg_geometry_columns (table_name TEXT, column_name TEXT, geometry_type_name TEXT,
+            srs_id INTEGER, z INTEGER, m INTEGER);
+        CREATE TABLE "art-objects" (fid INTEGER PRIMARY KEY AUTOINCREMENT, geom BLOB, nosaukums TEXT, type TEXT);
+        CREATE TABLE notes (id INTEGER PRIMARY KEY, note TEXT);
+        INSERT INTO gpkg_contents (table_name, data_type, identifier) VALUES
+            ('notes', 'attributes', 'notes'), ('art-objects', 'features', 'art-objects');
+        INSERT INTO gpkg_geometry_columns VALUES ('art-objects', 'geom', 'POINT', 4326, 0, 0);
+    """)
+    try:
+        db.execute('CREATE VIRTUAL TABLE "rtree_art-objects_geom" USING rtree(id, minx, maxx, miny, maxy)')
+    except sqlite3.OperationalError:
+        pass  # SQLite without the R*Tree module
+    db.execute('INSERT INTO "art-objects" (geom, nosaukums, type) VALUES (?, ?, ?)',
+               (_gpkg_blob(_wkb_point(24.1, 56.95), envelope=(24.1, 24.1, 56.95, 56.95)), "Brīvības piemineklis", "Piemineklis"))
+    db.execute('INSERT INTO "art-objects" (geom, nosaukums, type) VALUES (?, ?, ?)',
+               (_gpkg_blob(_wkb_point(24.2, 56.9, big_endian=True)), "Strūklaka", "Strūklaka"))
+    db.execute("INSERT INTO notes (note) VALUES ('x')")
+    db.commit()
+    db.close()
+
+
+def test_geopackage_feature_table_without_fiona(tmp_path):
+    from metacrafter.file_inputs import prepare_input
+
+    path = tmp_path / "art.gpkg"
+    _geopackage(str(path))
+    for name in ("art.gpkg", "art.sqlite"):  # the same bytes as plain SQLite
+        target = tmp_path / name
+        if name != "art.gpkg":
+            target.write_bytes(path.read_bytes())
+        plan = prepare_input(str(target), {})
+        records = list(plan.records)
+        assert plan.kind == "gpkg" and len(records) == 2
+        assert records[0] == {"type": "Feature", "properties": {"nosaukums": "Brīvības piemineklis", "type": "Piemineklis"},
+                              "geometry": {"type": "Point", "coordinates": [24.1, 56.95]}}
+        assert records[1]["geometry"]["coordinates"] == [24.2, 56.9]
+    fields = _fields(_scan(path))
+    assert {"properties.nosaukums", "properties.type", "geometry.type", "geometry.coordinates"} <= set(fields)
+
+
+def test_wkb_lines_polygons_and_collections():
+    import struct
+
+    from metacrafter.file_inputs import gpkg_geometry, wkb_geometry
+
+    ring = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 0.0]]
+    polygon = b"\x01" + struct.pack("<II", 3, 1) + struct.pack("<I", 4) + b"".join(struct.pack("<dd", *p) for p in ring)
+    multi = b"\x01" + struct.pack("<II", 6, 2) + polygon + polygon
+    assert wkb_geometry(multi)[0] == {"type": "MultiPolygon", "coordinates": [[ring], [ring]]}
+    # ISO WKB with z (LineString Z = 1002): x, y and z are kept.
+    line_z = b"\x01" + struct.pack("<II", 1002, 2) + struct.pack("<ddd", 1, 2, 3) + struct.pack("<ddd", 4, 5, 6)
+    assert wkb_geometry(line_z)[0] == {"type": "LineString", "coordinates": [[1, 2, 3], [4, 5, 6]]}
+    collection = b"\x01" + struct.pack("<II", 7, 1) + _wkb_point(1, 2)
+    assert gpkg_geometry(_gpkg_blob(collection)) == {
+        "type": "GeometryCollection", "geometries": [{"type": "Point", "coordinates": [1, 2]}]}
+    assert gpkg_geometry(b"GP\x00\x11" + bytes(4)) is None  # empty geometry flag
+    assert gpkg_geometry("not a blob") is None
+
+
+def test_sqlite_data_table_comes_before_metadata_tables(tmp_path):
+    import sqlite3
+
+    from metacrafter.file_inputs import prepare_input
+
+    path = tmp_path / "roads.sqlite"
+    db = sqlite3.connect(path)
+    db.executescript("""
+        CREATE TABLE geometry_columns (f_table_name TEXT, f_geometry_column TEXT);
+        CREATE TABLE spatial_ref_sys (srid INTEGER, auth_name TEXT);
+        CREATE TABLE roads (id INTEGER, name TEXT, email TEXT);
+        INSERT INTO roads VALUES (1, 'Main street', 'roads@example.com');
+    """)
+    db.commit()
+    db.close()
+    plan = prepare_input(str(path), {})
+    assert plan.records is None and plan.iterableargs["table"] == "roads"
+    assert list(_fields(_scan(path))) == ["id", "name", "email"]
+
+
+def _two_table_database(path):
+    import sqlite3
+
+    db = sqlite3.connect(path)
+    db.executescript("""
+        CREATE TABLE spatial_ref_sys (srid INTEGER, auth_name TEXT);
+        CREATE TABLE roads (id INTEGER, name TEXT, email TEXT);
+        CREATE TABLE towns (town TEXT, postcode TEXT);
+        INSERT INTO roads VALUES (1, 'Main street', 'roads@example.com');
+        INSERT INTO towns VALUES ('Riga', 'LV-1050');
+        INSERT INTO spatial_ref_sys VALUES (4326, 'EPSG');
+    """)
+    db.commit()
+    db.close()
+
+
+def test_sqlite_table_all_scans_every_data_table(tmp_path, capsys):
+    from metacrafter.file_inputs import select_tables
+
+    path = tmp_path / "roads.sqlite"
+    _two_table_database(str(path))
+    assert select_tables(str(path), "all") == ["roads", "towns"]
+    report = _scan(path, table="all")
+    assert [s["table"] for s in report["sources"]] == ["roads", "towns"]
+    assert {s["source"] for s in report["sources"]} == {str(path)}
+    assert list(_fields(report["sources"][1])) == ["town", "postcode"]
+    assert list(_fields(_scan(path, table="towns"))) == ["town", "postcode"]
+    assert list(_fields(_scan(path, table=2))) == ["town", "postcode"]
+    # A metadata table is scanned when it is named.
+    assert list(_fields(_scan(path, table="spatial_ref_sys"))) == ["srid", "auth_name"]
+    assert _scan(path, table="nope") == []
+    assert "No table 'nope'" in capsys.readouterr().err
+    assert _scan(path, table="towns", sheet="1") == []
+    csv_path = tmp_path / "plain.csv"
+    csv_path.write_text("a,b\n1,2\n")
+    assert _scan(csv_path, table="towns") == []
+    assert list(_fields(_scan(csv_path, table="all"))) == ["a", "b"]
+
+
+def test_geopackage_layers_by_table(tmp_path):
+    from metacrafter.file_inputs import select_tables
+
+    path = tmp_path / "art.gpkg"
+    _geopackage(str(path))
+    assert select_tables(str(path), "all") == ["art-objects", "notes"]
+    report = _scan(path, table="all")
+    by_table = {s["table"]: set(_fields(s)) for s in report["sources"]}
+    assert {"properties.nosaukums", "geometry.coordinates"} <= by_table["art-objects"]
+    assert by_table["notes"] == {"id", "note"}
+    assert set(_fields(_scan(path, table="notes"))) == {"id", "note"}
+
+
+ICS = """BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Opendatasoft Calendar 1.0//EN
+BEGIN:VEVENT
+DTSTART:20270505T220000Z
+DTEND:20270509T220000Z
+UID:29a5c83310ef3025276bdfd7b547d80feff2e005
+SUMMARY:Pont de l'Ascension
+BEGIN:VALARM
+ACTION:DISPLAY
+TRIGGER:-PT15M
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+DTSTART;VALUE=DATE:20271218
+UID:d9fcd2780eefabfe09e818d900a59db545ba57bb
+SUMMARY:Vacances de Noël
+END:VEVENT
+END:VCALENDAR
+"""
+
+
+def test_icalendar_events_without_begin_and_end_fields(tmp_path):
+    __import__("pytest").importorskip("icalendar")
+    from metacrafter.file_inputs import prepare_input
+
+    path = tmp_path / "calendar.ics"
+    path.write_text(ICS, encoding="utf-8")
+    records = list(prepare_input(str(path), {}).records)
+    assert records[0] == {"dtstart": "2027-05-05T22:00:00+00:00", "dtend": "2027-05-09T22:00:00+00:00",
+                          "uid": "29a5c83310ef3025276bdfd7b547d80feff2e005", "summary": "Pont de l'Ascension"}
+    assert records[1]["dtstart"] == "2027-12-18"
+    assert list(_fields(_scan(path))) == ["dtstart", "dtend", "uid", "summary"]
+
+
+def test_r_data_file(tmp_path):
+    pytest = __import__("pytest")
+    pyreadr = pytest.importorskip("pyreadr")
+    pd = pytest.importorskip("pandas")
+
+    path = tmp_path / "speakers.rda"
+    frame = pd.DataFrame({"koneleja": ["KJ1", "KJ2"], "sugu": ["M", "N"], "email": ["a@example.ee", "b@example.ee"]})
+    pyreadr.write_rdata(str(path), frame, df_name="fonkorp")
+    fields = _fields(_scan(path))
+    assert list(fields) == ["koneleja", "sugu", "email"] and "email" in fields["email"]

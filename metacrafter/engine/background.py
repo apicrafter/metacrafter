@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import re
 from functools import lru_cache
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 GENERIC_THRESHOLD = 0.3
 
@@ -88,6 +88,33 @@ def background_broadness(regexp: str) -> Tuple[float, Optional[str]]:
     best, best_class = 0.0, None
     for name, tokens in BACKGROUND_CLASSES.items():
         share = sum(1 for token in tokens if compiled.fullmatch(token)) / len(tokens)
+        if share > best:
+            best, best_class = share, name
+    return round(best, 3), best_class
+
+
+#: Tokens per background class that :func:`check_broadness` tries (evenly spaced).
+CHECK_SAMPLE = 40
+
+
+def check_broadness(test: Callable[[str], bool], per_class: int = CHECK_SAMPLE) -> Tuple[float, Optional[str]]:
+    """Largest share of one background class whose tokens pass ``test``, and that class.
+
+    The measure of :func:`background_broadness` for any value check: a value rule, a regexp
+    with its checksum, a validator. It tries ``per_class`` evenly spaced tokens of each class
+    (about 1000 in all), since a check such as a phone number parser is slow. A check that
+    raises on a token rejects it.
+    """
+    best, best_class = 0.0, None
+    for name, tokens in BACKGROUND_CLASSES.items():
+        tokens = tokens[:: max(1, -(-len(tokens) // per_class))]
+        passed = 0
+        for token in tokens:
+            try:
+                passed += bool(test(token))
+            except Exception:  # noqa: BLE001 - a failing check rejects the token
+                pass
+        share = passed / len(tokens)
         if share > best:
             best, best_class = share, name
     return round(best, 3), best_class

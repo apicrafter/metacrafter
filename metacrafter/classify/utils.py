@@ -119,6 +119,53 @@ def dict_to_columns(data):
     return {key: [v for row in rows for v in row.get(key, [None])] for key in keys}
 
 
+#: A nested object is a map whose keys are data (the words of an inverted index, ids of a
+#: lookup) when its objects together have at least this many distinct keys...
+SPARSE_MAP_MIN_KEYS = 100
+#: ...at least this many times as many as one object has on average...
+SPARSE_MAP_RATIO = 5.0
+#: ...and its keys hold lists, objects or numbers, not text.
+
+
+def sparse_map_parents(records, min_keys=SPARSE_MAP_MIN_KEYS, ratio=SPARSE_MAP_RATIO):
+    """Field paths (escaped as ``dict_generator`` escapes them) of nested objects whose keys
+    are data rather than field names.
+
+    The ``abstract_inverted_index`` of an OpenAlex work maps each word of the abstract to its
+    positions: 25 works give 1929 distinct keys (``of``, ``year``, ``data``), about 14 times
+    as many as one work has. Records of one schema repeat the keys of their nested objects
+    (a ratio near 1, even with optional keys), and a map whose keys hold text (OpenStreetMap
+    tags under ``properties``, translations by language) keeps its keys as field names. The
+    top level of a record is never a map: its keys are the fields.
+    """
+    found = {}
+
+    def walk(obj, path):
+        if isinstance(obj, dict):
+            if path:
+                entry = found.get(path)
+                if entry is None:
+                    entry = found[path] = [0, 0, set(), False]
+                entry[0] += 1
+                entry[1] += len(obj)
+                entry[2].update(str(key) for key in obj)
+                if not entry[3] and any(isinstance(value, str) for value in obj.values()):
+                    entry[3] = True
+            for key, value in obj.items():
+                segment = str(key).replace("\\", "\\\\").replace(".", "\\.")
+                walk(value, f"{path}.{segment}" if path else segment)
+        elif isinstance(obj, (list, tuple)):
+            for value in obj:
+                walk(value, path)
+
+    for record in records:
+        walk(record, "")
+    return {
+        path for path, (objects, keys, names, text) in found.items()
+        if not text and len(names) >= min_keys and len(names) >= ratio * keys / objects
+    }
+
+
 def string_to_charrange(s):
     """Returns array of chars from string"""
     chars = {}

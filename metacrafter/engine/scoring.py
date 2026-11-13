@@ -9,7 +9,26 @@ For a candidate datatype on one field:
 * ``confidence = 100 x value_evidence + name bonus + country bonus - draft penalty``,
   clamped to 0..100;
 * a field-name-only match scores ``60 x priority weight`` (1 -> 1.0, 2 -> 0.8,
-  3 -> 0.6), so it never exceeds 60.
+  3 -> 0.6), moved by how well the values fit the datatype (``value_fit``): up to
+  ``FIT_BONUS`` (30) more when a specific check of the datatype passes the values, up to
+  ``MISFIT_PENALTY`` (10) less when the values fail even a broad check of its shape. A
+  match without such checks (``name``, ``category``) keeps ``60 x priority weight``. The
+  penalty is small because the checks of a datatype do not cover all its forms (phone
+  numbers with brackets, postcodes, country names where the registry has country codes):
+  a priority 1 name match stays at the default threshold of 50, and ``--confidence 60``
+  drops the ones whose values do not fit.
+
+Value fit of a field-name match for datatype T, from the checks of T: its value rules
+(curated and registry-derived, imprecise ones included), the regexps of its registry
+record and pattern records (with their checksums), and the validator of the field rule.
+Each check has a pass rate on the sampled values and a background broadness ``b``
+(:func:`metacrafter.engine.background.check_broadness`: how much ordinary data it passes).
+
+* ``support = max(rate x (1 - b))``: a specific check that passes the values;
+* ``misfit = (1 - rate of passing any shape check) x max(b of the shape checks)``:
+  values that even a broad check rejects (word positions ``58``, ``226`` named ``year``).
+  Dictionary rules (``match: text``) give support only: a dictionary that misses a name
+  says little against it.
 
 ``--legacy-scoring`` restores the pre-1.0 behaviour: the share of matching values,
 and 100 for field-name matches.
@@ -25,6 +44,8 @@ NAME_BONUS = 10.0
 COUNTRY_BONUS = 5.0
 COUNTRY_PENALTY = 10.0
 DRAFT_PENALTY = 5.0
+FIT_BONUS = 30.0
+MISFIT_PENALTY = 10.0
 PRIORITY_WEIGHTS = {1: 1.0, 2: 0.8, 3: 0.6}
 
 
@@ -32,10 +53,15 @@ def priority_weight(priority: Optional[int]) -> float:
     return PRIORITY_WEIGHTS.get(int(priority or 3), 0.6)
 
 
-def field_score(priority: Optional[int], legacy: bool = False) -> float:
+def field_score(priority: Optional[int], legacy: bool = False, fit: Optional[Dict[str, Any]] = None) -> float:
+    """Confidence of a field-name match: ``60 x priority weight``, moved by ``fit`` (the
+    ``support`` and ``misfit`` of the values, see the module docstring)."""
     if legacy:
         return 100.0
-    return round(FIELD_ONLY_CAP * priority_weight(priority), 2)
+    score = FIELD_ONLY_CAP * priority_weight(priority)
+    if fit:
+        score += FIT_BONUS * float(fit.get("support") or 0.0) - MISFIT_PENALTY * float(fit.get("misfit") or 0.0)
+    return round(max(0.0, min(100.0, score)), 2)
 
 
 def data_score(

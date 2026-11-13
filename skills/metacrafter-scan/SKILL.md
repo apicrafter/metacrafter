@@ -33,7 +33,9 @@ For each field:
   `rule_key` is the rule's own key; it may be an older alias such as `ssn` for `usssn`.
 - **`confidence`** is heuristic, not a probability:
   - 90-100 with data evidence is strong;
-  - field-name-only matches score at most 60, so check the values before relying on them;
+  - field-name-only matches score 60 by the name alone (`ruletype: field`), up to 90 when
+    the values pass a specific check of the datatype and down to 50 when they fail even a
+    broad one (`evidence.value_fit`), so check the values before relying on them;
   - scans report matches from confidence 50 by default; pass `confidence: 5` (CLI
     `--confidence 5`) to see weaker candidates, which include chance checksum matches;
   - matches with `evidence.checksum_rate` 1.0 (IBAN, INN, card numbers) are near-certain.

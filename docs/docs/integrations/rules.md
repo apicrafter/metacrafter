@@ -55,10 +55,12 @@ Invalid rules are skipped with a diagnostic, never loaded as unchecked patterns.
 | `type` | `field` (column names) or `data` (values) |
 | `match` | `text`, `ppr`, `func`, `regex` or `registry` (see below) |
 | `rule` | Pattern, keyword list, function path or registry id |
-| `validator` | Dotted path to `(value) -> bool`, or `checksum:<algorithm>`. On a field rule it checks the values: the name match is kept when at least half of the non-empty sampled values pass |
+| `validator` | Dotted path to `(value) -> bool`, or `checksum:<algorithm>`. On a field rule it checks the values: the name match is kept when at least half of the non-empty sampled values pass; a field without values keeps it |
+| `needs_values` | `true` on a field rule: the name match is dropped when the field has no non-empty values in the sample or in the records up to the 1000th (then the validator checks those). For datatypes the name does not prove, such as Unix milliseconds in a `created_at` field. Metacrafter 2.1 and earlier ignore it |
 | `priority` | 1 (strongest) to 3; weights field-name evidence |
 | `minlen`, `maxlen` | Value length bounds (honoured for every match type) |
 | `fieldrule`, `fieldrulematch` | Field-name guard (`text` or `ppr`) for data and field rules |
+| `fieldregex` | Field-name guard by Python regular expression, searched in the last part of the field name without regard to case (`date\|datum\|_at$`). With `fieldrule` too, either guard lets the rule run. Metacrafter 2.1 and earlier ignore it: a value rule that must not run unguarded there also needs a `fieldrule` |
 | `is_pii` | Boolean; marks matches as PII |
 | `imprecise` | Skipped unless `--include-imprecise` |
 | `deprecated` | Skipped unless `--include-deprecated` |
@@ -89,6 +91,26 @@ ibanbyregistry:
 
 The checksum of the record (here `iban_mod97`) is applied automatically. The rule `key`
 must resolve to the same record as `rule`.
+
+### Field-name guards
+
+A value rule whose values alone are ambiguous can ask for a field name. `fieldrule` lists the
+names (`fieldrulematch: text`) or gives a PyParsing expression (`fieldrulematch: ppr`);
+`fieldregex` gives a regular expression:
+
+```yaml
+unixtimemsbydate:
+  key: unixtime_ms
+  type: data
+  match: regex
+  rule: '-?\d{11,13}'
+  fieldregex: 'date|datum|data|fecha|_at$|time'
+```
+
+13-digit numbers in `TicketReportedOnDate` or `Data założenia` are then Unix milliseconds,
+and in `code` they are not looked at. The keys of a nested object whose keys are data (the
+words of an inverted index: many distinct keys across records, lists or numbers as values)
+pass no field-name guard and match no field-name rule.
 
 ### Regular expressions
 
@@ -257,10 +279,26 @@ Confidence is 0–100 (`scoring_model: v1`):
   (for registry detectors, also when the field name names the datatype).
 - **Country**: +5 / −10 for registry detectors when `--country-codes` is set.
 - **Draft penalty**: −5 for draft registry records.
-- **Field-name-only matches** score 60 × priority weight (1 → 60, 2 → 48, 3 → 36).
+- **Field-name-only matches** score 60 × priority weight (1 → 60, 2 → 48, 3 → 36),
+  moved by how well the values fit the datatype (`evidence.value_fit`). The checks of the
+  datatype are its value rules (imprecise ones included), the regexps of its registry record
+  and pattern records with their checksums, and the field rule's `validator`. Each check has
+  a pass rate on up to 200 distinct values and a background broadness `b` (the share of
+  ordinary tokens, numbers or words, that it passes):
+  - `support` = the best `rate × (1 − b)`: a specific check that passes the values adds up
+    to +30 (a field `email` of e-mail addresses: 90);
+  - `misfit` = the share of values that fail every shape check × the largest `b` of those
+    checks: values that even a broad check rejects take up to −10 (word positions `58`,
+    `226` under the key `year`: 50). Dictionary rules (`match: text`) only add support.
+
+  A datatype without checks (`name`, `category`, `id`) keeps 60 × priority weight. So
+  `--confidence 60` drops name matches whose values do not fit, and `--confidence 70`
+  keeps the name matches whose values do.
 
 Each match has an `evidence` object with `hit_rate`, `checksum_rate`, `specificity`,
-`name_score`, counts and `scoring_model`. `--legacy-scoring` restores the pre-1.0 scores
+`name_score`, counts and `scoring_model`; a field-name match with checks of its datatype
+also has `value_fit` (`support`, `misfit`, the best `check` with its `rate` and `broadness`,
+`shape_rate`, `considered_count`). `--legacy-scoring` restores the pre-1.0 scores
 (share of matching values; 100 for field-name matches).
 
 Confidence is a heuristic, not a calibrated probability.

@@ -38,7 +38,7 @@ for the first scan. For offline use, run `metacrafter registry fetch --to DIR`.
 Optional extras:
 
 ```bash
-pip install 'metacrafter[formats]'       # Parquet, ORC, Excel, ODS, SPSS, XML, Shapefile, compressed files
+pip install 'metacrafter[formats]'       # Parquet, ORC, Excel, ODS, SPSS, Stata, SAS, dBase, R data, iCalendar, XML, Shapefile, compressed files
 pip install 'metacrafter[mongodb]'       # MongoDB and BSON
 pip install 'metacrafter[duckdb]'        # native DuckDB scanning
 pip install 'metacrafter[server]'        # HTTP API server
@@ -59,7 +59,7 @@ from metacrafter import CrafterCmd
 
 - YAML rules for field names and values (text, PyParsing, Python functions)
 - PII, person names, identifiers (UUID/GUID, email, phone), dates (312+ patterns via [qddate](https://github.com/ivbeg/qddate)), and country-specific types
-- Files via [iterabledata](https://github.com/datenoio/iterabledata): CSV, TSV, JSON/JSONL, XML, Parquet, Avro, ORC, Excel (`--sheet` NAME, number or `all`), ODS, SPSS, KML, BSON, Pickle, plus gzip/bzip2/xz/lz4/zstd/brotli/snappy/zip
+- Files via [iterabledata](https://github.com/datenoio/iterabledata): CSV, TSV, JSON/JSONL, XML, Parquet, Avro, ORC, Excel (`--sheet` NAME, number or `all`), ODS, SPSS, Stata, SAS, dBase, R data, SQLite and GeoPackage (`--table` NAME, number or `all`), iCalendar, KML, BSON, Pickle, plus gzip/bzip2/xz/lz4/zstd/brotli/snappy/zip
 - SQL databases (SQLAlchemy) and MongoDB
 - Context and language filters so only relevant rules run
 - Built-in HTTP API (`metacrafter server run`)

@@ -13,12 +13,19 @@ zipped Shapefiles and sheet options themselves, #90):
 - WFS GML wraps features in ``wfs:member`` or a namespaced ``featureMember`` (#84);
 - GTFS and other delimited tables are named ``.txt`` (#85);
 - CSV files start with an Excel ``sep=;`` line or with title rows above the header (#87);
-- SPSS files need pandas in iterabledata's reader; they are read here with pyreadstat's
-  dict output, and their variable and value labels go to the report (#97);
+- SPSS, Stata and SAS files need pandas in iterabledata's readers; they are read here with
+  pyreadstat's dict output, and their variable and value labels go to the report (#97, #110);
 - KML keeps attributes in ``SchemaData/SimpleData`` (GDAL, ogr2ogr) or in the HTML table of
   the description (ArcGIS), which iterabledata's reader drops (#100);
 - XML tables list the column names in a header element and each record as a flat list of
-  identically named elements (``<header><column>Name</column>`` ... ``<body><column>``) (#101).
+  identically named elements (``<header><column>Name</column>`` ... ``<body><column>``) (#101);
+- dBase files name their code page in a ``.cpg`` file or a language driver id, or in neither
+  (cp1251 or cp866 text), and iterabledata reads them as UTF-8 (#110);
+- GeoPackage files need fiona in iterabledata's reader; they are read here with sqlite3. In
+  a GeoPackage or another SQLite database the first table by name is a metadata table
+  (``gpkg_contents``, ``geometry_columns``) rather than the data (#110);
+- iterabledata's iCalendar reader turns the ``BEGIN`` / ``END`` lines of every event into
+  fields; events are read here with icalendar (#110).
 
 :func:`prepare_input` reads the start of the file (decompressed) and returns a
 :class:`InputPlan`: iterabledata arguments plus the clean-up of the records. It only adds
@@ -38,6 +45,8 @@ import lzma
 import math
 import os
 import re
+import sqlite3
+import struct
 import zipfile
 from collections import Counter
 from dataclasses import dataclass, field
@@ -644,8 +653,14 @@ def prepare_input(filename: str, iterableargs: dict) -> InputPlan:
         _plan_json(filename, codec, plan)
     elif ext in ("xlsx", "xls") and codec is None and "start_line" not in args and "keys" not in args:
         _plan_sheet(filename, ext, plan)
-    elif ext in ("sav", "zsav") and codec is None:
-        _plan_spss(filename, plan)
+    elif ext in STATS_READERS and codec is None:
+        _plan_stats(filename, ext, plan)
+    elif ext == "dbf" and codec is None:
+        _plan_dbf(filename, plan)
+    elif ext in SQLITE_EXTENSIONS and codec is None:
+        _plan_sqlite(filename, ext, plan)
+    elif ext == "ics" and codec is None:
+        _plan_ical(filename, plan)
     elif ext in ("kml", "kmz") and codec is None:
         _plan_kml(filename, ext, plan)
     elif ext == "xml" and args.get("tagname"):
@@ -857,8 +872,17 @@ def _plan_json(filename: str, codec: Optional[str], plan: InputPlan) -> None:
     plan.notes.append(f"records from {where}")
 
 
-# ---------------------------------------------------------------- SPSS
-SPSS_CHUNK_ROWS = 1000
+# ---------------------------------------------------------------- SPSS, Stata and SAS
+STATS_CHUNK_ROWS = 1000
+#: pyreadstat's reader of each statistical file format. iterabledata's SPSS, Stata and SAS
+#: readers ask pyreadstat for pandas data frames; its dict output needs neither pandas nor polars.
+STATS_READERS = {
+    "sav": "read_sav",
+    "zsav": "read_sav",
+    "dta": "read_dta",
+    "sas7bdat": "read_sas7bdat",
+    "xpt": "read_xport",
+}
 
 
 def _label_key(value: Any) -> str:
@@ -867,52 +891,63 @@ def _label_key(value: Any) -> str:
     return str(value)
 
 
-def _spss_value(value: Any) -> Any:
+def _stats_value(value: Any) -> Any:
     return None if isinstance(value, float) and math.isnan(value) else value
 
 
-def _spss_rows(data: dict) -> Iterator[dict]:
+def _stats_rows(data: dict) -> Iterator[dict]:
     columns = list(data)
     for i in range(len(data[columns[0]]) if columns else 0):
-        yield {name: _spss_value(data[name][i]) for name in columns}
+        yield {name: _stats_value(data[name][i]) for name in columns}
 
 
-def spss_records(filename: str, first: Optional[dict] = None, chunk: Optional[int] = None) -> Iterator[dict]:
-    """Records of an SPSS ``.sav`` / ``.zsav`` file, read in chunks of rows.
+def stats_records(filename: str, reader: str = "read_sav", first: Optional[dict] = None,
+                  chunk: Optional[int] = None, **options: Any) -> Iterator[dict]:
+    """Records of an SPSS, Stata or SAS file, read in chunks of rows by ``pyreadstat.<reader>``.
 
     pyreadstat's dict output (pyreadstat >= 1.3.1) needs neither pandas nor polars;
     system-missing values become None. ``first`` is the first chunk, already read.
+    ``options`` go to the reader (``encoding``).
     """
     import pyreadstat
 
-    chunk = chunk or SPSS_CHUNK_ROWS
+    read = getattr(pyreadstat, reader)
+    chunk = chunk or STATS_CHUNK_ROWS
     offset = 0
     data = first
     while True:
         if data is None:
-            data, _ = pyreadstat.read_sav(filename, row_offset=offset, row_limit=chunk, output_format="dict")
+            data, _ = read(filename, row_offset=offset, row_limit=chunk, output_format="dict", **options)
         rows = len(next(iter(data.values()), []))
-        yield from _spss_rows(data)
+        yield from _stats_rows(data)
         if rows < chunk:
             return
         offset += rows
         data = None
 
 
-def _plan_spss(filename: str, plan: InputPlan) -> None:
+def spss_records(filename: str, first: Optional[dict] = None, chunk: Optional[int] = None) -> Iterator[dict]:
+    """Records of an SPSS ``.sav`` / ``.zsav`` file (see :func:`stats_records`)."""
+    return stats_records(filename, "read_sav", first, chunk)
+
+
+def _plan_stats(filename: str, ext: str, plan: InputPlan) -> None:
     try:
         import pyreadstat
     except ImportError:
         return  # iterabledata names the missing package
+    reader = STATS_READERS[ext]
+    options = {"encoding": plan.iterableargs["encoding"]} if plan.iterableargs.get("encoding") else {}
     try:
-        first, meta = pyreadstat.read_sav(filename, row_limit=SPSS_CHUNK_ROWS, output_format="dict")
+        first, meta = getattr(pyreadstat, reader)(filename, row_limit=STATS_CHUNK_ROWS, output_format="dict",
+                                                  **options)
     except TypeError:
         return  # pyreadstat < 1.3.1 has no dict output: iterabledata's reader needs pandas
     except Exception as exc:  # noqa: BLE001 - iterabledata reports the error
         logger.debug("pyreadstat could not read %s: %s", filename, exc)
         return
-    plan.records = spss_records(filename, first)
-    plan.kind = "sav"
+    plan.records = stats_records(filename, reader, first, **options)
+    plan.kind = "sav" if ext in ("sav", "zsav") else ext
     labels = getattr(meta, "column_names_to_labels", None) or {}
     value_labels = getattr(meta, "variable_value_labels", None) or {}
     for name in getattr(meta, "column_names", None) or list(first):
@@ -924,6 +959,356 @@ def _plan_spss(filename: str, plan: InputPlan) -> None:
         if info:
             plan.field_info[name] = info
     plan.notes.append(f"read with pyreadstat ({getattr(meta, 'number_columns', len(first))} variables)")
+
+
+# ---------------------------------------------------------------- dBase
+def cpg_encoding(text: str) -> Optional[str]:
+    """Python codec of the code page a ``.cpg`` file names: ``UTF-8``, ``1251``, ``ANSI 1251``,
+    ``88591``; None when it names none."""
+    text = text.strip()
+    if not text:
+        return None
+    candidates = [text, text.split()[-1]]
+    last = candidates[-1]
+    if last.isdigit():
+        if last == "65001":
+            candidates.append("utf-8")
+        elif last.startswith("8859") and len(last) > 4:
+            candidates.append("iso8859_" + last[4:])
+        else:
+            candidates.append("cp" + last)
+    for name in candidates:
+        try:
+            return codecs.lookup(name).name
+        except LookupError:
+            continue
+    return None
+
+
+def dbf_encoding(filename: str) -> Optional[str]:
+    """Encoding of the text of a dBase file: the code page of its ``.cpg`` file (Shapefile
+    convention), else of its language driver id, else detected from the records.
+
+    A file without a language driver id (byte 29 is 0) is read as ASCII by dbfread and as
+    UTF-8 by iterabledata, but such files are often in a Windows or DOS code page. None when
+    the text is ASCII or the file cannot be read.
+    """
+    stem = os.path.splitext(filename)[0]
+    for suffix in (".cpg", ".CPG"):
+        if os.path.exists(stem + suffix):
+            try:
+                with open(stem + suffix, encoding="ascii", errors="replace") as fh:
+                    found = cpg_encoding(fh.read(100))
+            except OSError:
+                found = None
+            if found:
+                return found
+    try:
+        with open(filename, "rb") as fh:
+            header = fh.read(32)
+            if len(header) < 32:
+                return None
+            if header[29]:
+                try:
+                    from dbfread.codepages import guess_encoding
+
+                    return guess_encoding(header[29])
+                except (ImportError, LookupError):
+                    return None
+            fh.seek(int.from_bytes(header[8:10], "little"))
+            sample = fh.read(SAMPLE_BYTES)
+    except OSError:
+        return None
+    if not re.search(rb"[\x80-\xff]", sample):
+        return None
+    return detect_encoding(sample, truncated=len(sample) >= SAMPLE_BYTES)
+
+
+def _plan_dbf(filename: str, plan: InputPlan) -> None:
+    args = plan.iterableargs
+    if args.get("encoding"):
+        return
+    encoding = dbf_encoding(filename)
+    if encoding:
+        args["encoding"] = encoding
+        plan.notes.append(f"encoding {encoding}")
+
+
+# ---------------------------------------------------------------- GeoPackage and SQLite
+SQLITE_EXTENSIONS = ("gpkg", "sqlite", "db")
+# Tables of SQLite, GeoPackage and SpatiaLite about the data (virtual tables, such as the
+# R-tree indexes rtree_* and idx_*, and their shadow tables are found by their SQL).
+_SQLITE_META = re.compile(
+    r"^(?:sqlite_|gpkg_|gpkgext_)|^(?:spatial_ref_sys(?:_aux)?|spatialite_history|sql_statements_log|"
+    r"data_licenses|elementarygeometries|spatialindex|knn2?|(?:views_|virts_)?geometry_columns(?:_\w+)?)$",
+    re.IGNORECASE,
+)
+# Geometry types of Well-Known Binary (ISO and EWKB codes).
+_WKB_TYPES = {1: "Point", 2: "LineString", 3: "Polygon", 4: "MultiPoint", 5: "MultiLineString",
+              6: "MultiPolygon", 7: "GeometryCollection"}
+# Bytes of the envelope in a GeoPackage geometry header, by the envelope code of its flags.
+_GPKG_ENVELOPE = {0: 0, 1: 32, 2: 48, 3: 48, 4: 64}
+
+
+def _quote_ident(name: str) -> str:
+    return '"' + name.replace('"', '""') + '"'
+
+
+def _sqlite_connect(filename: str) -> sqlite3.Connection:
+    """A read-only connection: scanning never changes the database."""
+    from pathlib import Path
+
+    return sqlite3.connect(Path(filename).resolve().as_uri() + "?mode=ro", uri=True)
+
+
+def wkb_geometry(data: bytes, offset: int = 0) -> Tuple[Optional[dict], int]:
+    """GeoJSON geometry of the Well-Known Binary at ``offset`` (ISO WKB, EWKB) and the offset
+    after it. Coordinates keep x, y and z; m values are dropped. An empty point is None."""
+    order = "<" if data[offset] == 1 else ">"
+    (code,) = struct.unpack_from(order + "I", data, offset + 1)
+    offset += 5
+    has_z, has_m = bool(code & 0x80000000), bool(code & 0x40000000)
+    if code & 0x20000000:  # EWKB with an SRID
+        offset += 4
+    code &= 0x0FFFFFFF
+    base, dims_code = code % 1000, code // 1000
+    has_z = has_z or dims_code in (1, 3)
+    has_m = has_m or dims_code in (2, 3)
+    kind = _WKB_TYPES.get(base)
+    if kind is None:
+        raise ValueError(f"WKB geometry type {code}")
+    dims = 2 + has_z + has_m
+    keep = 3 if has_z else 2
+
+    def coordinates(at: int) -> list:
+        return list(struct.unpack_from(order + "d" * dims, data, at)[:keep])
+
+    def count(at: int) -> int:
+        return struct.unpack_from(order + "I", data, at)[0]
+
+    def line(at: int) -> Tuple[list, int]:
+        n = count(at)
+        at += 4
+        return [coordinates(at + i * 8 * dims) for i in range(n)], at + n * 8 * dims
+
+    if kind == "Point":
+        point = coordinates(offset)
+        geometry = None if any(math.isnan(v) for v in point) else {"type": kind, "coordinates": point}
+        return geometry, offset + 8 * dims
+    if kind == "LineString":
+        points, offset = line(offset)
+        return {"type": kind, "coordinates": points}, offset
+    if kind == "Polygon":
+        rings = []
+        n = count(offset)
+        offset += 4
+        for _ in range(n):
+            ring, offset = line(offset)
+            rings.append(ring)
+        return {"type": kind, "coordinates": rings}, offset
+    parts = []
+    n = count(offset)
+    offset += 4
+    for _ in range(n):
+        part, offset = wkb_geometry(data, offset)
+        if part is not None:
+            parts.append(part)
+    if kind == "GeometryCollection":
+        return {"type": kind, "geometries": parts}, offset
+    return {"type": kind, "coordinates": [part["coordinates"] for part in parts]}, offset
+
+
+def gpkg_geometry(blob: Any) -> Optional[dict]:
+    """GeoJSON geometry of a GeoPackage geometry blob (``GP`` header, envelope, WKB)."""
+    if not isinstance(blob, (bytes, bytearray, memoryview)):
+        return None
+    blob = bytes(blob)
+    if len(blob) < 8 or blob[:2] != b"GP" or blob[3] & 0x10:  # not a GeoPackage geometry, or empty
+        return None
+    try:
+        return wkb_geometry(blob, 8 + _GPKG_ENVELOPE.get((blob[3] >> 1) & 0x07, 0))[0]
+    except (struct.error, ValueError, IndexError):
+        return None
+
+
+def sqlite_data_tables(connection: sqlite3.Connection) -> Tuple[List[str], List[str]]:
+    """The GeoPackage layers (feature tables, then attribute tables, as ``gpkg_contents`` lists
+    them) and the other tables of a database, by name, without metadata, virtual and shadow
+    tables."""
+    rows = connection.execute("SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name").fetchall()
+    virtual = [name for name, sql in rows if (sql or "").lstrip().upper().startswith("CREATE VIRTUAL TABLE")]
+    tables = [name for name, _ in rows if name not in virtual and not _SQLITE_META.match(name)
+              and not any(name.startswith(v + "_") for v in virtual)]
+    layers: List[str] = []
+    if any(name == "gpkg_contents" for name, _ in rows):
+        try:
+            contents = connection.execute("SELECT table_name, data_type FROM gpkg_contents ORDER BY rowid").fetchall()
+        except sqlite3.Error:
+            contents = []
+        for kind in ("features", "attributes"):
+            layers += [name for name, data_type in contents if data_type == kind and name in tables]
+    return layers, [name for name in tables if name not in layers]
+
+
+def sqlite_records(filename: str, table: str, geometry_columns: Iterable[str] = ()) -> Iterator[dict]:
+    """Rows of a table, read one at a time. With ``geometry_columns`` (a GeoPackage feature
+    table) a row is a GeoJSON-like feature, as fiona reads it: the first geometry column
+    decoded to ``geometry``, the other columns except the primary key in ``properties``."""
+    connection = _sqlite_connect(filename)
+    try:
+        geometry_columns = set(geometry_columns)
+        key = set()
+        if geometry_columns:
+            info = connection.execute(f"PRAGMA table_info({_quote_ident(table)})").fetchall()
+            key = {row[1] for row in info if row[5]}
+        cursor = connection.execute(f"SELECT * FROM {_quote_ident(table)}")  # nosec B608 - quoted catalog name
+        names = [d[0] for d in cursor.description]
+        for row in cursor:
+            if not geometry_columns:
+                yield dict(zip(names, row))
+                continue
+            properties: Dict[str, Any] = {}
+            geometry = None
+            for name, value in zip(names, row):
+                if name in geometry_columns:
+                    geometry = geometry or gpkg_geometry(value)
+                elif name not in key:
+                    properties[name] = value
+            yield {"type": "Feature", "properties": properties, "geometry": geometry}
+    finally:
+        connection.close()
+
+
+def _geometry_columns(connection: sqlite3.Connection, table: str) -> List[str]:
+    """Geometry columns of a GeoPackage feature table."""
+    try:
+        return [row[0] for row in connection.execute(
+            "SELECT column_name FROM gpkg_geometry_columns WHERE table_name = ?", (table,))]
+    except sqlite3.Error:
+        return []
+
+
+def _plan_sqlite(filename: str, ext: str, plan: InputPlan) -> None:
+    """Read the first GeoPackage layer, or name the first data table of another database for
+    iterabledata (it reads the first table by name, which may hold metadata). A table named by
+    the caller (``scan file --table``) is read the same way: a GeoPackage layer as features."""
+    args = plan.iterableargs
+    if args.get("query"):
+        return
+    given = args.get("table")
+    try:
+        connection = _sqlite_connect(filename)
+        try:
+            layers, others = sqlite_data_tables(connection)
+            table = given or (layers + others or [None])[0]
+            geometry_columns = _geometry_columns(connection, table) if table in layers else []
+            first = connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name LIMIT 1").fetchone()
+        finally:
+            connection.close()
+    except sqlite3.Error as exc:  # not a database: iterabledata reports the error
+        logger.debug("Could not read %s as SQLite: %s", filename, exc)
+        return
+    if table is None:
+        return
+    tables = layers + others
+    rest = f"; not scanned: {', '.join(t for t in tables if t != table)}" if len(tables) > 1 and not given else ""
+    if table in layers or ext == "gpkg":  # iterabledata reads GeoPackage files with fiona
+        plan.records = sqlite_records(filename, table, geometry_columns)
+        plan.kind = "gpkg" if layers else "sqlite"
+        plan.notes.append(f"{'GeoPackage layer' if table in layers else 'table'} {table!r}{rest}")
+        args.pop("table", None)
+    elif given:
+        return
+    elif first is None or first[0] != table or rest:
+        args["table"] = table
+        plan.notes.append(f"table {table!r}{rest}")
+
+
+def select_tables(filename: str, table: Any) -> Optional[List[str]]:
+    """Names of the tables of a SQLite database or GeoPackage that ``--table`` names.
+
+    ``table`` is a table name, a number counted from 1 in the order of ``all``, or ``all``:
+    the GeoPackage layers (as ``gpkg_contents`` lists them), then the other tables by name,
+    without metadata, virtual and shadow tables. A name may also be one of those. ``all`` on a
+    file that is not a database gives None (the file is one table); a name or number there,
+    or one that the database lacks, raises ``ValueError``.
+    """
+    ext, codec = split_name(filename)
+    value = str(table).strip()
+    base = os.path.basename(filename)
+    if ext not in SQLITE_EXTENSIONS or codec is not None:
+        if value.lower() == "all":
+            return None
+        raise ValueError(f"--table applies to SQLite databases and GeoPackages, not {base}")
+    try:
+        connection = _sqlite_connect(filename)
+        try:
+            layers, others = sqlite_data_tables(connection)
+            names = [row[0] for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")]
+        finally:
+            connection.close()
+    except sqlite3.Error as exc:
+        raise ValueError(f"{base} is not a SQLite database: {exc}") from exc
+    tables = layers + others
+    if value.lower() == "all":
+        return tables
+    if value in names:
+        return [value]
+    if value.isdigit() and 1 <= int(value) <= len(tables):
+        return [tables[int(value) - 1]]
+    listed = ", ".join(tables) or "none"
+    raise ValueError(f"No table {value!r} in {base}; data tables: {listed}")
+
+
+# ---------------------------------------------------------------- iCalendar
+ICAL_COMPONENTS = ("VEVENT",)
+
+
+def _ical_value(value: Any) -> Any:
+    """Text of an iCalendar property value; dates and times in ISO format."""
+    if isinstance(value, list):
+        return [_ical_value(item) for item in value]
+    moment = getattr(value, "dt", None)
+    if moment is not None and hasattr(moment, "isoformat"):
+        return moment.isoformat()
+    if isinstance(value, str):  # vText, vCalAddress, vUri
+        return str(value)
+    to_ical = getattr(value, "to_ical", None)
+    if callable(to_ical):
+        text = to_ical()
+        return text.decode("utf-8", errors="replace") if isinstance(text, bytes) else str(text)
+    return str(value)
+
+
+def ical_records(filename: str) -> List[dict]:
+    """Events of an iCalendar file: one record per VEVENT, keyed by the lower-case names of its
+    own properties (iterabledata's names), without the properties of nested components such
+    as VALARM and without the BEGIN / END lines."""
+    from icalendar import Calendar
+
+    with open(filename, "rb") as fh:
+        calendar = Calendar.from_ical(fh.read())
+    records = []
+    for component in calendar.walk():
+        if component.name in ICAL_COMPONENTS:
+            records.append({name.lower(): _ical_value(value) for name, value in component.items()})
+    return records
+
+
+def _plan_ical(filename: str, plan: InputPlan) -> None:
+    try:
+        import icalendar  # noqa: F401
+    except ImportError:
+        return  # iterabledata names the missing package (or reads the file with ics)
+    try:
+        records = ical_records(filename)
+    except Exception as exc:  # noqa: BLE001 - iterabledata reports the error
+        logger.debug("Could not read %s as iCalendar: %s", filename, exc)
+        return
+    plan.records = records
+    plan.kind = "ical"
 
 
 # ---------------------------------------------------------------- KML
