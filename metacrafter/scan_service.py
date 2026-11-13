@@ -90,6 +90,10 @@ MIN_CONFIDENCE_FOR_MATCH = 50.0
 # Registry-derived detectors unless ``registry_detectors`` is set (argument or .metacrafter).
 DEFAULT_REGISTRY_DETECTORS = "checksum"
 DEFAULT_BATCH_SIZE = 1000  # Default batch size for database queries
+# A head sample of a file reads up to this many records in all: the records after the sample
+# are not classified, but a yes/no match checks their values for a third answer (the head of a
+# catalog holds Да / Нет, row 124 the first Частично).
+LOOKAHEAD_RECORDS = 1000
 
 RESULT_HEADERS = ["key", "ftype", "tags", "matches", "datatype_url"]
 from metacrafter.reports import STATS_HEADERS
@@ -1487,6 +1491,7 @@ class CrafterCmd(object):
         explain: bool = False,
         strip: Optional[bool] = None,
         field_schema: Optional[Dict[str, Dict[str, Any]]] = None,
+        lookahead: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Scan data items and return classification results.
         
@@ -1508,6 +1513,9 @@ class CrafterCmd(object):
                 analysis (default: the ``strip`` setting of this CrafterCmd, False)
             field_schema: Database schema facts per field name (``primary_key``,
                 ``autoincrement``, ``foreign_key``), as ``scan sql`` reflects them
+            lookahead: Records of the same source after ``items`` (``scan_file`` passes
+                the records after a head sample, up to ``LOOKAHEAD_RECORDS`` in all). They
+                are not classified or counted; a yes/no match checks their values
             
         Returns:
             Dictionary with keys:
@@ -1522,8 +1530,10 @@ class CrafterCmd(object):
             raise ValueError("items must be an array of objects")
         observed_count = len(items)
         items = items[:limit]
+        lookahead = [item for item in lookahead or () if isinstance(item, dict)]
         if self.strip if strip is None else strip:
             items = strip_values(items)
+            lookahead = strip_values(lookahead)
         # Parse contexts and langs if they are strings
         if isinstance(contexts, str):
             contexts = [c.strip() for c in contexts.split(',') if c.strip()]
@@ -1619,6 +1629,7 @@ class CrafterCmd(object):
                     ignore_imprecise=ignore_imprecise,
                     legacy_scoring=self.legacy_scoring,
                     include_deprecated=self.include_deprecated,
+                    lookahead=lookahead,
                 )
             else:
                 results = self._classify_with_llm_only(
@@ -1646,6 +1657,7 @@ class CrafterCmd(object):
                 ignore_imprecise=ignore_imprecise,
                 legacy_scoring=self.legacy_scoring,
                 include_deprecated=self.include_deprecated,
+                lookahead=lookahead,
             )
             
             if self.llm_verifier is not None:
@@ -1765,6 +1777,7 @@ class CrafterCmd(object):
         seed=0,
         explain=False,
         sheet=None,
+        table=None,
     ):
         """Scan a file and classify its fields.
         
@@ -1815,10 +1828,14 @@ class CrafterCmd(object):
                 from 1, or 'all' for every sheet that holds a table, each as a table of
                 its own (an aggregate report, like a database scan). Defaults to the first
                 sheet that holds a table.
+            table: Table of a SQLite database or GeoPackage: a table name, a number counted
+                from 1, or 'all' for every data table (GeoPackage layers first), each as a
+                table of its own. Defaults to the first GeoPackage layer, else the first data
+                table.
         
         Returns:
-            The report (an aggregate report with one source per sheet for
-            ``sheet='all'``); an empty list on error.
+            The report (an aggregate report with one source per sheet or table for
+            ``sheet='all'`` and ``table='all'``); an empty list on error.
         
         Raises:
             IOError: If file cannot be opened or read.
@@ -1864,6 +1881,24 @@ class CrafterCmd(object):
             llm_min_confidence=llm_min_confidence,
         )
         read_options = dict(sampling=sampling, seed=seed, output_format=output_format)
+        if sheet is not None and table is not None:
+            print("Error: --sheet and --table cannot be used together", file=sys.stderr)
+            return []
+        if table is not None:
+            from metacrafter.file_inputs import select_tables
+
+            try:
+                tables = select_tables(str(filename), table)
+            except ValueError as e:
+                print(f"Error: {e}", file=sys.stderr)
+                return []
+            if tables is None:
+                logging.info(f"{filename} is not a database; --table all scans it as one table")
+            elif str(table).strip().lower() == "all":
+                return self._scan_sheets(filename, iterableargs, [({"table": name}, name) for name in tables],
+                                         scan_options, read_options, dformat, output, output_format, stats_only)
+            else:
+                iterableargs["table"] = tables[0]
         if sheet is not None:
             from metacrafter.file_inputs import select_sheets
 
@@ -1875,8 +1910,8 @@ class CrafterCmd(object):
             if pages is None:
                 logging.info(f"{filename} is not a workbook; --sheet all scans it as one table")
             elif str(sheet).strip().lower() == "all":
-                return self._scan_sheets(filename, iterableargs, pages, scan_options, read_options,
-                                         dformat, output, output_format, stats_only)
+                return self._scan_sheets(filename, iterableargs, [({"page": page}, name) for page, name in pages],
+                                         scan_options, read_options, dformat, output, output_format, stats_only)
             else:
                 iterableargs["page"] = pages[0][0]
         report = self._scan_one_file(filename, iterableargs, scan_options, **read_options)
@@ -1892,13 +1927,14 @@ class CrafterCmd(object):
         )
         return report
 
-    def _scan_sheets(self, filename, iterableargs, pages, scan_options, read_options,
+    def _scan_sheets(self, filename, iterableargs, parts, scan_options, read_options,
                      dformat, output, output_format, stats_only):
-        """Scan each sheet as a table of its own; write and return an aggregate report (#102)."""
+        """Scan each sheet of a workbook (#102) or table of a database as a table of its own;
+        write and return an aggregate report. ``parts`` are ``(reader arguments, name)``."""
         reports, errors = {}, []
-        for page, name in pages:
+        for args, name in parts:
             try:
-                report = self._scan_one_file(filename, dict(iterableargs, page=page), scan_options,
+                report = self._scan_one_file(filename, dict(iterableargs, **args), scan_options,
                                              table=name, **read_options)
             except ValueError as e:  # e.g. --fields that this sheet lacks
                 errors.append({"source": str(filename), "table": name, "code": "ValueError", "message": str(e)})
@@ -1908,7 +1944,7 @@ class CrafterCmd(object):
                     reports[name] = report  # empty sheets of an ODS workbook are left out
             else:
                 errors.append({"source": str(filename), "table": name, "code": "SheetScanFailed",
-                               "message": "Sheet scan failed"})
+                               "message": "Table scan failed" if "table" in args else "Sheet scan failed"})
         self._write_db_results(reports, dformat, output, output_format, stats_only, errors=errors,
                                source=str(filename))
         return aggregate_reports([dict(r, source=str(filename), table=name) for name, r in reports.items()], errors)
@@ -1958,9 +1994,11 @@ class CrafterCmd(object):
         if data_file is None:
             return []
         items = []
+        lookahead = []
         try:
             try:
-                items, provenance = self._read_records(data_file, filename, plan, options["limit"], sampling, seed)
+                items, provenance = self._read_records(data_file, filename, plan, options["limit"], sampling, seed,
+                                                       lookahead=None if self.remote is not None else lookahead)
             except Exception as e:  # noqa: BLE001 - only decoding errors are handled here
                 decode_error = _decode_error(e)
                 if decode_error is None:
@@ -1981,7 +2019,10 @@ class CrafterCmd(object):
                 self._print_scan_header(filename, data_file.id(), len(items), contexts, langs)
 
             if self.remote is None:
-                report = self.scan_data(items, **options)
+                if lookahead:
+                    _strip_bom_from_keys(lookahead)
+                    _strip_key_whitespace(lookahead)
+                report = self.scan_data(items, lookahead=lookahead, **options)
             else:
                 remote_options = {k: v for k, v in options.items()
                                   if k not in ("explain", "classification_mode", "llm_min_confidence")}
@@ -1997,18 +2038,28 @@ class CrafterCmd(object):
             if data_file is not None:
                 data_file.close()
             # Clear items from memory after processing
-            del items
+            del items, lookahead
 
 
-    def _read_records(self, data_file, filename, plan, limit, sampling, seed):
-        """Sample records of an open file after the plan's skips and key filter."""
+    def _read_records(self, data_file, filename, plan, limit, sampling, seed, lookahead=None):
+        """Sample records of an open file after the plan's skips and key filter.
+
+        With a ``lookahead`` list and a head sample that filled ``limit``, the records after
+        the sample, up to ``LOOKAHEAD_RECORDS`` in all, are appended to it.
+        """
+        from itertools import islice
+
         from metacrafter.sampling import sample_records
 
         progress_iter, progress_bar = self._iter_with_progress(
             data_file, desc=f"Reading {filename}", unit="records"
         )
         try:
-            return sample_records(plan.apply(progress_iter), limit, sampling, seed)
+            records = plan.apply(progress_iter)
+            items, provenance = sample_records(records, limit, sampling, seed)
+            if lookahead is not None and sampling == "head" and len(items) == limit < LOOKAHEAD_RECORDS:
+                lookahead.extend(row for row in islice(records, LOOKAHEAD_RECORDS - limit) if isinstance(row, dict))
+            return items, provenance
         finally:
             if progress_bar:
                 progress_bar.close()

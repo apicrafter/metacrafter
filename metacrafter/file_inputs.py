@@ -1179,20 +1179,29 @@ def sqlite_records(filename: str, table: str, geometry_columns: Iterable[str] = 
         connection.close()
 
 
+def _geometry_columns(connection: sqlite3.Connection, table: str) -> List[str]:
+    """Geometry columns of a GeoPackage feature table."""
+    try:
+        return [row[0] for row in connection.execute(
+            "SELECT column_name FROM gpkg_geometry_columns WHERE table_name = ?", (table,))]
+    except sqlite3.Error:
+        return []
+
+
 def _plan_sqlite(filename: str, ext: str, plan: InputPlan) -> None:
     """Read the first GeoPackage layer, or name the first data table of another database for
-    iterabledata (it reads the first table by name, which may hold metadata)."""
+    iterabledata (it reads the first table by name, which may hold metadata). A table named by
+    the caller (``scan file --table``) is read the same way: a GeoPackage layer as features."""
     args = plan.iterableargs
-    if args.get("table") or args.get("query"):
+    if args.get("query"):
         return
+    given = args.get("table")
     try:
         connection = _sqlite_connect(filename)
         try:
             layers, others = sqlite_data_tables(connection)
-            geometry_columns: List[str] = []
-            if layers:
-                geometry_columns = [row[0] for row in connection.execute(
-                    "SELECT column_name FROM gpkg_geometry_columns WHERE table_name = ?", (layers[0],))]
+            table = given or (layers + others or [None])[0]
+            geometry_columns = _geometry_columns(connection, table) if table in layers else []
             first = connection.execute(
                 "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name LIMIT 1").fetchone()
         finally:
@@ -1200,18 +1209,57 @@ def _plan_sqlite(filename: str, ext: str, plan: InputPlan) -> None:
     except sqlite3.Error as exc:  # not a database: iterabledata reports the error
         logger.debug("Could not read %s as SQLite: %s", filename, exc)
         return
-    tables = layers + others
-    if not tables:
+    if table is None:
         return
-    table = tables[0]
-    rest = f"; not scanned: {', '.join(tables[1:])}" if len(tables) > 1 else ""
-    if layers or ext == "gpkg":  # iterabledata reads GeoPackage files with fiona
+    tables = layers + others
+    rest = f"; not scanned: {', '.join(t for t in tables if t != table)}" if len(tables) > 1 and not given else ""
+    if table in layers or ext == "gpkg":  # iterabledata reads GeoPackage files with fiona
         plan.records = sqlite_records(filename, table, geometry_columns)
         plan.kind = "gpkg" if layers else "sqlite"
-        plan.notes.append(f"{'GeoPackage layer' if layers else 'table'} {table!r}{rest}")
+        plan.notes.append(f"{'GeoPackage layer' if table in layers else 'table'} {table!r}{rest}")
+        args.pop("table", None)
+    elif given:
+        return
     elif first is None or first[0] != table or rest:
         args["table"] = table
         plan.notes.append(f"table {table!r}{rest}")
+
+
+def select_tables(filename: str, table: Any) -> Optional[List[str]]:
+    """Names of the tables of a SQLite database or GeoPackage that ``--table`` names.
+
+    ``table`` is a table name, a number counted from 1 in the order of ``all``, or ``all``:
+    the GeoPackage layers (as ``gpkg_contents`` lists them), then the other tables by name,
+    without metadata, virtual and shadow tables. A name may also be one of those. ``all`` on a
+    file that is not a database gives None (the file is one table); a name or number there,
+    or one that the database lacks, raises ``ValueError``.
+    """
+    ext, codec = split_name(filename)
+    value = str(table).strip()
+    base = os.path.basename(filename)
+    if ext not in SQLITE_EXTENSIONS or codec is not None:
+        if value.lower() == "all":
+            return None
+        raise ValueError(f"--table applies to SQLite databases and GeoPackages, not {base}")
+    try:
+        connection = _sqlite_connect(filename)
+        try:
+            layers, others = sqlite_data_tables(connection)
+            names = [row[0] for row in connection.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")]
+        finally:
+            connection.close()
+    except sqlite3.Error as exc:
+        raise ValueError(f"{base} is not a SQLite database: {exc}") from exc
+    tables = layers + others
+    if value.lower() == "all":
+        return tables
+    if value in names:
+        return [value]
+    if value.isdigit() and 1 <= int(value) <= len(tables):
+        return [tables[int(value) - 1]]
+    listed = ", ".join(tables) or "none"
+    raise ValueError(f"No table {value!r} in {base}; data tables: {listed}")
 
 
 # ---------------------------------------------------------------- iCalendar

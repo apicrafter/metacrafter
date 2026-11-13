@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`fieldregex` rule attribute** (apicrafter/metacrafter-rules#70): a field-name guard by
+  regular expression, searched in the last part of the field name without regard to case. A
+  value rule with `fieldregex: 'date|datum|data|fecha|_at$|time'` runs on
+  `TicketReportedOnDate` and `Data założenia`, not on a 13-digit `code`. With `fieldrule` too,
+  either guard lets the rule run, so a rule pack can keep a keyword list for metacrafter 2.1
+  and earlier, which ignore the attribute (the rule schema allows unknown attributes). An
+  invalid expression disables the rule with a diagnostic.
+- **`needs_values` rule attribute** (apicrafter/metacrafter-rules#70): a field rule with
+  `needs_values: true` does not label a field without non-empty values (in the sample, or
+  in the records up to the 1000th, which its `validator` then checks). For datatypes that the
+  name does not prove: an empty `created_at` is not labelled by a rule that asks for Unix
+  milliseconds. Field rules without it keep their name-only labels on empty columns, as
+  before. Metacrafter 2.1 and earlier ignore the attribute.
+- **`scan file --table NAME|NUMBER|all`** for SQLite databases and GeoPackages (#110):
+  `all` scans the GeoPackage layers, then the other data tables (metadata, R-tree and
+  SpatiaLite system tables left out), each as a table of its own in an aggregate report, as
+  `--sheet all` does for workbooks; a name or number scans one table (a metadata table when
+  named). `CrafterCmd.scan_file(table=...)`, `file_inputs.select_tables`.
+- **`geojson` on the coordinates of lines and polygons** (apicrafter/metacrafter-rules#69):
+  the `coordinates` of GeoJSON geometries whose `type` beside them is mostly a line or a
+  polygon (district boundaries, bicycle paths, in degrees or projected) are the geometry, read
+  as one list of numbers; they get `geojson` (`ruletype: fieldtype`, confidence = share of
+  lines and polygons). Points keep `geopoint`; projected points get no label. 13 new hits on
+  metacrafter-testdata.
 - **Stata, SAS, dBase, R data, GeoPackage, SQLite and iCalendar files open** (#110). The
   `formats` extra adds `dbfread`, `icalendar`, `pyreadr` and pandas (pyreadr returns data
   frames; it is the only reader that needs pandas). `file_inputs.py` reads:
@@ -96,6 +120,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Values confirm or contradict more labels** (apicrafter/metacrafter-rules#69, #70):
+  - the keys of a nested object that is a map are data, not field names: when the objects
+    at one path have at least 100 distinct keys, five times as many as one object has on
+    average, and the keys hold lists, objects or numbers (not text), field-name rules,
+    field guards and detector name evidence skip its keys. The words of an OpenAlex
+    `abstract_inverted_index` (`year`, `data`, `price`) get no labels; OpenStreetMap tags and
+    records of one schema keep theirs;
+  - a field-name match of a generic text type (`name`, `description`, `title`) gives way when
+    a value rule of another type matched the field with at least its confidence (`species` on
+    GBIF `classifications.*.usage.name`, `encountryname` on `gadm.level0.name`), or when every
+    value is a short lower-case code (the CURIE prefix `wp` of `_links.curies.name`);
+  - a `boolean` value match is dropped when the values hold three answers that each occur
+    more than once, one of which the matched yes/no rules do not accept (`Да` / `Нет` /
+    `Частично`). Placeholders (`-`, `n/a`, `?`) are no answer; two answers stay a yes/no column
+    even when the rule knows one of them only (`SI` / `NO`, `да` / `не`); a value seen once is
+    noise (`False [1]`). A head sample of a file now reads up to 1000 records: those after the
+    sample are not classified, but this check (and the validator check above) looks at their
+    values, since the first `Частично` of a catalog may be in row 124 (`needs_values` rules
+    use them too).
+  On metacrafter-testdata (279 files, metacrafter-rules testdata-fixes branch) the wrong labels
+  go from 43 to 25 and 13 fields gain a right label (with `geojson` above), none lost: typed
+  precision 0.981 -> 0.989, recall 0.432 -> 0.434.
 - **`geopoint` on shapes and projected coordinates** (apicrafter/metacrafter-rules#69): a
   `geopoint` match on `coordinates` is dropped when the GeoJSON `type` beside them is mostly
   a line or a polygon (district boundaries, bicycle paths; a layer of points with a few

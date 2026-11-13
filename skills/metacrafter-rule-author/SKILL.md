@@ -38,11 +38,18 @@ be a registry id or alias.
        fieldrulematch: text
    ```
 
+   A field-name guard can also be a regular expression searched in the field name
+   (`fieldregex: 'date|datum|_at$'`; metacrafter 2.1 and earlier ignore it, so keep a
+   `fieldrule` list as well when the rule must not run unguarded there).
+
    Otherwise use `match: regex` (whole-value Python regex), `ppr` (PyParsing),
    `text` (keyword list) or `func` (a Python function). Add
    `validator: checksum:<algorithm>` when the identifier has a check digit.
 4. **Field-name rules** (`type: field`, usually `match: text`) recognise column names.
    Use `priority: 1` only for unambiguous names; generic names get `priority: 3`.
+   A field rule whose name does not prove the datatype (a date-like name for Unix
+   milliseconds) can set `validator` and `needs_values: true`: then a field without values
+   gets no label.
 5. **Validate**: `metacrafter rules validate ./myrules`.
 6. **Test** against registry examples:
    `metacrafter rules test --registry-examples --rulepath ./myrules --rule <ruleid>`.

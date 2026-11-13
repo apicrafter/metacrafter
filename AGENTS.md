@@ -144,7 +144,8 @@ fills in encoding, delimiter, header offset, JSON record key, PC-Axis encoding a
 fallback (`prepare_input`). It reads SPSS, Stata and SAS (pyreadstat dict output), GeoPackage
 (sqlite3), iCalendar and KML/KMZ itself, picks the data table of a SQLite file and the code page
 of a dBase file, names XML
-column lists after their header element, and `select_sheets` resolves `scan file --sheet`.
+column lists after their header element, and `select_sheets` resolves `scan file --sheet`
+(`select_tables`: `scan file --table` for SQLite and GeoPackage files).
 **Compression:** gzip, bzip2, xz, lz4, zstandard, Brotli, Snappy, ZIP
 
 Format detection is automatic based on file extension.

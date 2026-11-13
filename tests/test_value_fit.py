@@ -204,9 +204,10 @@ def test_geopoint_dropped_on_polygons_and_lines(tmp_path):
     ring = [[[4.3, 50.8], [4.4, 50.8], [4.4, 50.9], [4.3, 50.8]]]
     rows = [feature("Polygon", ring), feature("MultiPolygon", [ring]), feature("Point", [4.3, 50.8])]
     labels, reasons = geopoint_labels(tmp_path, rows)
-    assert labels == [] and "Coordinates of lines or polygons, not of points" in reasons
+    # The coordinates of shapes are the geometry: geojson (tests/test_rules_testdata_69_70.py).
+    assert labels == ["geojson"] and "Coordinates of lines or polygons, not of points" in reasons
     labels, _ = geopoint_labels(tmp_path, [feature("LineString", [[27.1, 38.4], [27.2, 38.5]])])
-    assert labels == []
+    assert labels == ["geojson"]
     # Mostly points, with a few building outlines: still points.
     rows = [feature("Point", [44.8 + i / 100, 41.7]) for i in range(9)] + [feature("Polygon", ring)]
     assert geopoint_labels(tmp_path, rows)[0] == ["geopoint"]

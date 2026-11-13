@@ -344,6 +344,8 @@ rules:
     validator: module.func     # Optional: validation function
     fieldrule: <rule>          # Optional: additional field name rule
     fieldrulematch: text|ppr   # Match type for fieldrule
+    fieldregex: <regex>        # Optional: field name guard by regular expression
+    needs_values: true         # Optional (field rules): no match on a field without values
 ```
 
 ### Rule Types

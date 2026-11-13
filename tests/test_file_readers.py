@@ -709,6 +709,58 @@ def test_sqlite_data_table_comes_before_metadata_tables(tmp_path):
     assert list(_fields(_scan(path))) == ["id", "name", "email"]
 
 
+def _two_table_database(path):
+    import sqlite3
+
+    db = sqlite3.connect(path)
+    db.executescript("""
+        CREATE TABLE spatial_ref_sys (srid INTEGER, auth_name TEXT);
+        CREATE TABLE roads (id INTEGER, name TEXT, email TEXT);
+        CREATE TABLE towns (town TEXT, postcode TEXT);
+        INSERT INTO roads VALUES (1, 'Main street', 'roads@example.com');
+        INSERT INTO towns VALUES ('Riga', 'LV-1050');
+        INSERT INTO spatial_ref_sys VALUES (4326, 'EPSG');
+    """)
+    db.commit()
+    db.close()
+
+
+def test_sqlite_table_all_scans_every_data_table(tmp_path, capsys):
+    from metacrafter.file_inputs import select_tables
+
+    path = tmp_path / "roads.sqlite"
+    _two_table_database(str(path))
+    assert select_tables(str(path), "all") == ["roads", "towns"]
+    report = _scan(path, table="all")
+    assert [s["table"] for s in report["sources"]] == ["roads", "towns"]
+    assert {s["source"] for s in report["sources"]} == {str(path)}
+    assert list(_fields(report["sources"][1])) == ["town", "postcode"]
+    assert list(_fields(_scan(path, table="towns"))) == ["town", "postcode"]
+    assert list(_fields(_scan(path, table=2))) == ["town", "postcode"]
+    # A metadata table is scanned when it is named.
+    assert list(_fields(_scan(path, table="spatial_ref_sys"))) == ["srid", "auth_name"]
+    assert _scan(path, table="nope") == []
+    assert "No table 'nope'" in capsys.readouterr().err
+    assert _scan(path, table="towns", sheet="1") == []
+    csv_path = tmp_path / "plain.csv"
+    csv_path.write_text("a,b\n1,2\n")
+    assert _scan(csv_path, table="towns") == []
+    assert list(_fields(_scan(csv_path, table="all"))) == ["a", "b"]
+
+
+def test_geopackage_layers_by_table(tmp_path):
+    from metacrafter.file_inputs import select_tables
+
+    path = tmp_path / "art.gpkg"
+    _geopackage(str(path))
+    assert select_tables(str(path), "all") == ["art-objects", "notes"]
+    report = _scan(path, table="all")
+    by_table = {s["table"]: set(_fields(s)) for s in report["sources"]}
+    assert {"properties.nosaukums", "geometry.coordinates"} <= by_table["art-objects"]
+    assert by_table["notes"] == {"id", "note"}
+    assert set(_fields(_scan(path, table="notes"))) == {"id", "note"}
+
+
 ICS = """BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//Opendatasoft Calendar 1.0//EN

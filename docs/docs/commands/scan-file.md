@@ -20,6 +20,7 @@ column. See [Formats](/formats/) and [File scanning](/use-cases/file-scanning).
 | `--encoding` | Character encoding (default: auto-detected) |
 | `--compression` | `auto`, `none`, or a codec (`gz`, `bz2`, `zip`, …) |
 | `--sheet` | Workbook sheet (XLSX, XLS, ODS): a name, a number from 1, or `all`. Default: the first sheet that holds a table. `all` scans every sheet with a header and three rows below it (every non-empty ODS sheet) as a table of its own: the report has one source per sheet (`source` is the file, `table` the sheet), like a database scan. Other files are one table |
+| `--table` | Table of a SQLite database or GeoPackage: a name, a number from 1, or `all`. Default: the first GeoPackage layer, else the first data table by name. `all` scans the GeoPackage layers (in `gpkg_contents` order) and then the other data tables, without metadata, R-tree and SpatiaLite system tables, each as a table of its own (one source per table, as for `--sheet all`). A metadata table is scanned when it is named. Other files are one table for `all`. Not with `--sheet` |
 
 Plus the [shared scan options](/commands/shared-options). Default `--limit` is
 100 records per field.
@@ -36,6 +37,8 @@ metacrafter scan file data.parquet \
 
 metacrafter scan file election.xlsx --sheet all \
   --format full --output-format json -o election.json
+
+metacrafter scan file survey.sqlite --table all --format full
 
 metacrafter scan file users.csv \
   --fields email,phone,name \

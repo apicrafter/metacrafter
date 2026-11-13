@@ -283,6 +283,7 @@ def scan_file(
     tagname: str = typer.Option(None, help="XML tag name for data extraction"),
     encoding: str = typer.Option(None, help="Character encoding for text files (e.g. utf8)"),
     sheet: Optional[str] = typer.Option(None, "--sheet", help="Workbook sheet (XLSX, XLS, ODS): a name, a number from 1, or 'all' for every sheet that holds a table, each as a table of its own (default: the first sheet that holds a table)"),
+    table: Optional[str] = typer.Option(None, "--table", help="SQLite or GeoPackage table: a name, a number from 1, or 'all' for every data table (GeoPackage layers first), each as a table of its own (default: the first layer, else the first data table)"),
     limit: int = typer.Option(100, help="Maximum records to process per field"),
     contexts: str = typer.Option(None, help="Comma-separated list of context filters"),
     langs: str = typer.Option(None, help="Comma-separated list of language filters"),
@@ -470,6 +471,7 @@ def scan_file(
         classification_mode=final_classification_mode,
         llm_min_confidence=llm_min_confidence,
         sheet=sheet,
+        table=table,
     )
 
 
