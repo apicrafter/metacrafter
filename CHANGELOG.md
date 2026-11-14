@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Dataverse `.tab` exports with thousands of variables are read: iterabledata has no `.tab` format
+  and detects the type of such a file from its first bytes, which failed when the header line is
+  longer than its sample ("Could not detect file type", a V-Dem table of 3033 variables and the
+  Austrian Corona Panel of 5933 on AUSSDA). `prepare_input` reads a `.tab` file with two or more
+  columns as delimited text with the delimiter it found (a tab).
+
 ### Added
 
 - Files without a known extension are read by content (`file_inputs.sniff_format`): data.gov.uk

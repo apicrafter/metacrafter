@@ -359,3 +359,33 @@ def test_known_extension_is_not_sniffed(tmp_path):
     path = tmp_path / "notes.txt"
     path.write_text("Just a sentence.\nAnother one, with a comma.\n")
     assert prepare_input(str(path), {}).iterableargs.get("format") is None
+
+
+# ---------------------------------------------------------------- Dataverse .tab exports
+def _wide_tab(columns: int) -> str:
+    names = ["version", "doi", "email"] + [f"v2x_{i}" for i in range(columns)]
+    rows = [
+        ['"1.0 (2021-01-01)"', '"doi:10.11587/X8UZ60"', f'"user{n}@example.org"'] + [str(n * i % 7) for i in range(columns)]
+        for n in range(1, 6)
+    ]
+    return "\t".join(names) + "\n" + "\n".join("\t".join(r) for r in rows) + "\n"
+
+
+def test_tab_file_with_a_header_longer_than_the_sniffed_bytes(tmp_path):
+    # V-Dem tables on AUSSDA Dataverse have 3033 variables: the header is 54 kB, and
+    # iterabledata, which has no .tab format, could not detect the type from the first bytes.
+    path = tmp_path / "10661_da_en_v1_1.tab"
+    path.write_text(_wide_tab(3000), encoding="utf-8")
+    plan = prepare_input(str(path), {})
+    assert plan.iterableargs["format"] == "csv" and plan.iterableargs["delimiter"] == "\t"
+    fields = _fields(_scan(path))
+    assert len(fields) == 3003 and "email" in fields["email"]
+
+
+def test_compressed_tab_file(tmp_path):
+    path = tmp_path / "export.tab.gz"
+    with gzip.open(path, "wt", encoding="utf-8") as fh:
+        fh.write(_wide_tab(5))
+    plan = prepare_input(str(path), {})
+    assert plan.iterableargs["format"] == "csv" and plan.iterableargs["delimiter"] == "\t"
+    assert "email" in _fields(_scan(path))["email"]
