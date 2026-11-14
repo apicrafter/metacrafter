@@ -459,6 +459,33 @@ def _marker_header(rows: List[List[str]]) -> Optional[int]:
     return None
 
 
+def _column_letter(index: int) -> str:
+    """Spreadsheet column name of a 0-based column index: 0 -> A, 25 -> Z, 26 -> AA."""
+    name = ""
+    index += 1
+    while index:
+        index, rest = divmod(index - 1, 26)
+        name = chr(65 + rest) + name
+    return name
+
+
+def _blank_column_letters(row: List[str]) -> List[str]:
+    """The first row with the cells that hold their own spreadsheet column name blanked.
+
+    Dataverse names the empty header cells of an ingested sheet after their column, so the
+    ``.tab`` export of a sheet with a title in A1 starts ``GRUPOA, B, C, D`` above the real
+    header, and one with group headings over merged cells ``A, B, C, D, E, Pregunta1, G``.
+    The letters are no labels: blanked, the title row is a title and the group headings a
+    band over the header. A row of letters only is left as it is (it may be the real
+    header), and so is a row with one letter.
+    """
+    letters = {i for i, cell in enumerate(row) if str(cell).strip() == _column_letter(i)}
+    others = [cell for i, cell in enumerate(row) if i not in letters and str(cell).strip()]
+    if len(letters) < 2 or not others:
+        return row
+    return ["" if i in letters else cell for i, cell in enumerate(row)]
+
+
 def _combine_header(band: List[List[str]], header: List[str], columns: int) -> List[str]:
     """Column names from upper header rows (merged cells filled to the right) and the header."""
     filled_band = []
@@ -488,7 +515,19 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
     ("Batken oblast"), or an upper header row (merged group headings) directly above it;
     then the names join the upper rows and the header row. A header marker line ("Tabla
     Campos") puts the header on the next row. Otherwise the header is the first row.
+    The spreadsheet column letters that Dataverse writes into the empty cells of the first
+    row are no labels (``_blank_column_letters``); a first row that stays the header keeps
+    them as names, and so do the columns that no header row names.
     """
+    first = rows[0] if rows else []
+    if rows:
+        rows = [_blank_column_letters(first)] + rows[1:]
+
+    def combined(band: List[List[str]], header: List[str]) -> List[str]:
+        names = _combine_header(band, header, columns)
+        return [name or (str(first[i]).strip() if i < len(first) and str(first[i]).strip() == _column_letter(i)
+                         else name) for i, name in enumerate(names)]
+
     widths = Counter(w for w in (_width(r) for r in rows) if w > 1)
     if not widths:
         return 0, 0, None
@@ -519,7 +558,7 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
             index += 1
         if all(_is_title_row(r, columns) or _is_section_row(r, text_columns) for r in rows[:top]):
             if top < index:
-                return index, columns, _combine_header(rows[top:index], rows[index], columns)
+                return index, columns, combined(rows[top:index], rows[index])
             return index, columns, None
         break
     wide = _wide_header(rows, columns)
@@ -576,11 +615,19 @@ def table_layout(text: str, delimiter: Optional[str] = None, truncated: bool = T
     return TableLayout(delim, columns, header_index, header, sep_hint, freq / max(len(rows), 1))
 
 
-def _unique(names: List[str]) -> List[str]:
+def _repeats_names(names: List[str]) -> bool:
+    """True when a non-empty column name occurs twice or more, spaces included: ``Department``
+    and ``Department `` are two keys of a record already."""
+    filled = [str(name) for name in names if str(name).strip()]
+    return len(set(filled)) < len(filled)
+
+
+def _unique(names: List[str], strip: bool = True) -> List[str]:
+    """The names with the second and later copies of a name numbered (name_2, name_3)."""
     seen: Counter = Counter()
     out = []
     for name in names:
-        name = name.strip()
+        name = name.strip() if strip else name
         seen[name] += 1
         out.append(name if seen[name] == 1 else f"{name}_{seen[name]}")
     return out
@@ -784,6 +831,13 @@ def _plan_table(filename: str, ext: str, codec: Optional[str], plan: InputPlan) 
         plan.skip_records = layout.header_index + 1 + (1 if layout.sep_hint else 0)
         skipped = plan.skip_records - 1
         plan.notes.append(f"header on record {skipped + 1}; skipped {skipped} line(s) before it")
+    elif _repeats_names(layout.header):
+        # Records are dicts: a column whose name an earlier column has already (two blocks of
+        # one sheet side by side, "Ct" over each gene of a qPCR table) would replace its values.
+        args["delimiter"] = layout.delimiter
+        args["keys"] = _unique(layout.header, strip=False)
+        plan.skip_records = 1
+        plan.notes.append("repeated column names numbered (name_2, name_3)")
 
 
 def sheet_rows(filename: str, ext: str, page: int = 0, limit: int = SAMPLE_RECORDS) -> Optional[List[List[str]]]:
