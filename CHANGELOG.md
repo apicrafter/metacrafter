@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- HXL hashtag rows: a row of Humanitarian Exchange Language hashtags right below the header of a
+  CSV file or a sheet (`;#date;#country+code;#country+name;#affected+infected;;`, the HDX tables)
+  is skipped, and each field reports its hashtag as `hxl` (`"hxl": "#country+code"`). It was read
+  as a record and put a hashtag into every column: `#date` among the dates, `#affected+infected`
+  among the counts. A table whose header is the hashtag row keeps it as the header.
+
 ### Changed
 
 - Value rules see Arabic text without the tatweel (kashida, U+0640) and with the Arabic letters for
@@ -33,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Records of text, dates and URLs are no longer taken for upper header rows: when a second
+  table sits beside the first one in its first records (the variants no longer reported, in the
+  SARS-CoV-2 variants table of the Africa Data Hub), those records are wider than the rest, the
+  first narrow record looked like a header, and the records above it were joined into its names
+  (`country Algeria Angola`). An upper header row now fills fewer of the body columns than the
+  header, as group headings do.
 - CSV files with a field longer than 131072 characters open: Python's csv module refuses such
   a field unless its limit is raised, and a WFS CSV export holds each geometry as well-known text
   in one field. Four of the 16 GeoServer exports of the Armenian Soil Information System

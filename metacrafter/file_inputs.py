@@ -130,6 +130,11 @@ LATIN_ALPHABETS = (
 )
 
 
+#: A hashtag of the Humanitarian Exchange Language (HXL): ``#country+code``, ``#adm1+name``,
+#: ``#affected+infected``. HDX tables put a row of them right below the header.
+_HXL_TAG = re.compile(r"^#[A-Za-z][A-Za-z0-9_]*(?:\s*\+[A-Za-z][A-Za-z0-9_]*)*$")
+
+
 @dataclass
 class InputPlan:
     """How to open one file and how to clean its records."""
@@ -368,6 +373,7 @@ class TableLayout:
     header: List[str]  # column names (upper header rows joined in)
     sep_hint: bool
     consistent: float  # share of sampled records that have ``columns`` fields
+    hxl: Optional[List[str]] = None  # the HXL hashtag row below the header, if there is one
 
 
 def _rows(text: str, delimiter: str, truncated: bool) -> List[List[str]]:
@@ -544,6 +550,23 @@ def _combine_header(band: List[List[str]], header: List[str], columns: int) -> L
     return names
 
 
+def hxl_tags(row: Optional[List[str]]) -> Optional[List[str]]:
+    """The cells of an HXL hashtag row (``;#date;#country+code;#country+name;;``), or None.
+
+    The Humanitarian Exchange Language marks the columns of a table with a row of hashtags
+    right below the header; the Humanitarian Data Exchange (HDX) serves thousands of tables
+    with one. It is a row whose filled cells are all hashtags, two or more of them (one in a
+    table of one column). Read as a record, it puts a hashtag into every column.
+    """
+    if not row:
+        return None
+    cells = [str(c).strip() for c in row]
+    filled = [c for c in cells if c]
+    if len(filled) < min(2, len(cells)) or not all(_HXL_TAG.match(c) for c in filled):
+        return None
+    return cells
+
+
 def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
     """(header row index, body column count, combined names or None) of the first table rows.
 
@@ -582,7 +605,11 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
         # Headings over the row label columns only are section titles (#98).
         text_columns = _text_columns([r for r in rows[index + 1:] if _width(r) > 1], columns)
         top = index
-        while top > 0 and _is_band_row(rows[top - 1], columns) and not _is_section_row(rows[top - 1], text_columns):
+        # Group headings span several columns, so an upper header row fills fewer of the body
+        # columns than the header: a row that fills as many is a record of text and dates
+        # ("Algeria,Alpha,B.1.1.7,2021-03-11,Africa CDC,https://...") above a shorter record.
+        while (top > 0 and _is_band_row(rows[top - 1], columns) and not _is_section_row(rows[top - 1], text_columns)
+               and _filled(rows[top - 1][:columns]) < _filled(rows[index][:columns])):
             top -= 1
         # Header rows below it (GENESIS: "Stichtag" / "31.12.2025" / "Insgesamt"): label
         # rows with fewer filled cells than the first data row continue the header, unless
@@ -591,7 +618,8 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
         # text and partly empty are data.
         named = rows[index]
         while (index + 1 < len(rows) and _is_band_row(rows[index + 1])
-               and not _fills_named_text_column(rows[index + 1], named, text_columns)):
+               and not _fills_named_text_column(rows[index + 1], named, text_columns)
+               and hxl_tags(rows[index + 1]) is None):
             data = next((r for r in rows[index + 2:] if _width(r) > 1 and not _is_band_row(r)), None)
             if data is None or _filled(rows[index + 1]) >= _filled(data):
                 break
@@ -672,7 +700,8 @@ def table_layout(text: str, delimiter: Optional[str] = None, truncated: bool = T
     columns, freq, delim, rows = best
     header_index, _, names = header_row(rows)
     header = names or (rows[header_index] if rows else [])
-    return TableLayout(delim, columns, header_index, header, sep_hint, freq / max(len(rows), 1))
+    tags = hxl_tags(rows[header_index + 1]) if header_index + 1 < len(rows) and hxl_tags(header) is None else None
+    return TableLayout(delim, columns, header_index, header, sep_hint, freq / max(len(rows), 1), tags)
 
 
 def wrapped_layout(text: str, truncated: bool = True) -> Optional[TableLayout]:
@@ -971,12 +1000,16 @@ def _plan_table(filename: str, ext: str, codec: Optional[str], plan: InputPlan) 
         plan.notes.append(f"read as a table delimited by {layout.delimiter!r}")
     if layout is None:
         return
-    if layout.sep_hint or layout.header_index:
+    if layout.sep_hint or layout.header_index or layout.hxl:
         args["delimiter"] = layout.delimiter
         args["keys"] = _unique(layout.header)
         plan.skip_records = layout.header_index + 1 + (1 if layout.sep_hint else 0)
         skipped = plan.skip_records - 1
-        plan.notes.append(f"header on record {skipped + 1}; skipped {skipped} line(s) before it")
+        if skipped:
+            plan.notes.append(f"header on record {skipped + 1}; skipped {skipped} line(s) before it")
+        if layout.hxl:
+            plan.skip_records += 1
+            _note_hxl(plan, args["keys"], layout.hxl)
     elif _repeats_names(layout.header):
         # Records are dicts: a column whose name an earlier column has already (two blocks of
         # one sheet side by side, "Ct" over each gene of a qPCR table) would replace its values.
@@ -1120,7 +1153,10 @@ def _plan_sheet(filename: str, ext: str, plan: InputPlan) -> None:
         if given is not None or _is_table(found, found_index, columns):
             page, rows, index, names = candidate, found, found_index, found_names
             break
-    if rows is None or (not index and page == 0):
+    tags = hxl_tags(rows[index + 1]) if rows is not None and index + 1 < len(rows) else None
+    if tags is not None and hxl_tags(rows[index]) is not None:
+        tags = None  # a table whose header is the hashtag row
+    if rows is None or (not index and page == 0 and tags is None):
         return
     if page != 0:
         titles = sheet_names(filename, ext)
@@ -1140,6 +1176,19 @@ def _plan_sheet(filename: str, ext: str, plan: InputPlan) -> None:
         plan.iterableargs["start_line"] = index
     if index:
         plan.notes.append(f"header on sheet row {index + 1}; skipped {index} row(s) above it")
+    if tags is not None:
+        keys = plan.iterableargs.get("keys") or _unique([str(c) for c in names or rows[index]])
+        plan.iterableargs["keys"] = keys
+        plan.iterableargs["start_line"] = index + 2
+        _note_hxl(plan, keys, tags)
+
+
+def _note_hxl(plan: InputPlan, keys: List[str], tags: List[str]) -> None:
+    """Report the HXL hashtag of each column (field ``hxl``) and that its row was skipped."""
+    for name, tag in zip(keys, tags):
+        if tag:
+            plan.field_info.setdefault(name, {})["hxl"] = tag
+    plan.notes.append("HXL hashtag row below the header: skipped, its hashtags are reported as hxl")
 
 
 def _plan_json(filename: str, codec: Optional[str], plan: InputPlan) -> None:
