@@ -410,3 +410,53 @@ def test_compressed_tab_file(tmp_path):
     plan = prepare_input(str(path), {})
     assert plan.iterableargs["format"] == "csv" and plan.iterableargs["delimiter"] == "\t"
     assert "email" in _fields(_scan(path))["email"]
+
+
+# ---------------------------------------------------------------- lines quoted whole
+# Exports of datos.gob.ar (Argentina) quote every whole line: the employment by sector series
+# of the Ministry of Production write each ;-delimited record as one cell, and the physical
+# budget execution tables of the Budget Office write each quoted CSV line as one cell again.
+SEMICOLON_LINES = ('"año_mes;provincia;genero;rubro;Cantidad;remuneracion_prom"\r\n'
+                   '"39083;Buenos Aires;Femenino;Combustibles-Producción;7;2189,37"\r\n'
+                   '"39083;Buenos Aires;Femenino;Metaliferos-Produccion;1;1080,74"\r\n'
+                   '"39083;Chubut;Varones;Combustibles-Producción;12;3546,71"\r\n'
+                   '"39114;Neuquén;Mujeres;Petróleo y gas;4;2340"\r\n')
+NESTED_CSV_LINES = ('"ejercicio_presupuestario,""jurisdiccion_id"",""contacto"",""unidad_medida_desc"""\n'
+                    '"2022,""64"",""obras@mop.gob.ar"",""Kilómetro"""\n'
+                    '"2022,""64"",""info@mop.gob.ar"",""Obra Terminada"""\n'
+                    '"2022,""30"",""presupuesto@mecon.gob.ar"",""Persona Asistida"""\n')
+
+
+def test_lines_quoted_whole_with_semicolons(tmp_path):
+    path = tmp_path / "empleo-rubro-prov.csv"
+    path.write_bytes(SEMICOLON_LINES.encode("cp1252"))
+    plan = prepare_input(str(path), {})
+    assert any("one quoted cell" in note and "';'" in note for note in plan.notes)
+    records = list(plan.records)
+    assert len(records) == 4 and records[0]["año_mes"] == "39083" and records[3]["provincia"] == "Neuquén"
+    fields = _fields(_scan(path))
+    assert list(fields) == ["año_mes", "provincia", "genero", "rubro", "Cantidad", "remuneracion_prom"]
+
+
+def test_quoted_csv_lines_quoted_again(tmp_path):
+    path = tmp_path / "inline"
+    path.write_text(NESTED_CSV_LINES, encoding="utf-8")
+    assert prepare_input(str(path), {}).iterableargs.get("format") == "csv"
+    fields = _fields(_scan(path))
+    assert list(fields) == ["ejercicio_presupuestario", "jurisdiccion_id", "contacto", "unidad_medida_desc"]
+    assert "email" in fields["contacto"]
+
+
+def test_compressed_lines_quoted_whole(tmp_path):
+    path = tmp_path / "empleo.csv.gz"
+    with gzip.open(path, "wt", encoding="utf-8", newline="") as fh:
+        fh.write(SEMICOLON_LINES)
+    assert len(list(prepare_input(str(path), {}).records)) == 4
+
+
+def test_one_column_of_quoted_text_is_not_split(tmp_path):
+    path = tmp_path / "direcciones.csv"
+    path.write_text('"direccion"\n"Calle 1, Rosario"\n"Avenida 2, Córdoba"\n"Ruta 3, Salta"\n', encoding="utf-8")
+    plan = prepare_input(str(path), {})
+    assert plan.records is None
+    assert list(_fields(_scan(path))) == ["direccion"]
