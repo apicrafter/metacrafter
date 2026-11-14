@@ -135,6 +135,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- CSV records whose cells are all text and partly empty are no longer joined into the header as
+  lower header rows. An AIMS microplastics table starts with blank-control records
+  (`Control,,,Fibre,Transparent,cellulose,Match,Yes,`) that have fewer filled cells than the
+  records below them; they became part of the column names (`Polymer cellulose polypropylene
+  nylon`, `colour Transparent blue`), so no rule saw `Polymer` or `colour`. A row below the
+  header continues it only while it leaves the text columns that the header names empty (or
+  repeats their names, as merged cells do): lower header rows sit over value columns
+  (`;male;female` under `Indicator;2019;2019`, GENESIS `Stichtag` / `31.12.2025`).
+
 - **Values confirm or contradict more labels** (apicrafter/metacrafter-rules#69, #70):
   - the keys of a nested object that is a map are data, not field names: when the objects
     at one path have at least 100 distinct keys, five times as many as one object has on

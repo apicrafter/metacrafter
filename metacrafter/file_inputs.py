@@ -438,6 +438,18 @@ def _is_section_row(row: List[str], text_columns: set) -> bool:
     return bool(cells) and bool(text_columns) and all(i in text_columns for i in cells)
 
 
+def _fills_named_text_column(row: List[str], header: List[str], text_columns: set) -> bool:
+    """True when the row has a value under a text column of the body that the header row names,
+    other than the header's own name (merged header cells repeat it): a record, not a lower
+    header row. Lower header rows sit over the value columns and leave the row labels empty."""
+    for i in text_columns:
+        cell = str(row[i]).strip() if i < len(row) else ""
+        name = str(header[i]).strip() if i < len(header) else ""
+        if cell and name and cell != name:
+            return True
+    return False
+
+
 def _marker_header(rows: List[List[str]]) -> Optional[int]:
     """Index of the row after a header marker line (SIPOT exports: "Tabla Campos")."""
     for index, row in enumerate(rows[:MAX_HEADER_OFFSET]):
@@ -494,8 +506,13 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
         while top > 0 and _is_band_row(rows[top - 1], columns) and not _is_section_row(rows[top - 1], text_columns):
             top -= 1
         # Header rows below it (GENESIS: "Stichtag" / "31.12.2025" / "Insgesamt"): label
-        # rows with fewer filled cells than the first data row continue the header.
-        while index + 1 < len(rows) and _is_band_row(rows[index + 1]):
+        # rows with fewer filled cells than the first data row continue the header, unless
+        # they put a value under a text column the header already names ("Control" under
+        # "Sample" in "Control,,,Fibre,Transparent,cellulose"): records whose cells are all
+        # text and partly empty are data.
+        named = rows[index]
+        while (index + 1 < len(rows) and _is_band_row(rows[index + 1])
+               and not _fills_named_text_column(rows[index + 1], named, text_columns)):
             data = next((r for r in rows[index + 2:] if _width(r) > 1 and not _is_band_row(r)), None)
             if data is None or _filled(rows[index + 1]) >= _filled(data):
                 break
