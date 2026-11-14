@@ -411,6 +411,9 @@ FIT_SAMPLE = 200
 #: Datatypes of field-name matches that say only that a field holds text for people: the
 #: object a field belongs to decides what the text names (see _drop_generic_name_matches).
 GENERIC_TEXT_TYPES = frozenset({"name", "description", "title"})
+# Types that say only what kind of value a field holds, for values without a type of their own:
+# a match of one does not hide a country-specific type that refines it (_drop_country_name_variants).
+FALLBACK_TYPES = frozenset({"id"})
 #: A short lower-case code (``wp``, ``en``, ``x1``), not text for people.
 _SHORT_CODE = re.compile(r"[a-z][a-z0-9_-]{0,3}")
 #: Values of a yes/no column that are no answer, besides the empty values of a scan.
@@ -618,6 +621,7 @@ class RulesProcessor:
         # Value-fit checks of field-name matches: broadness by check id, registry checks by datatype.
         self._fit_broadness: Dict[str, float] = {}
         self._registry_fit: Optional[Dict[str, List[Dict[str, Any]]]] = None
+        self._broader_cache: Dict[str, Set[str]] = {}
         self._registry_patterns: Dict[str, List[Dict[str, Any]]] = {}
         self.__rule_keys: List[str] = []
         self.langs: Dict[str, int] = {}
@@ -893,6 +897,7 @@ class RulesProcessor:
 
         self.registry = adapter
         self._registry_fit = None
+        self._broader_cache = {}
         bind_registry_rules(self, adapter)
         return add_registry_detectors(self, adapter, detectors)
 
@@ -1938,6 +1943,20 @@ class RulesProcessor:
         source = getattr(pattern, "pattern", "") or ""
         return bool(_LETTER_CLASS.search(source))
 
+    def _broader_types(self, key: str) -> Set[str]:
+        """Ids of the registry ``parent`` chain of datatype ``key`` (empty without a registry)."""
+        cache = self._broader_cache
+        if key not in cache:
+            adapter = self.registry
+            chain: List[str] = []
+            if adapter is not None and getattr(adapter, "available", False):
+                try:
+                    chain = adapter.ancestors(key)
+                except Exception:  # noqa: BLE001 - a registry without the record has no chain
+                    chain = []
+            cache[key] = set(chain)
+        return cache[key]
+
     @staticmethod
     def _rule_countries(rule: Dict[str, Any]) -> Set[str]:
         """Countries a rule is specific to; empty for universal rules (``country_code: xx``)."""
@@ -1974,18 +1993,26 @@ class RulesProcessor:
         country other than ``xx``) is dropped when a universal rule matched the field with
         at least its priority weight, or when any rule matched with a higher weight: a field
         ``city`` matched by a universal rule does not also report ``egcity`` or ``trcity``.
+        A match of a fallback type (``FALLBACK_TYPES``: ``id``, an identifier without a type of
+        its own) covers no country type that refines it in the registry (its ``parent``
+        chain): the generic ``id`` rule names every ``*_nummer`` field, and the Austrian
+        ``KG_NUMMER`` is still ``at_kg_number``, whose parent is ``id``. A country type of a
+        concrete type stays covered by it (``fr_commune`` by ``city``).
         """
         if self.preset_countries or len(found) < 2:
             return found
-        best_any = max(priority_weight(r.get("priority")) for r in found)
-        universal = [priority_weight(r.get("priority")) for r in found if not self._rule_countries(r)]
-        best_universal = max(universal) if universal else None
         kept = []
         for rule in found:
             weight = priority_weight(rule.get("priority"))
-            if self._rule_countries(rule) and (
-                weight < best_any or (best_universal is not None and weight <= best_universal)
-            ):
+            if not self._rule_countries(rule):
+                kept.append(rule)
+                continue
+            fallbacks = self._broader_types(rule["key"]) & FALLBACK_TYPES
+            others = [r for r in found if r is not rule and r["key"] not in fallbacks]
+            best_any = max([priority_weight(r.get("priority")) for r in others] + [weight])
+            universal = [priority_weight(r.get("priority")) for r in others if not self._rule_countries(r)]
+            best_universal = max(universal) if universal else None
+            if weight < best_any or (best_universal is not None and weight <= best_universal):
                 if explain:
                     m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": 0.0, "matched_count": 0, "considered_count": 0, "reason": "Country-specific field name covered by a universal rule"})
                 continue
