@@ -1716,7 +1716,12 @@ class RulesProcessor:
         ``needs_values: true``: the name alone does not say what the values are (an empty
         ``created_at`` column is not labelled by a rule that asks for Unix milliseconds). Such
         a rule looks at the records read after the sample (``more_values``): it is kept when
-        they have values and at least half pass its validator.
+        they have values and at least half pass its validator. A rule with a validator and
+        without ``needs_values`` looks at those records too and is dropped when they have
+        values that do not fit: a ``COMUNA`` column that is empty in the first 445 rows and
+        holds ``Comuna 11`` after them is not ``city``, whose validator refuses a numbered
+        division, and the country rule for the comunas of Buenos Aires, which the universal
+        ``city`` match would cover, keeps the field.
         Rules without a validator keep their match, except country-specific rules of the same
         type as a universal rule that the values failed: the values do not fit that type in
         any country. Country rules of other types stay (a ``provincia`` of codes is
@@ -1727,15 +1732,16 @@ class RulesProcessor:
         texts = [str(v).strip() for v in values if v not in empty_values and v is not None]
         texts = [t for t in texts if t]
         if not texts:
-            # No values to veto by. Rules that need values look at the records after the sample.
-            if not any(rule.get("needs_values") for rule in found):
-                return found
+            # No values to veto by: the rules look at the records after the sample. A rule that
+            # needs values is dropped without them; any rule with a validator is dropped when
+            # those records have values and they do not fit.
             later = [str(v).strip() for v in (more_values() if more_values is not None else ())
                      if v not in empty_values and v is not None]
             later = [t for t in later if t]
             kept = []
             for rule in found:
-                if rule.get("needs_values") and not (later and self._validator_passes(rule, later)):
+                unfit_later = bool(later) and not self._validator_passes(rule, later)
+                if unfit_later or (rule.get("needs_values") and not later):
                     if explain:
                         reason = ("The values do not fit the field-name rule" if later
                                   else "The field-name rule needs values and the field has none")
