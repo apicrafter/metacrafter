@@ -533,3 +533,20 @@ def test_repeated_column_names_are_numbered(tmp_path):
     spaced = tmp_path / "fleet.csv"
     spaced.write_text("Department,Department ,Reg\nCity,Parks,AB12CDE\nCity,Roads,CD34EFG\n", encoding="utf-8")
     assert "keys" not in prepare_input(str(spaced), {}).iterableargs
+
+
+def test_wkt_geometry_longer_than_the_csv_field_limit(tmp_path):
+    # GeoServer WFS CSV exports keep the geometry as WKT in one field; a province boundary in
+    # marz.csv of ArmSIS has 131365 characters, and the csv module stops at 131072, so the file
+    # did not open.
+    ring = ", ".join(f"{44 + i / 1e5:.6f} {40 + i / 1e5:.6f}" for i in range(12000))
+    path = tmp_path / "marz.csv"
+    path.write_text("FID,the_geom,OBJECTID,Name_eng\n"
+                    f'marz.1,"MULTIPOLYGON ((({ring})))",1,Yerevan\n'
+                    f'marz.2,"MULTIPOLYGON ((({ring})))",2,Aragatsotn\n'
+                    f'marz.3,"MULTIPOLYGON ((({ring})))",3,Ararat\n', encoding="utf-8")
+    assert len(ring) > 131072
+    report = _scan(path)
+    assert list(_fields(report)) == ["FID", "the_geom", "OBJECTID", "Name_eng"]
+    assert report["stats"]["Name_eng"]["n_uniq"] == 3
+    assert report["stats"]["the_geom"]["n_uniq"] == 1
