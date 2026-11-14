@@ -33,6 +33,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A first row of labels that is wider than the records is the header: records that leave their
+  last cells empty made the first record, if mostly text, look like the header, and the real
+  header was joined above it as group headings (`id 3095`, `ident GFLL`, `iso_region SL-N`). The
+  OurAirports export of the airports of Sierra Leone on openAFRICA has 18 columns and records of
+  16 (`wikipedia_link` and `keywords` mostly empty), a Google Forms export 23 columns and answers
+  of 18 (`file_inputs._wide_first_header`).
 - A census table by single years of age keeps its header below the title rows: a header
   that is mostly the numbers 0 to 100 (`CODIGO;PROV;DEPTO;FRACCION;RADIO;0;1;2;...;100;Total`,
   statistics office of Córdoba) was taken for a record, and the title row became the header

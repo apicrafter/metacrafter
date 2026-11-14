@@ -539,7 +539,8 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
     every row above it is a title or note row, a section heading over the row label columns
     ("Batken oblast"), or an upper header row (merged group headings) directly above it;
     then the names join the upper rows and the header row. A header marker line ("Tabla
-    Campos") puts the header on the next row. Otherwise the header is the first row.
+    Campos") puts the header on the next row, and a first row of labels wider than the
+    records (``_wide_first_header``) is the header. Otherwise the header is the first row.
     The spreadsheet column letters that Dataverse writes into the empty cells of the first
     row are no labels (``_blank_column_letters``); a first row that stays the header keeps
     them as names, and so do the columns that no header row names.
@@ -560,6 +561,8 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
     marked = _marker_header(rows)
     if marked is not None:
         return marked, columns, None
+    if _wide_first_header(rows, columns):
+        return 0, _width(rows[0]), None
     for index, row in enumerate(rows[: MAX_HEADER_OFFSET + 1]):
         following = next((r for r in rows[index + 1:] if _width(r) > 1), None)
         if not _looks_like_header(row, columns, following):
@@ -590,6 +593,26 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
     if wide is not None:
         return wide[0], wide[1], None
     return 0, columns, None
+
+
+def _wide_first_header(rows: List[List[str]], columns: int) -> bool:
+    """True when the first row is the header although the records are narrower.
+
+    The records may leave their last cells empty: in an OurAirports export most airports have
+    no ``wikipedia_link`` and ``keywords``, so the most common width is 16 of the 18 columns of
+    the header, and in a Google Forms export the last questions are optional. The first row
+    then does not look like a header for the width of the records, and the first record, mostly
+    text (``3095,GFLL,medium_airport,"Lungi International Airport",...``), became the header
+    with the real header joined above it as group headings (``id 3095``, ``ident GFLL``). A
+    first row of labels only (no numbers) that is wider than the records and at least as wide
+    as every row below it is the header.
+    """
+    first = rows[0]
+    width = _width(first)
+    below = [r for r in rows[1:] if _width(r) > 1]
+    if not below or width <= columns + max(1, columns // 10) or width < max(_width(r) for r in below):
+        return False
+    return _is_band_row(first, columns) and _looks_like_header(first, width, below[0])
 
 
 def _wide_header(rows: List[List[str]], columns: int) -> Optional[Tuple[int, int]]:
