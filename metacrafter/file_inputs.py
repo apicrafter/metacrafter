@@ -89,9 +89,10 @@ _UNIT_NOTE = re.compile(r"^[\s(（]*(?:単位|单位|unit|units|einheit|unité|u
 # id, title, type code and field id rows (#98).
 HEADER_MARKERS = {"tabla campos"}
 # Python's csv module refuses a field of more than 131072 characters (csv.field_size_limit).
-# A WFS CSV export holds the geometry as well-known text in one field, and one province
-# boundary or isoline is longer than that: 0.9 MB in a record of marz.csv of the Armenian Soil
-# Information System. The limit is set for the process, so iterabledata's reader gets it too.
+# A WFS CSV export holds the geometry as well-known text in one field, and a detailed boundary
+# or isoline is longer than that: 131365 characters in marz.csv and 255791 in Temperature.csv of
+# the Armenian Soil Information System. The limit is set for the process, so iterabledata's
+# reader gets it too.
 CSV_FIELD_LIMIT = 1 << 30
 
 

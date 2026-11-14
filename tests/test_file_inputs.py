@@ -536,9 +536,9 @@ def test_repeated_column_names_are_numbered(tmp_path):
 
 
 def test_wkt_geometry_longer_than_the_csv_field_limit(tmp_path):
-    # GeoServer WFS CSV exports keep the geometry as WKT in one field; the boundary of an
-    # Armenian province in marz.csv of ArmSIS is 0.9 MB, and the csv module stops at 131072
-    # characters, so the file did not open.
+    # GeoServer WFS CSV exports keep the geometry as WKT in one field; a province boundary in
+    # marz.csv of ArmSIS has 131365 characters, and the csv module stops at 131072, so the file
+    # did not open.
     ring = ", ".join(f"{44 + i / 1e5:.6f} {40 + i / 1e5:.6f}" for i in range(12000))
     path = tmp_path / "marz.csv"
     path.write_text("FID,the_geom,OBJECTID,Name_eng\n"
