@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A country-specific field-name match is no longer dropped beside a universal match of the
+  fallback type `id` when it refines `id` in the registry (its `parent` chain). The generic `id`
+  rule names every `*_nummer` field, so without a scan country the Austrian cadastral
+  municipality number `KG_NUMMER` of the BEV control point files (`at_kg_number`, whose parent
+  is `id`) was reported as `id` alone. Country variants of a concrete type are still dropped
+  (`egcity` and `fr_commune` beside `city`).
 - Dataverse `.tab` exports with thousands of variables are read: iterabledata has no `.tab` format
   and detects the type of such a file from its first bytes, which failed when the header line is
   longer than its sample ("Could not detect file type", a V-Dem table of 3033 variables and the

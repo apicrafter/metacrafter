@@ -489,3 +489,65 @@ def test_pii_only_drops_outranked_matches(tmp_path):
     fields = okpd_scan(tmp_path, pii_only=True)
     assert fields["okpd2"]["matches"] == []
     assert {m["dataclass"] for m in fields["ip"]["matches"]} == {"ipv4"}
+
+
+GENERIC_ID = """
+  idbyfield:
+    key: id
+    match: regex
+    type: field
+    rule: (?i)(?:.*[ _.-])?(?:id|nummer)(?:[ _.-].*)?
+    priority: 1
+"""
+KG_NUMBER = """
+  atkgnumberbyname:
+    key: at_kg_number
+    match: regex
+    type: field
+    rule: (?i)kg[ _-]?nummer
+    priority: 1
+"""
+REFINED = [
+    {"id": "id", "status": "draft", "kind": "datatype", "name": "Unique identifier"},
+    {"id": "at_kg_number", "status": "draft", "kind": "datatype", "name": "Austrian cadastral municipality number",
+     "parent": "id", "country": ["AT"], "regexp": "^\\d{5}$"},
+    {"id": "city", "status": "stable", "kind": "datatype", "name": "City"},
+    {"id": "egcity", "status": "draft", "kind": "datatype", "name": "Egyptian city", "country": ["EG"]},
+    {"id": "fr_commune", "status": "draft", "kind": "datatype", "name": "French commune", "parent": "city",
+     "country": ["FR"]},
+]
+
+
+@pytest.fixture
+def refined_adapter():
+    registry = SnapshotRegistry(datatypes=REFINED, aliases={}, manifest={"version": "test"}, source="test")
+    return RegistryAdapter._wrap(registry, None, "test")
+
+
+def test_country_type_kept_beside_its_broader_universal_type(tmp_path, refined_adapter):
+    # The generic id rule names KG_NUMMER too; at_kg_number refines id, so it is not covered.
+    processor = processor_with(tmp_path, [(GENERIC_ID, "xx"), (KG_NUMBER, "at")], refined_adapter)
+    columns = scan(processor, [{"KG_NUMMER": "01204"}, {"KG_NUMMER": "73518"}])
+    assert "at_kg_number" in classes(columns["KG_NUMMER"])
+
+
+FRCOMMUNE = """
+  frcommunefield:
+    key: fr_commune
+    match: text
+    type: field
+    rule: city
+    priority: 1
+"""
+
+
+def test_country_name_variant_still_dropped_with_registry(tmp_path, refined_adapter):
+    processor = processor_with(tmp_path, [(CITY, "xx"), (EGCITY, "eg")], refined_adapter)
+    assert classes(scan(processor, [{"city": "Cairo"}])["city"]) == {"city"}
+
+
+def test_country_variant_of_a_concrete_parent_still_dropped(tmp_path, refined_adapter):
+    # fr_commune refines city, but city is a type of its own, not a fallback: a Belgian or
+    # Swiss commune name is a city too.
+    processor = processor_with(tmp_path, [(CITY, "xx"), (FRCOMMUNE, "fr")], refined_adapter)
+    assert classes(scan(processor, [{"city": "Namur"}])["city"]) == {"city"}
