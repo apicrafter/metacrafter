@@ -40,6 +40,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   first narrow record looked like a header, and the records above it were joined into its names
   (`country Algeria Angola`). An upper header row now fills fewer of the body columns than the
   header, as group headings do.
+- CSV files with a field longer than 131072 characters open: Python's csv module refuses such
+  a field unless its limit is raised, and a WFS CSV export holds each geometry as well-known text
+  in one field. Four of the 16 GeoServer exports of the Armenian Soil Information System
+  (ArmSIS) did not open (`field larger than field limit (131072)`): the province boundaries of
+  `marz.csv` (a boundary of 131365 characters), the isotherms (255791), isohyets and heat
+  duration zones.
+  `metacrafter.file_inputs.allow_long_csv_fields` raises the limit to 2^30 for the process
+  before a file is read.
 - A first row of labels that is wider than the records is the header: records that leave their
   last cells empty made the first record, if mostly text, look like the header, and the real
   header was joined above it as group headings (`id 3095`, `ident GFLL`, `iso_region SL-N`). The
