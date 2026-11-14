@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Spanish markers of a missing value are empty values by default: `s/d` and `S/D` (sin
+  datos), `sin dato`, `sin datos`, `Sin datos`, `sin_informacion` and `sin información`. The
+  cultural directories of the Argentine culture ministry (datos.cultura.gob.ar) fill whole
+  columns with them: 15 of the 27 fields of the festival directory hold `s/d`, and it is the
+  commonest value of 11 (Periodicidad: 1986 `s/d`, 1239 `Anual`), so value rules and field-rule validators
+  saw too few values that fit and the year, URL, postal code and attendance mode columns lost
+  their labels. `SPANISH_EMPTY_VALUES` in `metacrafter.classify.stats` lists them;
+  `--empty-values` still replaces the whole list.
 - `NA` is an empty value by default, like `N/A` and `NaN`: R writes missing values as `NA`, and
   so do the plot surveys of the Terrestrial Ecosystem Research Network (TERN, Australia). A
   column of species names, NVIS strata or authorships with more `NA` than values lost its
