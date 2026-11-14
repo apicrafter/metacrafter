@@ -413,7 +413,8 @@ FIT_SAMPLE = 200
 GENERIC_TEXT_TYPES = frozenset({"name", "description", "title"})
 # Types that say only what kind of value a field holds, for values without a type of their own:
 # a match of one does not hide a country-specific type that refines it (_drop_country_name_variants).
-FALLBACK_TYPES = frozenset({"id"})
+# ``id`` is an identifier and ``category`` an enumeration without a type of their own.
+FALLBACK_TYPES = frozenset({"id", "category"})
 #: A short lower-case code (``wp``, ``en``, ``x1``), not text for people.
 _SHORT_CODE = re.compile(r"[a-z][a-z0-9_-]{0,3}")
 #: Values of a yes/no column that are no answer, besides the empty values of a scan.
@@ -1994,10 +1995,13 @@ class RulesProcessor:
         at least its priority weight, or when any rule matched with a higher weight: a field
         ``city`` matched by a universal rule does not also report ``egcity`` or ``trcity``.
         A match of a fallback type (``FALLBACK_TYPES``: ``id``, an identifier without a type of
-        its own) covers no country type that refines it in the registry (its ``parent``
-        chain): the generic ``id`` rule names every ``*_nummer`` field, and the Austrian
-        ``KG_NUMMER`` is still ``at_kg_number``, whose parent is ``id``. A country type of a
-        concrete type stays covered by it (``fr_commune`` by ``city``).
+        its own, and ``category``, an enumeration without one) covers no country type that
+        refines it in the registry (its ``parent`` chain): the generic ``id`` rule names every
+        ``*_nummer`` field, and the Austrian ``KG_NUMMER`` is still ``at_kg_number``, whose
+        parent is ``id``; the generic ``category`` rule names every ``tipo_*`` field, and the
+        Argentine census ``TIPO_RAD`` (U, R, M) is still ``ar_indec_census_radius_type``, whose
+        parent is ``category``. A country type of a concrete type stays covered by it
+        (``fr_commune`` by ``city``).
         """
         if self.preset_countries or len(found) < 2:
             return found

@@ -381,19 +381,44 @@ def _is_label(cell: str) -> bool:
     return bool(cell) and (not _NUMBER.match(cell) or bool(_YEAR.match(cell)) or bool(_DATE.match(cell)))
 
 
+#: Consecutive whole numbers in a row that are column labels, not values: single years of age
+#: (0, 1, 2 ... 100 in a census table by age) or column numbers (1, 2, 3 ... 79).
+MIN_NUMBER_RUN = 5
+
+
+def _labels(cells: List[str]) -> List[bool]:
+    """Which cells are labels (``_is_label``), counting runs of at least ``MIN_NUMBER_RUN``
+    consecutive whole numbers in neighbouring cells (0;1;2;...;100) as labels too."""
+    flags = [_is_label(c) for c in cells]
+    run: List[int] = []
+    for i, cell in enumerate(cells + [""]):
+        number = int(cell) if cell.isdigit() and len(cell) <= 3 else None
+        if number is not None and run and number == int(cells[run[-1]]) + 1:
+            run.append(i)
+            continue
+        if len(run) >= MIN_NUMBER_RUN:
+            for j in run:
+                flags[j] = True
+        run = [i] if number is not None else []
+    return flags
+
+
 def _signature(row: List[str], columns: int) -> Tuple[bool, ...]:
-    return tuple(_is_label(str(c).strip()) for c in row[:columns])
+    return tuple(_labels([str(c).strip() for c in row[:columns]]))
 
 
 def _looks_like_header(row: List[str], columns: int, following: Optional[List[str]] = None) -> bool:
-    """Wide enough, mostly labels, and not shaped like the record after it (then it is data)."""
+    """Wide enough, mostly labels, and not shaped like the record after it (then it is data).
+    A run of consecutive whole numbers counts as labels (``_labels``): the header of a census
+    table by single years of age is ``CODIGO;PROV;DEPTO;FRACCION;RADIO;0;1;2;...;100;Total``."""
     cells = [str(c).strip() for c in row[:columns]]
-    filled = [c for c in cells if c]
+    labels = _labels(cells)
+    filled = [(c, flag) for c, flag in zip(cells, labels) if c]
     if abs(_width(row) - columns) > max(1, columns // 10) or len(filled) < max(2, math.ceil(columns / 2)):
         return False
-    if sum(1 for c in filled if _is_label(c)) <= len(filled) / 2:
+    if sum(1 for _, flag in filled if flag) <= len(filled) / 2:
         return False
-    if following is not None and any(not _is_label(c) for c in filled):
+    if following is not None and not all(flag for _, flag in filled):
         # "1;A;x" above "2;B;y": the same mix of numbers and text in every column is data.
         return _signature(row, columns) != _signature(following, columns)
     return True
