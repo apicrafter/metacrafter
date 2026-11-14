@@ -250,6 +250,27 @@ def test_multi_row_header_is_joined():
                                  "Stichtag 31.12.2025 weiblich"]
 
 
+def test_text_records_with_empty_cells_are_not_header_rows():
+    # AIMS microplastics: the first records are all text with empty cells, fewer filled cells
+    # than the records with weights; they were joined into the header ("Polymer cellulose
+    # polypropylene nylon").
+    rows = ["Sample,tissue,Sample Weight,Shape,colour,Polymer,Contamination Match?,FTIR?,Length"]
+    rows += ["Control,,,Fibre,Transparent,cellulose,Match,Yes,"] * 2
+    rows += ["Control,,,Fragment,blue,polypropylene,Match,Yes,", "Control,,,Fragment,Transparent,nylon,NoMatch,Yes,"]
+    rows += ["Coral Trout 12,Muscle,7.1389,Fibre,Transparent,cellulose,Match,Yes,"] * 3
+    layout = table_layout("\n".join(rows) + "\n", truncated=False)
+    assert layout.header_index == 0
+    assert layout.header[:6] == ["Sample", "tissue", "Sample Weight", "Shape", "colour", "Polymer"]
+
+
+def test_lower_header_rows_over_value_columns_are_joined():
+    text = ("Indicator;2019;2019;2020;2020\n;male;female;male;female\n"
+            "Population;10;11;12;13\nHouseholds;4;5;6;7\n")
+    layout = table_layout(text, truncated=False)
+    assert layout.header_index == 1
+    assert layout.header == ["Indicator", "2019 male", "2019 female", "2020 male", "2020 female"]
+
+
 def test_years_as_column_labels():
     text = "Tabelle 3\n\nIndikator;Einheit;2019;2020;2021\nA;t;1;2;3\nB;t;4;5;6\n"
     layout = table_layout(text, truncated=False)
