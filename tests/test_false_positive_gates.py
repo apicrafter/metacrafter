@@ -531,6 +531,44 @@ def test_country_type_kept_beside_its_broader_universal_type(tmp_path, refined_a
     assert "at_kg_number" in classes(columns["KG_NUMMER"])
 
 
+GENERIC_CATEGORY = """
+  categorybyfield:
+    key: category
+    match: regex
+    type: field
+    rule: (?i)(?:.*[ _.-])?(?:tipo|type)(?:[ _.-].*)?
+    priority: 1
+"""
+RADIUS_TYPE = """
+  arindeccensusradiustypebyname:
+    key: ar_indec_census_radius_type
+    match: regex
+    type: field
+    rule: (?i)tipo[ _]?rad(?:io)?(?:\\d{2})?
+    priority: 1
+"""
+CATEGORY_REFINED = REFINED + [
+    {"id": "category", "status": "draft", "kind": "datatype", "name": "Category"},
+    {"id": "ar_indec_census_radius_type", "status": "draft", "kind": "datatype",
+     "name": "Argentine census radius type", "parent": "category", "country": ["AR"]},
+]
+
+
+def test_country_enumeration_kept_beside_category(tmp_path):
+    # The generic category rule names TIPO_RAD too; the census radius type refines category,
+    # an enumeration without a type of its own, so it is not covered (it was dropped before).
+    registry = SnapshotRegistry(datatypes=CATEGORY_REFINED, aliases={}, manifest={"version": "test"}, source="test")
+    adapter = RegistryAdapter._wrap(registry, None, "test")
+    processor = processor_with(tmp_path, [(GENERIC_CATEGORY, "xx"), (RADIUS_TYPE, "ar")], adapter)
+    columns = scan(processor, [{"TIPO_RAD": "U"}, {"TIPO_RAD": "R"}, {"TIPO_RAD": "M"}])
+    assert {"ar_indec_census_radius_type", "category"} <= classes(columns["TIPO_RAD"])
+    # A country type that does not refine category is still covered by it.
+    other = RADIUS_TYPE.replace("arindeccensusradiustypebyname", "egcityfield").replace(
+        "ar_indec_census_radius_type", "egcity")
+    processor = processor_with(tmp_path, [(GENERIC_CATEGORY, "xx"), (other, "eg")], adapter)
+    assert classes(scan(processor, [{"TIPO_RAD": "U"}])["TIPO_RAD"]) == {"category"}
+
+
 FRCOMMUNE = """
   frcommunefield:
     key: fr_commune

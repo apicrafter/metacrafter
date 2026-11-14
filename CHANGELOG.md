@@ -26,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A census table by single years of age keeps its header below the title rows: a header
+  that is mostly the numbers 0 to 100 (`CODIGO;PROV;DEPTO;FRACCION;RADIO;0;1;2;...;100;Total`,
+  statistics office of Córdoba) was taken for a record, and the title row became the header
+  with two fields. A run of five or more consecutive whole numbers in neighbouring cells now
+  counts as column labels.
+- A country-specific field-name match is no longer dropped beside a universal match of
+  `category` when it refines `category` in the registry: `category` joins `id` in the fallback
+  types. The generic category rule names every `tipo_*` field, so without a scan country the
+  Argentine census radius type `TIPO_RAD` (U, R, M; `ar_indec_census_radius_type`, whose parent
+  is `category`) was reported as `category` alone.
 - CSV files whose every line is one quoted cell are read as the table inside the cells
   (`file_inputs.wrapped_layout`, `wrapped_records`): exports of datos.gob.ar (Argentina) quote
   each whole line, either a `;`-delimited record (`"39083;Combustibles-Producción;1587;3546,71"`,

@@ -90,6 +90,27 @@ def test_title_rows_above_header_are_found():
     assert layout.header == ["AGS", "Gemeinde", "Einwohner"]
 
 
+def test_header_with_single_years_of_age_below_a_title():
+    # A census table by single years of age (Córdoba DGEyC): the header is mostly the numbers
+    # 0 to 100, which count as labels because they run on one by one.
+    ages = ";".join(str(a) for a in range(101))
+    width = 5 + 101 + 1
+    text = (
+        "Provincia de Córdoba según radio censal. Personas por edades simples. Año 2010" + ";" * (width - 1) + "\r\n"
+        + ";" * (width - 1) + "\r\n"
+        + "CODIGO;PROV;DEPTO;FRACCION;RADIO;" + ages + ";Total\r\n"
+        + "-;Total Provincial;-;-;-;" + ";".join("52.789" for _ in range(101)) + ";3.308.876\r\n"
+        + "140070101;14;7;001;01;" + ";".join(str(a % 4) for a in range(101)) + ";68\r\n"
+        + "140070102;14;7;001;02;" + ";".join(str(a % 7) for a in range(101)) + ";494\r\n"
+    )
+    layout = table_layout(text, truncated=False)
+    assert layout.header_index == 2
+    assert layout.header[:7] == ["CODIGO", "PROV", "DEPTO", "FRACCION", "RADIO", "0", "1"]
+    # Values that only happen to rise by one are no header: four in a row are not enough.
+    text = "a;b;c;d;e;f\n1;2;3;4;x;y\n5;6;7;8;z;w\n"
+    assert table_layout(text, truncated=False).header_index == 0
+
+
 def test_ordinary_header_stays_first():
     text = "id;name;city\n1;A;Berlin\n2;B;Hamburg\n"
     assert table_layout(text, truncated=False).header_index == 0
