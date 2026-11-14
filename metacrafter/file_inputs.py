@@ -764,6 +764,12 @@ def _plan_table(filename: str, ext: str, codec: Optional[str], plan: InputPlan) 
         return
     given = args.get("delimiter") or ("\t" if ext in ("tsv", "tab") else "|" if ext == "psv" else None)
     layout = table_layout(text, given, truncated)
+    if ext == "tab" and layout is not None and layout.columns >= 2:
+        # iterabledata knows no .tab format and detects the type from the first bytes, which
+        # fails when the header is longer than its sample (Dataverse exports with 3000 and more
+        # variables): read the file as delimited text.
+        args.setdefault("format", "csv")
+        args.setdefault("delimiter", layout.delimiter)
     if ext == "txt":
         if layout is None or layout.consistent < 0.8 or layout.columns < 2:
             return  # plain text: iterabledata reads it line by line
