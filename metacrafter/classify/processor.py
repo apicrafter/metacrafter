@@ -40,6 +40,7 @@ from pyparsing import (
 
 from .utils import (
     dict_to_columns,
+    fold_arabic_columns,
     headers,
     resolve_field_names,
     sparse_map_parents,
@@ -1099,7 +1100,10 @@ class RulesProcessor:
             RULE_TYPE_DATA, filter_contexts, filter_langs, ignore_imprecise, include_deprecated
         )
 
-        data_columns = dict_to_columns(data)
+        # Value rules see Arabic text without the tatweel and with Arabic letters for the
+        # Persian forms of yeh, keheh and heh (fold_arabic_drawing): UAE statistics write
+        # أبو ظــــبي and الغربیه for أبو ظبي and الغربيه.
+        data_columns = fold_arabic_columns(dict_to_columns(data))
         fields = resolve_field_names(fields, data_columns)
         # Nested objects whose keys are data (the words of an inverted index): their keys are
         # not field names, so field-name rules and field guards do not look at them.
@@ -1111,7 +1115,7 @@ class RulesProcessor:
             if not lookahead:
                 return []
             if not lookahead_columns:
-                lookahead_columns.update(dict_to_columns(lookahead))
+                lookahead_columns.update(fold_arabic_columns(dict_to_columns(lookahead)))
             return lookahead_columns.get(name, [])
         # Value rules by datatype, imprecise ones included: with a field name for their type
         # they check whether the values fit it (see field_score).

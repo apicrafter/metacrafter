@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Value rules see Arabic text without the tatweel (kashida, U+0640) and with the Arabic letters for
+  the Persian forms of yeh, keheh and heh doachashmee (U+06CC, U+06A9, U+06BE). Statistical
+  tables of the UAE Open Data portal stretch words to fill their cells (`ينايـر`, `أبو ظــــبي`,
+  `الشارقــة`) and type Arabic words on Persian keyboard layouts (`الغربیه`, `المنھل`): 261 of its
+  1 779 CSV files have the tatweel and 192 the Persian letters, and text rules such as the Arabic
+  month names matched none of those values. Values without these characters are not touched;
+  field names are not folded.
 - The Spanish markers of a missing value are empty values by default: `s/d` and `S/D` (sin
   datos), `sin dato`, `sin datos`, `Sin datos`, `sin_informacion` and `sin información`. The
   cultural directories of the Argentine culture ministry (datos.cultura.gob.ar) fill whole

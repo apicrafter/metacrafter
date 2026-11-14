@@ -105,6 +105,33 @@ def resolve_field_names(requested, available):
     return resolved
 
 
+#: Arabic letter forms that change how a word is drawn, not what it says: the tatweel
+#: (kashida, U+0640) that stretches words to fill a table cell (أبو ظــــبي), and the Persian
+#: yeh, keheh and heh doachashmee (U+06CC, U+06A9, U+06BE) that Persian and Urdu keyboard
+#: layouts type in Arabic words (الغربیه, المنھل). They are folded to the Arabic letters.
+_ARABIC_DRAWING_FORMS = str.maketrans({"ـ": None, "ی": "ي", "ک": "ك", "ھ": "ه"})
+_ARABIC_DRAWING_CHARS = frozenset("ـیکھ")
+
+
+def fold_arabic_drawing(value):
+    """``value`` without the tatweel and with Arabic letters for Persian yeh, keheh and heh.
+
+    Values of other types and strings without these characters are returned unchanged.
+    """
+    if isinstance(value, str) and not _ARABIC_DRAWING_CHARS.isdisjoint(value):
+        return value.translate(_ARABIC_DRAWING_FORMS)
+    return value
+
+
+def fold_arabic_columns(columns):
+    """Fold the Arabic drawing forms (``fold_arabic_drawing``) of every value of ``columns``
+    (a dict of value lists, as ``dict_to_columns`` returns it), in place; returns ``columns``."""
+    for key, values in columns.items():
+        if any(isinstance(v, str) and not _ARABIC_DRAWING_CHARS.isdisjoint(v) for v in values):
+            columns[key] = [fold_arabic_drawing(v) for v in values]
+    return columns
+
+
 def dict_to_columns(data):
     """Collect scalar values and count missing paths as null for each row."""
     rows = []
