@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Files without a known extension are read by content (`file_inputs.sniff_format`): data.gov.uk
+  keeps resources as files named `csv`, `xml` or `json` with no dot, and servers send CSV as
+  `download.aspx` or `export.ashx`. An OLE2 or OOXML workbook, XML (not an HTML page), JSON,
+  JSON lines and delimited text of two or more columns get their format and delimiter; such
+  files failed with "Could not detect file type" before (12 of 1128 files in a sample of a
+  January 2022 data.gov.uk snapshot).
 - **`fieldregex` rule attribute** (apicrafter/metacrafter-rules#70): a field-name guard by
   regular expression, searched in the last part of the field name without regard to case. A
   value rule with `fieldregex: 'date|datum|data|fecha|_at$|time'` runs on
