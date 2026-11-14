@@ -7,6 +7,8 @@ import pytest
 
 from metacrafter.core import CrafterCmd
 from metacrafter.file_inputs import (
+    CSV_FIELD_LIMIT,
+    allow_long_csv_cells,
     detect_encoding,
     json_records,
     prepare_input,
@@ -533,3 +535,36 @@ def test_repeated_column_names_are_numbered(tmp_path):
     spaced = tmp_path / "fleet.csv"
     spaced.write_text("Department,Department ,Reg\nCity,Parks,AB12CDE\nCity,Roads,CD34EFG\n", encoding="utf-8")
     assert "keys" not in prepare_input(str(spaced), {}).iterableargs
+
+
+# ---------------------------------------------------------------- long cells (WKT geometries)
+def test_csv_cell_longer_than_the_csv_module_default(tmp_path):
+    # The Premetro route and the school perimeter of the Buenos Aires open data portal keep a
+    # geometry per row: one WKT cell of 150 000 to 300 000 characters, over the 131 072 the csv
+    # module allows by default ("field larger than field limit").
+    import csv
+
+    points = ",".join(f"-58.{466426 + i} -34.{680310 + i}" for i in range(12000))
+    assert len(points) > 200000
+    path = tmp_path / "recorrido-premetro.csv"
+    path.write_text(
+        "WKT,id,linea,email\r\n"
+        + "".join(f'"MULTILINESTRING (({points}))",{n},PREMETRO,user{n}@example.org\r\n' for n in range(1, 6)),
+        encoding="utf-8",
+    )
+    csv.field_size_limit(131072)  # as if another library had reset it
+    fields = _fields(_scan(path))
+    assert list(fields) == ["WKT", "id", "linea", "email"]
+    assert "email" in fields["email"]
+    assert csv.field_size_limit() == CSV_FIELD_LIMIT
+
+
+def test_higher_csv_cell_limit_of_the_caller_is_kept():
+    import csv
+
+    previous = csv.field_size_limit(CSV_FIELD_LIMIT * 2)
+    try:
+        assert allow_long_csv_cells() == CSV_FIELD_LIMIT * 2
+        assert csv.field_size_limit() == CSV_FIELD_LIMIT * 2
+    finally:
+        csv.field_size_limit(max(previous, CSV_FIELD_LIMIT))

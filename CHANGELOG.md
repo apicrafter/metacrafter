@@ -26,6 +26,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A CSV file with a cell of more than 131 072 characters is read: the `csv` module refuses
+  such a cell by default (`field larger than field limit (131072)`), so the file failed with
+  `FormatParseError`. Geometry tables have them: the Premetro route and the school perimeter of
+  the Buenos Aires open data portal (data.buenosaires.gob.ar) keep one WKT `MULTILINESTRING` or
+  `MULTIPOLYGON` of 150 000 to 300 000 characters per row. `metacrafter.file_inputs` raises the
+  limit to 256 MiB (`CSV_FIELD_LIMIT`, `allow_long_csv_cells()`) when it is imported and before
+  a file is opened; a higher limit set by the caller is kept.
+
 - A census table by single years of age keeps its header below the title rows: a header
   that is mostly the numbers 0 to 100 (`CODIGO;PROV;DEPTO;FRACCION;RADIO;0;1;2;...;100;Total`,
   statistics office of Córdoba) was taken for a record, and the title row became the header

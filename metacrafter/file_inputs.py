@@ -58,6 +58,23 @@ logger = logging.getLogger(__name__)
 SAMPLE_BYTES = 1 << 20
 JSON_MAX_BYTES = 256 << 20
 SAMPLE_RECORDS = 60
+# The csv module refuses a cell of more than 131 072 characters ("field larger than field
+# limit"), and a geometry column holds more: the WKT MULTIPOLYGON of a district of a city has
+# 300 000 characters. Cells of up to 256 MiB are read.
+CSV_FIELD_LIMIT = 1 << 28
+
+
+def allow_long_csv_cells() -> int:
+    """Raise the cell size limit of the csv module to ``CSV_FIELD_LIMIT``; a higher limit set
+    by the caller is kept. Returns the limit in force."""
+    current = csv.field_size_limit()
+    if current < CSV_FIELD_LIMIT:
+        csv.field_size_limit(CSV_FIELD_LIMIT)
+        return CSV_FIELD_LIMIT
+    return current
+
+
+allow_long_csv_cells()
 MAX_HEADER_OFFSET = 30
 MAX_SHEETS = 20
 MIN_TABLE_COLUMNS = 3
