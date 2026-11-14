@@ -592,7 +592,7 @@ def wrapped_layout(text: str, truncated: bool = True) -> Optional[TableLayout]:
     single = [r[0] for r in rows if len(r) == 1]
     if len(single) < 0.9 * len(rows):
         return None
-    lines = [ln.strip() for ln in text.lstrip("﻿").splitlines() if ln.strip()][: len(rows)]
+    lines = [ln.strip() for ln in text.lstrip("\ufeff").splitlines() if ln.strip()][: len(rows)]
     quoted = sum(1 for ln in lines if len(ln) > 1 and ln.startswith('"') and ln.endswith('"'))
     if quoted < 0.9 * len(lines):
         return None
