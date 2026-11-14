@@ -30,7 +30,8 @@ SUPPORTED_FILE_TYPES = [
     "pkl",
 ]
 
-DEFAULT_EMPTY_VALUES = [None, "", "None", "NaN", "-", "N/A"]
+# NA is the missing value of R and of the data exported from it (TERN, Dryad, CRAN packages).
+DEFAULT_EMPTY_VALUES = [None, "", "None", "NaN", "-", "N/A", "NA"]
 
 DEFAULT_OPTIONS = {
     "encoding": "utf8",
