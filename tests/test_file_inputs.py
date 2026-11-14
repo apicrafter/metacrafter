@@ -460,3 +460,55 @@ def test_one_column_of_quoted_text_is_not_split(tmp_path):
     plan = prepare_input(str(path), {})
     assert plan.records is None
     assert list(_fields(_scan(path))) == ["direccion"]
+
+
+def test_dataverse_column_letters_over_the_header_are_a_title_row():
+    # Dataverse names the empty header cells of an ingested sheet after their column: a sheet
+    # with a title in A1 is exported as "GRUPOA, B, C, D" above the real header (RDA-UNR).
+    text = ("GRUPOA\tB\tC\tD\n"
+            '"ID"\t"SEXO"\t"EDAD"\t"TUVO COVID"\n'
+            '"0001"\t"Femenino"\t"42"\t"SI"\n"0002"\t"Masculino"\t"48"\t"no"\n"0003"\t"Masculino"\t"47"\t"No"\n')
+    layout = table_layout(text, "\t", truncated=False)
+    assert layout.header_index == 1
+    assert layout.header == ["ID", "SEXO", "EDAD", "TUVO COVID"]
+
+
+def test_dataverse_column_letters_beside_group_headings_are_blank_cells():
+    # Survey of secondary school students (RDA-UNR): question headings over merged cells.
+    text = ("A\tB\tPregunta1\tD\tPregunta5\tF\n"
+            '"Numero"\t"Edad"\t"Cocaína1"\t"Tabaco1"\t"Cocaína5"\t"Edad cocaína"\n'
+            '"1"\t"14"\t"SI"\t"NO"\t"1"\t"13"\n"2"\t"15"\t"NO SE"\t"SI"\t"1"\t"14"\n"3"\t"14"\t"SI"\t"SI"\t"1"\t"12"\n')
+    layout = table_layout(text, "\t", truncated=False)
+    assert layout.header_index == 1
+    assert layout.header == ["Numero", "Edad", "Pregunta1 Cocaína1", "Pregunta1 Tabaco1", "Pregunta5 Cocaína5",
+                             "Pregunta5 Edad cocaína"]
+
+
+def test_dataverse_column_letters_stay_names_of_a_first_row_header():
+    # Blank header cells over the second column of each block keep their letter as the name.
+    text = ('RT\tB\tMS5.5\tD\tMS6.5\tF\n7.242\t"iC14:0"\t248832.65\t1.95\t86678.76\t0.55\n'
+            '7.856\t"nC14:0"\t59423.71\t0.47\t64670.24\t0.41\n8.965\t"iC15:0"\t1464098.52\t11.46\t2514400.95\t15.95\n')
+    layout = table_layout(text, "\t", truncated=False)
+    assert layout.header_index == 0
+    assert layout.header == ["RT", "B", "MS5.5", "D", "MS6.5", "F"]
+    letters = "A\tB\tC\nx\ty\tz\n1\t2\t3\n4\t5\t6\n"
+    assert table_layout(letters, "\t", truncated=False).header_index == 0
+
+
+def test_repeated_column_names_are_numbered(tmp_path):
+    # Two blocks of one sheet side by side repeat their names; records are dicts, so the
+    # second column replaced the first (AquaCrop alfalfa cuts, RDA-UNR; Madrid contracts).
+    path = tmp_path / "cuts.tab"
+    path.write_text("n\tPeriodo\tkgMS\tF\tn\tPeriodo\tkgMS\n"
+                    "1.0\t10-2-00/9-3-00\t2360.0\t\t1.0\t6-11-15 al 17-12-15\t1510.0\n"
+                    "2.0\t9-3-00/10-4-00\t1580.0\t\t2.0\t17-12-14 al 16-1-15\t1480.0\n", encoding="utf-8")
+    plan = prepare_input(str(path), {})
+    assert plan.iterableargs["keys"] == ["n", "Periodo", "kgMS", "F", "n_2", "Periodo_2", "kgMS_2"]
+    assert plan.skip_records == 1
+    report = _scan(path)
+    assert list(_fields(report)) == ["n", "Periodo", "kgMS", "F", "n_2", "Periodo_2", "kgMS_2"]
+    assert report["stats"]["Periodo_2"]["n_uniq"] == 2
+    # Names that differ in a space are two keys already (Leeds fleet: "Department", "Department ").
+    spaced = tmp_path / "fleet.csv"
+    spaced.write_text("Department,Department ,Reg\nCity,Parks,AB12CDE\nCity,Roads,CD34EFG\n", encoding="utf-8")
+    assert "keys" not in prepare_input(str(spaced), {}).iterableargs

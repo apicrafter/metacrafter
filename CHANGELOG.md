@@ -27,12 +27,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   header cell must split into as many distinct names as the records; a one-column file of quoted
   text with commas stays one column. Plain, gz, bz2, xz and zip files; files without a known
   extension are recognised the same way.
+- Repeated column names of a CSV or `.tab` header no longer lose columns: records are dicts, so
+  the last column of a name replaced the others. Two blocks of one sheet side by side repeat
+  their names (`PeríododeacumulaciónsegúnRED` twice in the AquaCrop alfalfa data of RDA-UNR,
+  `Ct` over each gene of a qPCR table); the award procedure of the Madrid contracts register
+  came out empty because its repeated column is. The second and later copies are named
+  `name_2`, `name_3`, as for headers below title rows. Names that differ in a space
+  (`Department`, `Department `) were two keys already and stay as they are.
+
+- The spreadsheet column letters that Dataverse writes into the empty cells of the first row of
+  an ingested sheet are no labels when the header is looked for: a `.tab` export of a sheet with
+  a title in A1 starts `GRUPOA, B, C, D` above the real header, and one with question headings over
+  merged cells `A, B, C, D, E, Pregunta1, G`. The title row is now a title and the headings a
+  band over the header (`Pregunta1 Cocaína1`), instead of a header of letters (a `BN` column
+  labelled `cabn`). A first row that stays the header keeps the letters as names, and so do
+  columns that no header row names; a row of letters only is left as it is.
+
 - A country-specific field-name match is no longer dropped beside a universal match of the
   fallback type `id` when it refines `id` in the registry (its `parent` chain). The generic `id`
   rule names every `*_nummer` field, so without a scan country the Austrian cadastral
   municipality number `KG_NUMMER` of the BEV control point files (`at_kg_number`, whose parent
   is `id`) was reported as `id` alone. Country variants of a concrete type are still dropped
   (`egcity` and `fr_commune` beside `city`).
+
 - Dataverse `.tab` exports with thousands of variables are read: iterabledata has no `.tab` format
   and detects the type of such a file from its first bytes, which failed when the header line is
   longer than its sample ("Could not detect file type", a V-Dem table of 3033 variables and the
