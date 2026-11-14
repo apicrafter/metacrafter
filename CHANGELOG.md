@@ -26,6 +26,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- CSV files with a field longer than 131072 characters open: Python's csv module refuses such
+  a field unless its limit is raised, and a WFS CSV export holds each geometry as well-known text
+  in one field. Four of the 16 GeoServer exports of the Armenian Soil Information System
+  (ArmSIS) did not open (`field larger than field limit (131072)`): the province boundaries of
+  `marz.csv` (0.9 MB in one record), the isotherms, isohyets and heat duration zones.
+  `metacrafter.file_inputs.allow_long_csv_fields` raises the limit to 2^30 for the process
+  before a file is read.
 - A census table by single years of age keeps its header below the title rows: a header
   that is mostly the numbers 0 to 100 (`CODIGO;PROV;DEPTO;FRACCION;RADIO;0;1;2;...;100;Total`,
   statistics office of Córdoba) was taken for a record, and the title row became the header
