@@ -615,6 +615,82 @@ def table_layout(text: str, delimiter: Optional[str] = None, truncated: bool = T
     return TableLayout(delim, columns, header_index, header, sep_hint, freq / max(len(rows), 1))
 
 
+def wrapped_layout(text: str, truncated: bool = True) -> Optional[TableLayout]:
+    """The layout of the records inside text whose every line is one quoted cell.
+
+    Some exports quote each whole line: ``"año_mes;provincia_zona;genero"`` (a record of
+    ``;``-delimited cells written as one cell) or ``"ejercicio,""jurisdiccion_id"",""programa_id"",...``
+    (a quoted CSV line quoted again). Read as CSV, every record of such a file is a single
+    cell, and the cells are the records of the table. None unless at least 90% of the sampled
+    lines are quoted whole and the header cell splits into as many columns as the records:
+    a one-column file of quoted text with commas (``"Calle 1, Rosario"``) is no table.
+    """
+    rows = _rows(text, ",", truncated)
+    if len(rows) < 3:
+        return None
+    single = [r[0] for r in rows if len(r) == 1]
+    if len(single) < 0.9 * len(rows):
+        return None
+    lines = [ln.strip() for ln in text.lstrip("\ufeff").splitlines() if ln.strip()][: len(rows)]
+    quoted = sum(1 for ln in lines if len(ln) > 1 and ln.startswith('"') and ln.endswith('"'))
+    if quoted < 0.9 * len(lines):
+        return None
+    inner = table_layout("\n".join(single), None, False)
+    if inner is None or inner.columns < 2 or inner.consistent < 0.9 or inner.sep_hint:
+        return None
+    names = [name for name in inner.header if str(name).strip()]
+    if len(names) != inner.columns or len(set(names)) != len(names):
+        return None
+    return inner
+
+
+def _text_stream_codec(codec: Optional[str]) -> bool:
+    return codec in (None, "gz", "bz2", "xz", "zip")
+
+
+def _text_stream(filename: str, codec: Optional[str], encoding: str):
+    """The file as text with newlines kept for the csv module, or None for codecs not handled."""
+    if codec is None:
+        raw = open(filename, "rb")
+    elif codec == "gz":
+        raw = gzip.open(filename, "rb")
+    elif codec == "bz2":
+        raw = bz2.open(filename, "rb")
+    elif codec == "xz":
+        raw = lzma.open(filename, "rb")
+    elif codec == "zip":
+        with zipfile.ZipFile(filename) as archive:
+            names = [n for n in archive.namelist() if not n.endswith("/")]
+            if not names:
+                return None
+            raw = archive.open(names[0])
+    else:
+        return None
+    return io.TextIOWrapper(raw, encoding=encoding, errors="replace", newline="")
+
+
+def wrapped_records(filename: str, codec: Optional[str], encoding: str, layout: TableLayout) -> Iterator[dict]:
+    """Records of a file whose lines are quoted whole (see ``wrapped_layout``): each line read
+    as one CSV cell and the cell split with the delimiter of ``layout``."""
+    stream = _text_stream(filename, codec, encoding)
+    if stream is None:
+        return
+    keys = _unique(layout.header)
+    with stream:
+        before = layout.header_index + 1  # title records and the header
+        for row in csv.reader(stream):
+            if not any(str(cell).strip() for cell in row):
+                continue
+            if len(row) == 1:
+                cells = next(csv.reader(io.StringIO(row[0]), delimiter=layout.delimiter), [])
+            else:
+                cells = row
+            if before:
+                before -= 1
+                continue
+            yield dict(zip(keys, cells + [None] * (len(keys) - len(cells))))
+
+
 def _repeats_names(names: List[str]) -> bool:
     """True when a non-empty column name occurs twice or more, spaces included: ``Department``
     and ``Department `` are two keys of a record already."""
@@ -748,6 +824,8 @@ def sniff_format(filename: str, codec: Optional[str] = None) -> Optional[Tuple[s
     layout = table_layout(text, None, len(head) >= 1 << 16)
     if layout is not None and layout.columns >= 2 and layout.consistent >= 0.8:
         return "csv", f"text delimited by {layout.delimiter!r}", {"delimiter": layout.delimiter}
+    if wrapped_layout(text, len(head) >= 1 << 16) is not None:
+        return "csv", "lines quoted whole", {}
     return None
 
 
@@ -811,6 +889,13 @@ def _plan_table(filename: str, ext: str, codec: Optional[str], plan: InputPlan) 
         return
     given = args.get("delimiter") or ("\t" if ext in ("tsv", "tab") else "|" if ext == "psv" else None)
     layout = table_layout(text, given, truncated)
+    if given in (None, ",") and (layout is None or layout.columns < 2):
+        inner = wrapped_layout(text, truncated)
+        if inner is not None and _text_stream_codec(codec):
+            plan.records = wrapped_records(filename, codec, args["encoding"], inner)
+            plan.kind = "csv"
+            plan.notes.append(f"every line is one quoted cell: read the cells as text delimited by {inner.delimiter!r}")
+            return
     if ext == "tab" and layout is not None and layout.columns >= 2:
         # iterabledata knows no .tab format and detects the type from the first bytes, which
         # fails when the header is longer than its sample (Dataverse exports with 3000 and more

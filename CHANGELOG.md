@@ -18,6 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- CSV files whose every line is one quoted cell are read as the table inside the cells
+  (`file_inputs.wrapped_layout`, `wrapped_records`): exports of datos.gob.ar (Argentina) quote
+  each whole line, either a `;`-delimited record (`"39083;Combustibles-Producción;1587;3546,71"`,
+  the SIACAM mining employment series) or a quoted CSV record quoted again
+  (`"2022,""1"",""Poder Legislativo Nacional"",..."`, the physical budget execution tables), so
+  the scan saw a single field. At least 90% of the sampled lines must be quoted whole and their
+  header cell must split into as many distinct names as the records; a one-column file of quoted
+  text with commas stays one column. Plain, gz, bz2, xz and zip files; files without a known
+  extension are recognised the same way.
 - Repeated column names of a CSV or `.tab` header no longer lose columns: records are dicts, so
   the last column of a name replaced the others. Two blocks of one sheet side by side repeat
   their names (`PeríododeacumulaciónsegúnRED` twice in the AquaCrop alfalfa data of RDA-UNR,
