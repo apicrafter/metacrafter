@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `NA` is an empty value by default, like `N/A` and `NaN`: R writes missing values as `NA`, and
+  so do the plot surveys of the Terrestrial Ecosystem Research Network (TERN, Australia). A
+  column of species names, NVIS strata or authorships with more `NA` than values lost its
+  label, because value rules and field-rule validators counted every `NA` as a value that
+  does not fit (`fourthMostDominantSpecies`: `NA`, `NA`, `Melicope vitiflora`).
+  `--empty-values` still replaces the list.
+
 ### Fixed
 
 - Dataverse `.tab` exports with thousands of variables are read: iterabledata has no `.tab` format

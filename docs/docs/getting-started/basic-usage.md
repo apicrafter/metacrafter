@@ -63,6 +63,9 @@ metacrafter scan file data.csv \
   --format full
 ```
 
+By default `None`, `NaN`, `-`, `N/A`, `NA` and the empty string are empty values: they are not
+classified, and a field of them only is tagged `empty`. `--empty-values` replaces the list.
+
 `--dict-share` controls when a field is tagged as a dictionary (low cardinality).
 
 ## Registry URLs

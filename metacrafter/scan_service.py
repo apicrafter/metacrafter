@@ -1821,7 +1821,7 @@ class CrafterCmd(object):
             dict_share: Override dictionary share threshold (percentage). Fields with
                 uniqueness below this threshold are treated as dictionaries.
             empty_values: Optional comma-separated list of values treated as empty.
-                Use '""' for empty string. Defaults to [None, "", "None", "NaN", "-", "N/A"].
+                Use '""' for empty string. Defaults to [None, "", "None", "NaN", "-", "N/A", "NA"].
             compression: Compression codec handling - 'auto' (detect), 'none' (disable),
                 or specific codec ('gz', 'bz2', etc.). Defaults to 'auto'.
             sheet: Workbook sheet (XLSX, XLS, ODS): a sheet name, a sheet number counted
