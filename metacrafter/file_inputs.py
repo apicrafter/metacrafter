@@ -634,6 +634,59 @@ def json_records(data: bytes) -> Optional[Tuple[list, str]]:
     return [item for item in node if isinstance(item, dict)], "the list under " + ".".join(found[1])
 
 
+# ---------------------------------------------------------------- formats by content
+#: Extensions that name a format; any other name (data.gov.uk keeps resources as ``csv`` or
+#: ``xml`` without a dot, servers send ``download.aspx`` or ``export.ashx``) is read by content.
+NAMED_FORMATS = {
+    "csv", "tsv", "psv", "tab", "txt", "json", "jsonl", "ndjson", "geojson", "topojson", "xml", "kml",
+    "kmz", "gml", "xls", "xlsx", "ods", "parquet", "avro", "orc", "bson", "pickle", "pkl", "dbf", "px",
+    "sav", "zsav", "dta", "sas7bdat", "xpt", "rda", "rdata", "rds", "ics", "shp", "gpkg", "sqlite", "db",
+}
+_OLE2 = b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"
+
+
+def sniff_format(filename: str, codec: Optional[str] = None) -> Optional[Tuple[str, str, Dict[str, Any]]]:
+    """The format of a file whose name has no known extension, from its first bytes: the format,
+    why, and reader options (the delimiter of a table). An OLE2 or OOXML workbook, a JSON
+    document or JSON lines, XML (not an HTML page) or delimited text with at least two columns.
+    None when the bytes say nothing."""
+    head = read_bytes(filename, codec, 1 << 16)
+    if not head:
+        return None
+    if head.startswith(_OLE2):
+        return "xls", "an OLE2 (Excel 97-2003) workbook", {}
+    if head.startswith(b"PK\x03\x04"):
+        try:
+            with zipfile.ZipFile(filename) as archive:
+                names = archive.namelist()
+        except (zipfile.BadZipFile, OSError):
+            return None
+        if any(n.startswith("xl/") for n in names):
+            return "xlsx", "an OOXML (Excel) workbook", {}
+        return None
+    if b"\x00" in head[:1024] and not head.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+        return None
+    encoding = detect_encoding(head, len(head) >= 1 << 16)
+    try:
+        text = head.decode(encoding, errors="replace").lstrip("\ufeff \t\r\n")
+    except LookupError:
+        return None
+    lower = text[:256].lower()
+    if lower.startswith(("<!doctype html", "<html")) or "<html" in lower[:64]:
+        return None
+    if text.startswith("<"):
+        return "xml", "XML", {}
+    if text.startswith(("{", "[")):
+        lines = [ln for ln in text.splitlines()[:5] if ln.strip()]
+        if len(lines) > 1 and all(ln.lstrip().startswith("{") and ln.rstrip().endswith("}") for ln in lines[:-1]):
+            return "jsonl", "JSON lines", {}
+        return "json", "JSON", {}
+    layout = table_layout(text, None, len(head) >= 1 << 16)
+    if layout is not None and layout.columns >= 2 and layout.consistent >= 0.8:
+        return "csv", f"text delimited by {layout.delimiter!r}", {"delimiter": layout.delimiter}
+    return None
+
+
 # ---------------------------------------------------------------- the plan
 def prepare_input(filename: str, iterableargs: dict) -> InputPlan:
     """Arguments and record clean-up for opening ``filename`` with iterabledata."""
@@ -644,6 +697,14 @@ def prepare_input(filename: str, iterableargs: dict) -> InputPlan:
     ext, codec = split_name(filename)
     if "compression" in args:  # forced by the caller
         codec = args["compression"] if args["compression"] in CODEC_EXTENSIONS else None
+    if ext not in NAMED_FORMATS:
+        sniffed = sniff_format(filename, codec)
+        if sniffed is not None:
+            ext, why, options = sniffed
+            args["format"] = ext
+            for key, value in options.items():
+                args.setdefault(key, value)
+            plan.notes.append(f"no known extension: read as {ext} ({why})")
     if ext in TABLE_EXTENSIONS:
         _plan_table(filename, ext, codec, plan)
     elif ext == "px":

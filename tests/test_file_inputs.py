@@ -314,3 +314,48 @@ def test_json_column_split_tables():
              "count": 2}
     assert json_records(json.dumps(keyed).encode())[0] == [
         {"station id": "3", "station latitude": "52.41"}, {"station id": "8", "station latitude": "51.6"}]
+
+
+# ---------------------------------------------------------------- formats by content
+def test_extensionless_csv_is_read_by_content(tmp_path):
+    # data.gov.uk keeps resources as files named csv, xml or json without a dot
+    path = tmp_path / "csv"
+    path.write_text("SiteReference,Postcode,Email\nBLR0001,LS8 5LN,info@leeds.gov.uk\n"
+                    "BLR0002,LS9 7LS,planning@leeds.gov.uk\n")
+    plan = prepare_input(str(path), {})
+    assert plan.iterableargs["format"] == "csv" and plan.iterableargs["delimiter"] == ","
+    fields = _fields(_scan(path))
+    assert list(fields) == ["SiteReference", "Postcode", "Email"] and "email" in fields["Email"]
+
+
+def test_script_extension_csv_is_read_by_content(tmp_path):
+    path = tmp_path / "download.aspx"
+    path.write_text("Name;PLZ;E-Mail\nSchule A;10115;info@a.de\nSchule B;40212;info@b.de\n")
+    assert prepare_input(str(path), {}).iterableargs.get("format") == "csv"
+    assert "email" in _fields(_scan(path))["E-Mail"]
+
+
+def test_extensionless_json_and_json_lines(tmp_path):
+    rows = [{"name": "Leeds", "email": "info@leeds.gov.uk"}, {"name": "York", "email": "info@york.gov.uk"}]
+    array = tmp_path / "json"
+    array.write_text(json.dumps(rows))
+    assert prepare_input(str(array), {}).iterableargs["format"] == "json"
+    lines = tmp_path / "export"
+    lines.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+    assert prepare_input(str(lines), {}).iterableargs["format"] == "jsonl"
+    assert "email" in _fields(_scan(lines))["email"]
+
+
+def test_extensionless_xml_and_html(tmp_path):
+    xml = tmp_path / "xml"
+    xml.write_text('<?xml version="1.0"?><Root><Row><Name>A</Name></Row></Root>')
+    assert prepare_input(str(xml), {"tagname": "Row"}).iterableargs["format"] == "xml"
+    page = tmp_path / "csv"
+    page.write_text("<!DOCTYPE html><html><body>Not found</body></html>")
+    assert prepare_input(str(page), {}).iterableargs.get("format") is None
+
+
+def test_known_extension_is_not_sniffed(tmp_path):
+    path = tmp_path / "notes.txt"
+    path.write_text("Just a sentence.\nAnother one, with a comma.\n")
+    assert prepare_input(str(path), {}).iterableargs.get("format") is None
