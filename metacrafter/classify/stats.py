@@ -31,7 +31,13 @@ SUPPORTED_FILE_TYPES = [
 ]
 
 # NA is the missing value of R and of the data exported from it (TERN, Dryad, CRAN packages).
-DEFAULT_EMPTY_VALUES = [None, "", "None", "NaN", "-", "N/A", "NA"]
+# s/d (sin datos) and sin información mark a missing value in Spanish data: the directories of
+# the Argentine culture ministry fill whole columns with them (datos.cultura.gob.ar).
+SPANISH_EMPTY_VALUES = [
+    "s/d", "S/D", "sin dato", "Sin dato", "sin datos", "Sin datos", "Sin Datos",
+    "sin_informacion", "sin información", "Sin información",
+]
+DEFAULT_EMPTY_VALUES = [None, "", "None", "NaN", "-", "N/A", "NA"] + SPANISH_EMPTY_VALUES
 
 DEFAULT_OPTIONS = {
     "encoding": "utf8",
