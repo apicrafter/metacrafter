@@ -533,3 +533,75 @@ def test_repeated_column_names_are_numbered(tmp_path):
     spaced = tmp_path / "fleet.csv"
     spaced.write_text("Department,Department ,Reg\nCity,Parks,AB12CDE\nCity,Roads,CD34EFG\n", encoding="utf-8")
     assert "keys" not in prepare_input(str(spaced), {}).iterableargs
+
+
+# ---------------------------------------------------------------- HXL hashtag rows
+HXL_CSV = (
+    "﻿ID;DATE;ISO_3;PAYS;REGION;CONTAMINES;SOURCE;\n"
+    ";#date;#country+code;#country+name;#adm1+name;#affected+infected;;\n"
+    + "".join(f"{i};{12 + i}/03/2020;GHA;Ghana;Region {i};{i * 3};Service de la Santé;\n" for i in range(1, 12))
+)
+
+
+def test_hxl_tags():
+    from metacrafter.file_inputs import hxl_tags
+
+    assert hxl_tags(["", "#date", "#country+code", " #affected +infected", ""]) == [
+        "", "#date", "#country+code", "#affected +infected", ""]
+    assert hxl_tags(["#adm1+name"]) == ["#adm1+name"]
+    assert hxl_tags(["1", "#date", "#country"]) is None  # a record with a hashtag in it
+    assert hxl_tags(["#COVID19 vaccines", "#date"]) is None  # text after a hashtag
+    assert hxl_tags(["", "#date", ""]) is None  # one hashtag in a wide row
+    assert hxl_tags(["ID", "DATE"]) is None and hxl_tags([]) is None
+
+
+def test_hxl_row_below_the_header_is_skipped(tmp_path):
+    path = tmp_path / "gha_subnational_covid19_hxl.csv"
+    path.write_bytes(HXL_CSV.encode("utf-8"))
+    layout = table_layout(HXL_CSV.lstrip("﻿"), None, False)
+    assert layout.header_index == 0 and layout.header[:3] == ["ID", "DATE", "ISO_3"]
+    assert layout.hxl[:4] == ["", "#date", "#country+code", "#country+name"]
+    plan = prepare_input(str(path), {})
+    assert plan.skip_records == 2 and plan.field_info["ISO_3"] == {"hxl": "#country+code"}
+    assert "ID" not in plan.field_info
+    report = _scan(path)
+    fields = {f["field"]: f for f in report["data"]}
+    assert fields["ISO_3"]["hxl"] == "#country+code" and fields["DATE"]["hxl"] == "#date"
+    assert report["stats"]["CONTAMINES"]["n_uniq"] == 11  # no #affected+infected among the counts
+    assert "date" in [m["datatype"] for m in fields["DATE"]["matches"]]
+
+
+def test_hashtag_header_is_kept(tmp_path):
+    path = tmp_path / "tags.csv"
+    path.write_text("#date,#country+code,#affected+infected\n" + "".join(f"2020-03-{10 + i},GHA,{i}\n" for i in range(9)))
+    plan = prepare_input(str(path), {})
+    assert plan.skip_records == 0 and not plan.field_info
+    assert list(_fields(_scan(path))) == ["#date", "#country+code", "#affected+infected"]
+
+
+def test_xlsx_hxl_row(tmp_path):
+    openpyxl = pytest.importorskip("openpyxl")
+    workbook = openpyxl.Workbook()
+    sheet = workbook.active
+    sheet.append(["Date", "Country code", "Admin 1", "Cases"])
+    sheet.append(["#date", "#country+code", "#adm1+name", "#affected+infected"])
+    for i in range(10):
+        sheet.append([f"2020-04-{10 + i}", "NGA", f"Lagos {i}", i * 7])
+    path = tmp_path / "nga_hxl.xlsx"
+    workbook.save(path)
+    plan = prepare_input(str(path), {})
+    assert plan.iterableargs["start_line"] == 2 and plan.field_info["Cases"] == {"hxl": "#affected+infected"}
+    report = _scan(path)
+    assert list(_fields(report)) == ["Date", "Country code", "Admin 1", "Cases"]
+    assert report["stats"]["Cases"]["n_uniq"] == 10
+
+
+def test_records_of_text_and_dates_are_no_upper_header_rows():
+    # A second table beside the first one in its first rows (variants no longer reported) makes
+    # those rows wider than the body; they are records, not group headings over a later row.
+    side = ",,Liberia,Omicron,B.1.1.529,2022-01-06,Africa CDC Briefing"
+    lines = ["country,variant_name,variant,date_of_the_report,source_name,,no longer reporting,,,,,removed"]
+    lines += [f"Country {i},Alpha,B.1.1.7,2021-03-{10 + i},Africa CDC Press Briefing" + (side if i < 5 else "")
+              for i in range(12)]
+    layout = table_layout("\n".join(lines) + "\n", None, False)
+    assert layout.header_index == 0 and layout.header[:3] == ["country", "variant_name", "variant"]
