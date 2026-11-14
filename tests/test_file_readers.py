@@ -459,6 +459,46 @@ def test_wide_header_needs_title_rows_above_it():
     assert header_row(rows)[0] == 0
 
 
+_AIRPORTS = """id,ident,type,name,latitude_deg,longitude_deg,elevation_ft,continent,iso_country,iso_region,municipality,scheduled_service,gps_code,iata_code,local_code,home_link,wikipedia_link,keywords
+3095,GFLL,medium_airport,"Lungi International Airport",8.61643981933594,-13.1955003738403,84,AF,SL,SL-N,Freetown,1,GFLL,,http://www.freetownairport.com/,http://en.wikipedia.org/wiki/Lungi_International_Airport,
+31741,GFKE,medium_airport,"Kenema Airport",7.89129018783569,-11.1766004562378,485,AF,SL,SL-E,Kenema,1,GFKE,,,http://en.wikipedia.org/wiki/Kenema_Airport,
+32689,GFYE,medium_airport,"Yengema Airport",8.61046981811523,-11.0453996658325,1300,AF,SL,SL-E,Yengema,1,GFYE,,,http://en.wikipedia.org/wiki/Yengema_Airport,
+30799,GFBN,medium_airport,"Sherbro International Airport",7.53242015838623,-12.5188999176025,14,AF,SL,SL-S,Bonthe,1,GFBN,,,http://en.wikipedia.org/wiki/Sherbro_International_Airport,"Bonthe Airport"
+31526,GFTO,small_airport,"Tongo Airport",8.21700000762939,-11.0670003890991,750,AF,SL,SL-E,Tongo,0,GFTO,,,,
+301111,SL-0001,heliport,"Mammy Yoko Heliport",8.49231124864,-13.2884573936,,AF,SL,SL-W,,0,,JMY,,,
+"""
+
+
+def test_first_row_header_wider_than_the_records():
+    """OurAirports: the records leave wikipedia_link and keywords empty, so the header is wider
+    than most of them; the first record is mostly text and was taken for the header."""
+    import csv
+    import io
+
+    from metacrafter.file_inputs import header_row
+
+    rows = list(csv.reader(io.StringIO(_AIRPORTS)))
+    assert header_row(rows) == (0, 18, None)
+
+
+def test_scan_keeps_the_wide_first_row_as_header(tmp_path):
+    path = tmp_path / "airports.csv"
+    path.write_text(_AIRPORTS, encoding="utf-8")
+    fields = _fields(_scan(path))
+    assert "ident" in fields and "iso_region" in fields and "id 3095" not in fields
+
+
+def test_wide_first_row_needs_labels_only():
+    """A first row wider than the records that holds numbers is not taken for a wide header:
+    the header found for the width of the records stays."""
+    from metacrafter.file_inputs import _wide_first_header
+
+    rows = [["x", "1", "2", "", "", "note"], ["Name", "Count", "Total"], ["y", "3", "4"], ["z", "5", "6"]]
+    assert not _wide_first_header(rows, 3)
+    rows[0] = ["Name", "Count", "Total", "", "", "Note"]
+    assert _wide_first_header(rows[:1] + rows[2:], 3)
+
+
 def test_xlsx_header_below_a_title_and_a_group_heading(tmp_path):
     openpyxl = __import__("pytest").importorskip("openpyxl")
     workbook = openpyxl.Workbook()
