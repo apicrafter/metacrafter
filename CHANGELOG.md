@@ -48,6 +48,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   saved on an old Mac, in mac_roman with CR line ends, has `í`, `í`, `ç`, `ü` and `ã` inside words:
   four of the five were Portuguese, below the 0.9 cover the DOS and Mac choice asks, and the file was
   read as cp1250 (`Fam’lia;Nome Cient’fico;Categoria de ameaŤa`); it is now read as mac_roman.
+- Field-name rules of different countries compete when no scan country is set: a country-specific
+  match whose confidence trails the best country-specific match of the field, from rules of another
+  country, by `COUNTRY_NAME_MARGIN` (5) points or more is dropped. Countries of one language share field
+  names: the Argentine and the Bolivian department rules both read `departamento`, and a column of
+  Bolivian departments whose first records are La Paz (also a department of Catamarca and Entre Ríos)
+  passed both; the Argentine match (81.3) now goes, the Bolivian one (90) stays. Matches of equal fit
+  and universal rules are kept (metacrafter-testdata, Bolivian round).
+
 - The Arabic markers of a missing value are empty values by default: `غير مبين` (not stated),
   `غير محدد` (not specified), `غير معروف` (unknown) and `غير متوفر` (not available), each also with
   the feminine ending (`غير مبينة`), and so is the English `Not Stated` (in sentence case, lower case
@@ -58,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   had confidence 59 instead of 60 and `arnationality` 82.5 instead of 90; a column with more markers
   than values would have lost its label. `ARABIC_EMPTY_VALUES`
   in `metacrafter.classify.stats` lists them; `--empty-values` still replaces the whole list.
+
 - The English markers of a missing value are empty values by default: `n/a`, `Not Applicable`,
   `Not Assessed` and `Not Recorded`, each also in sentence case, lower case and capitals. Asset and
   tree registers of Australian councils fill columns with them: in the 2024 snapshot of the City of
