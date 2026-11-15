@@ -1462,7 +1462,48 @@ class RulesProcessor:
             self._drop_generic_name_matches(m_result, slice, empty_values, explain)
             self._drop_unfit_geopoints(field, data_columns, slice, empty_values, m_result, explain)
             results.add(m_result)
+        self._drop_other_table_countries(results, explain)
         return results
+
+    def _drop_other_table_countries(self, results: TableScanResult, explain: bool) -> None:
+        """Settle matches of several countries in a field by the country of the other fields of the table.
+
+        Applies when no scan country is set. Countries that share a language share field names, and
+        some values fit the rules of both: ``comuna`` with 4, 8 and 11 is a comuna of Buenos Aires
+        and a comuna of Cali, and ``_drop_weaker_country_name_matches`` keeps both because the
+        values fit equally. The rest of the table tells them apart. A match counts for a country
+        when its datatype is that country's own: the id starts with the country code of the rule
+        file (``co_department``, ``ar_caba_barrio``); a rule file of a country also holds rules in
+        its language for universal types (``district``, ``street``), which say nothing about the
+        country. A field whose own-country field-name matches all belong to one country is a vote
+        for it. In a field with own-country matches of different countries, by name or by value,
+        the matches of countries without a vote are dropped when another country of the field has
+        one. Without votes for any of them every match stays. Value rules do not vote: a pattern
+        that fits by chance says little about the table.
+        """
+        if self.preset_countries or len(results.results) < 2:
+            return
+        owners: Dict[str, Set[str]] = {}
+        for rule in itertools.chain(self.field_rules, self.data_rules):
+            key = str(rule.get("key") or "")
+            owners[rule["id"]] = {code for code in self._rule_countries(rule) if key.startswith(code + "_")}
+        votes: Counter = Counter()
+        for column in results.results:
+            named = [owners[m.ruleid] for m in column.matches if m.ruletype == "field" and owners.get(m.ruleid)]
+            if named:
+                votes.update(set.intersection(*named))
+        if not votes:
+            return
+        for column in results.results:
+            specific = [m for m in column.matches if owners.get(m.ruleid)]
+            if not any(votes[code] for m in specific for code in owners[m.ruleid]):
+                continue
+            for match in specific:
+                if any(votes[code] for code in owners[match.ruleid]):
+                    continue
+                column.matches.remove(match)
+                if explain:
+                    column.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": "The other fields of the table are of another country"})
 
     #: Values that a yes/no column may hold besides empty ones: two answers and a placeholder.
     MAX_BOOLEAN_VALUES = 3

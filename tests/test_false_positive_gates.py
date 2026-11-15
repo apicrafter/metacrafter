@@ -296,6 +296,58 @@ def test_country_name_matches_compete_only_without_scan_country(tmp_path):
     assert "ar_department" in classes(scan(processor, rows)["departamento"])
 
 
+BOPROVINCE = """
+  boprovincebyname:
+    key: bo_province
+    match: text
+    type: field
+    rule: provincia
+    priority: 1
+"""
+
+
+def test_country_name_tie_settled_by_other_fields_of_the_table(tmp_path):
+    # La Paz alone fits both countries; the province field, read by a Bolivian rule only, settles it.
+    processor = processor_with(tmp_path, [(ARDEPARTMENT, "ar"), (BODEPARTMENT, "bo"), (BOPROVINCE, "bo")])
+    rows = [{"departamento": "La Paz", "provincia": "Murillo"}] * 5
+    columns = scan(processor, rows, explain=True)
+    assert classes(columns["departamento"]) == {"bo_department"}
+    assert classes(columns["provincia"]) == {"bo_province"}
+    assert any(r["ruleid"] == "ardepartmentbyname" and r["reason"].startswith("The other fields")
+               for r in columns["departamento"].rejected)
+
+
+def test_country_name_tie_kept_without_other_fields_of_a_country(tmp_path):
+    processor = processor_with(tmp_path, [(ARDEPARTMENT, "ar"), (BODEPARTMENT, "bo"), (BOPROVINCE, "bo")])
+    rows = [{"departamento": "La Paz", "otro": "x"}] * 5
+    assert classes(scan(processor, rows)["departamento"]) == {"ar_department", "bo_department"}
+    # With a scan country the matches do not compete.
+    processor = processor_with(tmp_path, [(ARDEPARTMENT, "ar"), (BODEPARTMENT, "bo"), (BOPROVINCE, "bo")],
+                               countries=["ar", "bo"])
+    rows = [{"departamento": "La Paz", "provincia": "Murillo"}] * 5
+    assert classes(scan(processor, rows)["departamento"]) == {"ar_department", "bo_department"}
+
+
+INDISTRICT = """
+  indistrictknown:
+    key: district
+    match: text
+    type: field
+    rule: provincia
+    priority: 1
+"""
+
+
+def test_language_rules_of_a_country_file_do_not_vote(tmp_path):
+    # A rule for a universal type in a country's rule file (district, in the Indian rules) names no
+    # country: the tie of the departments stays.
+    processor = processor_with(tmp_path, [(ARDEPARTMENT, "ar"), (BODEPARTMENT, "bo"), (INDISTRICT, "in")])
+    rows = [{"departamento": "La Paz", "provincia": "Murillo"}] * 5
+    columns = scan(processor, rows)
+    assert classes(columns["departamento"]) == {"ar_department", "bo_department"}
+    assert classes(columns["provincia"]) == {"district"}
+
+
 UUIDRULE = f"""
   uuidbyvalue:
     key: uuid

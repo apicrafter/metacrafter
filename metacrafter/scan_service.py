@@ -1822,7 +1822,8 @@ class CrafterCmd(object):
                 uniqueness below this threshold are treated as dictionaries.
             empty_values: Optional comma-separated list of values treated as empty.
                 Use '""' for empty string. Defaults to [None, "", "None", "NaN", "-", "N/A", "NA"] and the
-                Spanish s/d, S/D, sin dato(s), Sin datos, sin_informacion and sin información, and the
+                Spanish s/d, S/D, sin dato(s), Sin datos, sin_informacion and sin información, No aplica,
+                No registra, No reporta, SIN DATO and SIN INFORMACIÓN, NULL, null and <Null>, and the
                 English n/a, Not Applicable, Not Assessed, Not Recorded and Not Stated (in four cases),
                 and the Arabic غير مبين, غير محدد, غير معروف and غير متوفر (also feminine), and the
                 Portuguese Não informado, Não se aplica, Não disponível, Sem informação (in four cases)
