@@ -66,6 +66,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A Dataverse `.tab` file of one variable has no tab at all, and iterabledata, which has no `.tab`
+  format, could not detect its type (`Format 'tab' is not supported`): every `.tab` file is now read
+  as tab-delimited text. The ages of the radar layers of an Antarctic ice rise on Open Data @
+  UCLouvain (`De_ages.tab`, one column `year AD`) failed to open.
 - A rule may declare a `minlen` / `maxlen` up to 10 000 000 characters (`MAX_RULE_LEN` in
   `metacrafter.classify.processor`); a range above 100 000 made the whole rule fail to load ("Invalid
   priority or length"). Geometries written as text are longer: the `geo_shape` of the Camden LGA
