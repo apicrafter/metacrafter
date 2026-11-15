@@ -421,6 +421,9 @@ GENERIC_TEXT_TYPES = frozenset({"name", "description", "title"})
 # a match of one does not hide a country-specific type that refines it (_drop_country_name_variants).
 # ``id`` is an identifier and ``category`` an enumeration without a type of their own.
 FALLBACK_TYPES = frozenset({"id", "category"})
+# Points of confidence by which a field-name match of one country must trail the best match of
+# another country to be dropped (_drop_weaker_country_name_matches).
+COUNTRY_NAME_MARGIN = 5.0
 #: A short lower-case code (``wp``, ``en``, ``x1``), not text for people.
 _SHORT_CODE = re.compile(r"[a-z][a-z0-9_-]{0,3}")
 #: Values of a yes/no column that are no answer, besides the empty values of a scan.
@@ -1198,6 +1201,7 @@ class RulesProcessor:
                         evidence=evidence,
                     )
                 )
+            self._drop_weaker_country_name_matches(field_found, m_result, explain)
             # Before the float columns leave the loop: coordinates are floats.
             self._drop_unfit_geopoints(field, data_columns, slice, empty_values, m_result, explain)
             self._add_geometry_match(field, data_columns, m_result)
@@ -2037,6 +2041,34 @@ class RulesProcessor:
                 continue
             kept.append(rule)
         return kept
+
+    def _drop_weaker_country_name_matches(
+        self, found: List[Dict[str, Any]], m_result: ColumnMatchResult, explain: bool
+    ) -> None:
+        """Drop the field-name matches of one country whose values fit clearly worse than those of another.
+
+        Applies when no scan country is set. Countries that share a language share field names:
+        the department rules of Argentina and of Bolivia both read ``departamento``, and both
+        validators pass a column of Bolivian departments where its first records are La Paz (a
+        department of Catamarca and of Entre Ríos too). The values decide: a country-specific match
+        whose confidence is ``COUNTRY_NAME_MARGIN`` or more below the best country-specific match
+        of a field, from rules of other countries, is dropped (``ar_department`` at 81.3 beside
+        ``bo_department`` at 90). Matches of equal fit stay, and so do universal ones.
+        """
+        if self.preset_countries or len(found) < 2:
+            return
+        countries = {rule["id"]: self._rule_countries(rule) for rule in found}
+        matches = [m for m in m_result.matches if m.ruletype == "field" and countries.get(m.ruleid)]
+        if len(matches) < 2:
+            return
+        best = max(matches, key=lambda m: m.confidence)
+        for match in matches:
+            if match is best or countries[match.ruleid] & countries[best.ruleid]:
+                continue
+            if match.confidence <= best.confidence - COUNTRY_NAME_MARGIN:
+                m_result.matches.remove(match)
+                if explain:
+                    m_result.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": "Values fit a field-name rule of another country better"})
 
     @staticmethod
     def _validator_id(rule: Dict[str, Any]) -> Any:

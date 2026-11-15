@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Field-name rules of different countries compete when no scan country is set: a country-specific
+  match whose confidence trails the best country-specific match of the field, from rules of another
+  country, by `COUNTRY_NAME_MARGIN` (5) points or more is dropped. Countries of one language share field
+  names: the Argentine and the Bolivian department rules both read `departamento`, and a column of
+  Bolivian departments whose first records are La Paz (also a department of Catamarca and Entre Ríos)
+  passed both; the Argentine match (81.3) now goes, the Bolivian one (90) stays. Matches of equal fit
+  and universal rules are kept (metacrafter-testdata, Bolivian round).
+
 - The English markers of a missing value are empty values by default: `n/a`, `Not Applicable`,
   `Not Assessed` and `Not Recorded`, each also in sentence case, lower case and capitals. Asset and
   tree registers of Australian councils fill columns with them: in the 2024 snapshot of the City of
