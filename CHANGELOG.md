@@ -45,17 +45,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when the cp1252 reading puts symbols inside words (`CABA¥AS`, `Inversi¢n`, `N§` of cp850
   bytes; `Ejecuci—n`, `N¼` of mac_roman ones) and the DOS or Mac reading makes them letters of
   one Western alphabet. The detectors took such files for Cyrillic or Japanese (cp1251, cp932)
-  or for cp1250: 51 of the 469 CSV files of Datos Abiertos Mendoza that are not UTF-8 are cp850
-  and 12 mac_roman, spreadsheets saved by old DOS and Mac programs, and their field names came
-  out as `AЎO` or `N§`. Windows text with an apostrophe, a no-break space or a degree sign in a
+  or for cp1250: by their bytes 51 of the 469 CSV files of Datos Abiertos Mendoza that are not
+  UTF-8 are cp850 and 12 mac_roman, spreadsheets saved by old DOS and Mac programs, and their field
+  names came out as `AЎO` or `N§`; the 30 of them with three or more accented letters inside words
+  are now read in their code page (24 cp850, 6 mac_roman), the others have too few to tell. Windows text with an apostrophe, a no-break space or a degree sign in a
   word (`O’Higgins`, `Supplier\xa0Name`, `N°REG`) stays cp1252.
 - Spanish text in cp1252 is no longer read as cp1250 when it has grave vowels typed for acute
   ones (`CONTRATACIÒN`, `Direcciòn`): the Czech and Polish alphabets hold the Spanish vowels, so
-  cp1250 fitted better and turned `ñ` into `ń` and `Ñ` into `Ń` (`AŃO`, `DISEŃO`; 46 Mendoza
-  files). The ordinal indicators `º` and `ª` (`Nº`, `1ª`) no longer count as letters of no
+  cp1250 fitted better and turned `ñ` into `ń` and `Ñ` into `Ń` (`AŃO`, `DISEŃO`; 37 of the 50
+  Mendoza files read as cp1250 are now cp1252, 4 cp850 or mac_roman). The ordinal indicators `º` and `ª` (`Nº`, `1ª`) no longer count as letters of no
   alphabet when the Latin code page is chosen.
 - A file whose only non-ASCII bytes stand alone (the degree sign of `TEMPERATURA °C`, one `í`)
-  is no longer read as cp932 or cp949: two-byte text has runs of non-ASCII bytes.
+  is no longer read as cp932 or cp949: two-byte text has runs of non-ASCII bytes (26 Mendoza files are now cp1252, 5 cp850).
+  Of the 468 Mendoza files that are not UTF-8, 426 are now read as cp1252, 24 as cp850, 9 as
+  cp1250, 6 as mac_roman and 3 as cp1251 (369, 0, 50, 0 and 18 before, with 20 cp932 and 11 cp949);
+  the encodings of the files of metacrafter-testdata do not change.
 - A field-name rule with a validator looks at the records after the sample when the sample has
   no values, as a rule with `needs_values: true` does, and is dropped when those values do not
   fit. The urban planning certificates of Buenos Aires leave `COMUNA` empty in the first 445

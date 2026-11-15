@@ -310,8 +310,9 @@ def _latin_choice(sample: bytes) -> str:
 # detectors pick them for short Windows samples, but spreadsheets exported by DOS and old Mac
 # programs are still published in them. The Spanish of a cp850 file reads "CABA¥AS",
 # "Inversi¢n", "N§" in cp1252, that of a mac_roman file "Ejecuci—n", "l’nea", "N¼"; the
-# detectors took such files for cp1251 or cp932 (Cyrillic or Japanese) or cp1250. 51 of the 469
-# non-UTF-8 CSV files of Datos Abiertos Mendoza are cp850 and 12 mac_roman.
+# detectors took such files for cp1251 or cp932 (Cyrillic or Japanese) or cp1250. By their bytes 51
+# of the 469 non-UTF-8 CSV files of Datos Abiertos Mendoza are cp850 and 12 mac_roman; the 30 with
+# three or more accented letters inside words are read in their code page.
 _DOS_MAC_PAGES = ("cp850", "mac_roman")
 # A non-ASCII character between two Latin letters: a letter in any Western text, but for the
 # apostrophes and accents typed for them (O’Higgins, D´AGOSTINO), the degree sign typed for the
