@@ -676,8 +676,48 @@ def _wide_header(rows: List[List[str]], columns: int) -> Optional[Tuple[int, int
     return None
 
 
+#: Names of the columns of a table without a header row: column_1, column_2, ...
+HEADERLESS_NAME = "column_{}"
+
+
+def _first_row_is_record(rows: List[List[str]], columns: int) -> bool:
+    """True when a table has no header row: its first row is a record like the ones below it.
+
+    ``header_row`` takes the first row as the header when no row looks like one, so the
+    values of the first record of a header-less export became the column names
+    (``"http://.../1436188673472.jpg","-34.649329","-59.432996","Fresno Americano","Bueno"``
+    in the street tree inventory of Mercedes, Buenos Aires) and the record was lost. The first
+    row is a record when it has the width of the records, the same mix of numbers and text as
+    the next record (``_signature``), at least one cell that is no label (a number that is not
+    a year), and a cell whose value comes back in its column further down: a column name does
+    not repeat as a value of its own column, a species or a status does. A first row of labels
+    only stays the header.
+    """
+    if len(rows) < 3:
+        return False
+    first = [str(c).strip() for c in rows[0]]
+    if abs(_width(rows[0]) - columns) > max(1, columns // 10):
+        return False
+    following = next((r for r in rows[1:] if _width(r) > 1), None)
+    if following is None or _signature(rows[0], columns) != _signature(following, columns):
+        return False
+    if all(_signature(rows[0], columns)):
+        return False
+    below = rows[1:]
+    for index, cell in enumerate(first[:columns]):
+        if cell and not _NUMBER.match(cell) and any(
+            index < len(r) and str(r[index]).strip() == cell for r in below
+        ):
+            return True
+    return False
+
+
 def table_layout(text: str, delimiter: Optional[str] = None, truncated: bool = True) -> Optional[TableLayout]:
-    """Delimiter, header position and header of delimited text (first records only)."""
+    """Delimiter, header position and header of delimited text (first records only).
+
+    A table without a header row (``_first_row_is_record``) has ``header_index`` -1 and the
+    names ``column_1`` to ``column_N``.
+    """
     first, _, rest = text.partition("\n")
     sep_hint = False
     hint = _SEP_HINT.match(first.strip("\ufeff\r"))
@@ -699,6 +739,9 @@ def table_layout(text: str, delimiter: Optional[str] = None, truncated: bool = T
         return None
     columns, freq, delim, rows = best
     header_index, _, names = header_row(rows)
+    if header_index == 0 and names is None and _first_row_is_record(rows, columns):
+        header = [HEADERLESS_NAME.format(i + 1) for i in range(max(columns, _width(rows[0])))]
+        return TableLayout(delim, columns, -1, header, sep_hint, freq / max(len(rows), 1), None)
     header = names or (rows[header_index] if rows else [])
     tags = hxl_tags(rows[header_index + 1]) if header_index + 1 < len(rows) and hxl_tags(header) is None else None
     return TableLayout(delim, columns, header_index, header, sep_hint, freq / max(len(rows), 1), tags)
@@ -999,6 +1042,15 @@ def _plan_table(filename: str, ext: str, codec: Optional[str], plan: InputPlan) 
         args["delimiter"] = layout.delimiter
         plan.notes.append(f"read as a table delimited by {layout.delimiter!r}")
     if layout is None:
+        return
+    if layout.header_index < 0:
+        # No header row: the first record is data, and the columns get numbered names.
+        args["delimiter"] = layout.delimiter
+        args["keys"] = list(layout.header)
+        plan.skip_records = 1 if layout.sep_hint else 0
+        plan.notes.append(
+            f"no header row: the first line is a record; columns named {layout.header[0]} to {layout.header[-1]}"
+        )
         return
     if layout.sep_hint or layout.header_index or layout.hxl:
         args["delimiter"] = layout.delimiter

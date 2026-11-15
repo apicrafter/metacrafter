@@ -622,3 +622,41 @@ def test_wkt_geometry_longer_than_the_csv_field_limit(tmp_path):
     assert list(_fields(report)) == ["FID", "the_geom", "OBJECTID", "Name_eng"]
     assert report["stats"]["Name_eng"]["n_uniq"] == 3
     assert report["stats"]["the_geom"]["n_uniq"] == 1
+
+
+# ---------------------------------------------------------------- tables without a header row
+TREES = "".join(
+    f'"http://mercedes.gob.ar/salame/app/arbolado/fotos/14361886{i:05d}.jpg","-34.6{i:04d}","-59.43{i:03d}",'
+    f'"{species}","{state}","Derecho","0","28","{756 + 2 * i}","De 5 a 15"\n'
+    for i, (species, state) in enumerate([("Fresno Americano", "Bueno"), ("Acacia Bola", "Bueno"),
+                                          ("Fresno Americano", "Decrepito"), ("Paraiso", "Bueno"),
+                                          ("Acacia Bola", "Enfermo"), ("Fresno Americano", "Bueno")])
+)
+
+
+def test_first_row_of_a_headerless_table_is_a_record(tmp_path):
+    # The street tree inventory of Mercedes (Buenos Aires) has no header row: its first record
+    # became the column names ("Fresno Americano", "Bueno", "-34.649329") and was lost.
+    layout = table_layout(TREES, None, False)
+    assert layout.header_index == -1
+    assert layout.header == [f"column_{i}" for i in range(1, 11)]
+    path = tmp_path / "arbolado.csv"
+    path.write_text(TREES, encoding="utf-8")
+    plan = prepare_input(str(path), {})
+    assert plan.iterableargs["keys"][0] == "column_1" and plan.skip_records == 0
+    report = _scan(path)
+    assert list(_fields(report)) == [f"column_{i}" for i in range(1, 11)]
+    assert report["stats"]["column_1"]["n_uniq"] == 6
+    assert report["stats"]["column_4"]["n_uniq"] == 3
+
+
+def test_headers_with_numbers_stay_headers():
+    # A header has names, so they do not come back as values of their own column below.
+    text = "id;name;2324\n1;A;5\n2;B;6\n3;C;7\n"
+    assert table_layout(text, truncated=False).header_index == 0
+    # Labels only: the header, even when the records are text too.
+    text = "especie;estado;altura\nFresno;Bueno;De 5 a 15\nFresno;Malo;Menor a 5\nTilo;Bueno;De 5 a 15\n"
+    assert table_layout(text, truncated=False).header_index == 0
+    # A record that repeats a value below, but whose next row has another shape, stays the header.
+    text = "Bueno;12;x\nBueno;y;z\nMalo;w;v\n"
+    assert table_layout(text, truncated=False).header_index == 0
