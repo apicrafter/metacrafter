@@ -17,6 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The English markers of a missing value are empty values by default: `n/a`, `Not Applicable`,
+  `Not Assessed` and `Not Recorded`, each also in sentence case, lower case and capitals. Asset and
+  tree registers of Australian councils fill columns with them: in the 2024 snapshot of the City of
+  Ballarat Data Exchange (data.ballarat.vic.gov.au), 21 fields hold `Not Applicable` and 12 `Not
+  Assessed`, the commonest value of the diameter, height and species of the tree register (41 712
+  of 81 467 DBH cells) and of the military rank on the Avenue of Honour plaques (3 405 of 3 757),
+  so field-rule validators saw fewer than half of the values fit and the columns lost their
+  labels. `ENGLISH_EMPTY_VALUES` in `metacrafter.classify.stats` lists them; `--empty-values` still
+  replaces the whole list.
 - Value rules see Arabic text without the tatweel (kashida, U+0640) and with the Arabic letters for
   the Persian forms of yeh, keheh and heh doachashmee (U+06CC, U+06A9, U+06BE). Statistical
   tables of the UAE Open Data portal stretch words to fill their cells (`ينايـر`, `أبو ظــــبي`,
