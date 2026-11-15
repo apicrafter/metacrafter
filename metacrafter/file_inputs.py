@@ -114,7 +114,7 @@ LATIN_ALPHABETS = (
         "áéíóúüñ",  # Spanish
         "äöüß",  # German
         "àèéìíîòóùú",  # Italian
-        "àáâãçéêíóôõú",  # Portuguese
+        "àáâãçéêíóôõúü",  # Portuguese (ü of the Brazilian spelling before 2009: lingüística, Müll.Arg.)
         "éèëïöüáóú",  # Dutch
         "åäöæøéü",  # Nordic
     )]),

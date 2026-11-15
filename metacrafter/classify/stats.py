@@ -55,8 +55,21 @@ ENGLISH_EMPTY_VALUES = [
 ARABIC_EMPTY_VALUES = [
     "غير مبين", "غير مبينة", "غير محدد", "غير محددة", "غير معروف", "غير معروفة", "غير متوفر", "غير متوفرة",
 ]
+# Não informado (not reported), Não se aplica (not applicable), Não disponível (not available) and Sem
+# informação mark a missing value in Brazilian data: CAPES writes NÃO SE APLICA in most cells of the
+# subarea and speciality of its graduate programmes and NÃO INFORMADO for an unknown organisation, the
+# Banco Central do Brasil Não disponível for a payment system closed on Sundays, and the BNDES fills the
+# credited bank of a direct operation with ten hyphens (----------).
+PORTUGUESE_EMPTY_VALUES = [
+    "Não informado", "Não Informado", "não informado", "NÃO INFORMADO",
+    "Não se aplica", "Não Se Aplica", "não se aplica", "NÃO SE APLICA",
+    "Não disponível", "Não Disponível", "não disponível", "NÃO DISPONÍVEL",
+    "Sem informação", "Sem Informação", "sem informação", "SEM INFORMAÇÃO",
+    "----------",
+]
 DEFAULT_EMPTY_VALUES = (
     [None, "", "None", "NaN", "-", "N/A", "NA"] + SPANISH_EMPTY_VALUES + ENGLISH_EMPTY_VALUES + ARABIC_EMPTY_VALUES
+    + PORTUGUESE_EMPTY_VALUES
 )
 
 DEFAULT_OPTIONS = {

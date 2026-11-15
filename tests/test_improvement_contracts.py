@@ -192,6 +192,21 @@ def test_arabic_missing_value_markers_are_empty(rule_file):
     assert "غير بحريني" not in DEFAULT_EMPTY_VALUES
 
 
+def test_portuguese_missing_value_markers_are_empty(rule_file):
+    """Não informado, Não se aplica, Não disponível and the ten hyphens of the BNDES operations do not
+    count against a rule."""
+    processor = RulesProcessor()
+    processor.import_rules(str(rule_file))
+    for marker in ("Não informado", "NÃO INFORMADO", "Não se aplica", "NÃO SE APLICA", "Não disponível",
+                   "Sem informação", "----------"):
+        rows = [{"x": "123"}, {"x": marker}, {"x": marker}, {"x": marker}]
+        report = processor.match_dict(rows, confidence=100, parse_dates=False)
+        assert report.results[0].matches[0].dataclass == "national_id", marker
+    # Only the whole value: a sentence that starts with it is a value.
+    from metacrafter.classify.stats import DEFAULT_EMPTY_VALUES
+    assert "Não se aplica ao município" not in DEFAULT_EMPTY_VALUES
+
+
 def test_required_validator_failure_does_not_claim_id(rule_file):
     document = yaml.safe_load(rule_file.read_text())
     document["rules"]["national_id"]["validator"] = "missing_package.validate"

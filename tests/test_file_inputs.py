@@ -78,6 +78,25 @@ def test_dos_and_mac_spanish_get_their_code_page(encoding):
     assert detect_encoding(SPANISH_TABLE.encode(encoding), truncated=False) == encoding
 
 
+# A CNCFlora table of the Jardim Botânico do Rio de Janeiro saved by an old Mac: mac_roman, CR line ends
+# (cp1252 reads "Fam’lia;Nome Cient’fico", and 0x8D, ç, is not cp1252).
+PORTUGUESE_MAC_TABLE = (
+    "Família;Nome Científico;Categoria de ameaça\r"
+    "Amaryllidaceae;Griffinia aracensis Ravenna;CR\r"
+    "Apocynaceae;Aspidosperma polyneuron Müll.Arg.;NT\r"
+    "Fabaceae;Dimorphandra wilsonii Rizzini;CR\r"
+)
+
+
+def test_mac_portuguese_gets_its_code_page():
+    assert detect_encoding(PORTUGUESE_MAC_TABLE.encode("mac_roman"), truncated=False) == "mac_roman"
+
+
+def test_windows_portuguese_with_trema_stays_cp1252():
+    text = "LINGÜÍSTICA, LETRAS E ARTES;CIÊNCIAS HUMANAS;São Paulo;Educação\n" * 3
+    assert detect_encoding(text.encode("cp1252"), truncated=False) == "cp1252"
+
+
 @pytest.mark.parametrize(
     "text",
     [

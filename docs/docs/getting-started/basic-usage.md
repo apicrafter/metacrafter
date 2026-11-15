@@ -68,7 +68,9 @@ missing value (`s/d`, `S/D`, `sin dato`, `sin datos`, `Sin datos`, `sin_informac
 `sin información`), the English markers `n/a`, `Not Applicable`, `Not Assessed`, `Not Recorded`
 and `Not Stated` (also in sentence case, lower case and capitals) and the Arabic markers `غير مبين`
 (not stated), `غير محدد` (not specified), `غير معروف` (unknown) and `غير متوفر` (not available), also
-with the feminine ending `ة`, are empty values: they are not classified, and a field of them only is
+with the feminine ending `ة`, and the Portuguese markers `Não informado`, `Não se aplica`,
+`Não disponível` and `Sem informação` (in four cases) and `----------` are empty values: they are not
+classified, and a field of them only is
 tagged `empty`. `--empty-values` replaces the list.
 
 `--dict-share` controls when a field is tagged as a dictionary (low cardinality).
