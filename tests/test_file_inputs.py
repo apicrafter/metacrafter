@@ -62,6 +62,50 @@ def test_other_scripts_are_detected(text, encoding):
     assert text.encode(encoding).decode(detect_encoding(text.encode(encoding), truncated=False)) == text
 
 
+# ---------------------------------------------------------------- DOS and Mac code pages
+SPANISH_TABLE = (
+    "RUBRO;NOMBRE FANTASIA;Nº;AÑO\n"
+    "CABAÑAS;Inversión y Ganadería;12;2018\n"
+    "HOSTERÍA;Malla Antigranizo para pequeños productores;5;2019\n"
+    "APART-HOTEL;Eficiencia Hídrica;7;2020\n"
+)
+
+
+@pytest.mark.parametrize("encoding", ["cp850", "mac_roman"])
+def test_dos_and_mac_spanish_get_their_code_page(encoding):
+    # cp1252 reads "CABA¥AS", "Inversi¢n" (cp850) or "Ejecuci—n" (mac_roman); the detectors
+    # took such files for cp1251, cp932 or cp1250 (Datos Abiertos Mendoza).
+    assert detect_encoding(SPANISH_TABLE.encode(encoding), truncated=False) == encoding
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "O’Higgins;Región de Ñuble\n" * 3,
+        "Supplier\xa0Name,Contract\xa0Status,Route\xa0to\xa0Market\n" * 5,
+        "D´AGOSTINO;Nº 4;N°REG. 15\n" * 3,
+        # grave vowels typed for acute ones: cp1250 turned the ñ into ń ("DISEŃO")
+        "CONTRATACIÒN DE SERVICIOS;Dirección;AÑO\nDISEÑO;Licitación Pública;Nº 4\n" * 3,
+    ],
+)
+def test_windows_spanish_stays_cp1252(text):
+    assert detect_encoding(text.encode("cp1252"), truncated=False) == "cp1252"
+
+
+@pytest.mark.parametrize(
+    "text", ["DIA;HORA;TEMPERATURA °C;POTENCIA MW\n1;12:00;35;900\n", "codigo;descripción\n1;a\n"]
+)
+def test_lone_latin_bytes_are_not_cjk(text):
+    # a lone degree sign or accented letter came out as cp932 or cp949
+    assert detect_encoding(text.encode("cp1252"), truncated=False) == "cp1252"
+
+
+def test_cp850_file_keeps_its_field_names(tmp_path):
+    path = tmp_path / "alojamientos.csv"
+    path.write_bytes(SPANISH_TABLE.encode("cp850"))
+    assert set(_fields(_scan(path))) == {"RUBRO", "NOMBRE FANTASIA", "Nº", "AÑO"}
+
+
 def test_utf8_and_bom():
     assert detect_encoding("Straße".encode("utf-8")) == "utf-8"
     assert detect_encoding("\ufeffid".encode("utf-8")) == "utf-8-sig"
