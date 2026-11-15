@@ -445,6 +445,22 @@ def strip_language_suffix(name):
     return name
 
 
+# A qualifier in parentheses after a survey column name: "FSA (Study: Profiling Questionnaire 2014)",
+# "GENDER (Source: Profiling Questionnaire 2014)" of the Edmonton Insight Community exports. Only a
+# labelled qualifier ("Study: ...") is one; units and notes ("Peso (kg)", "Name (legal)") stay.
+_QUALIFIER_SUFFIX = re.compile(r"^(?P<base>[^()]*[^()\s])\s*\([A-Za-z][A-Za-z ]{1,24}:\s[^()]+\)$")
+
+
+def strip_qualifier_suffix(name):
+    """Field name without a trailing labelled qualifier in parentheses:
+    ``FSA (Study: Profiling Questionnaire 2014)`` -> ``FSA``.
+
+    Returns ``name`` unchanged when it has none (``Peso (kg)``, ``Name (legal)``).
+    """
+    match = _QUALIFIER_SUFFIX.match(str(name))
+    return match.group("base") if match else name
+
+
 def strip_values(value):
     """Copy of ``value`` with leading and trailing whitespace removed from every string.
 

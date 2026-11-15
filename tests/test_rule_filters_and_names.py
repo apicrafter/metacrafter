@@ -3,7 +3,7 @@
 import pytest
 
 from metacrafter.classify.processor import RULE_TYPE_DATA, RulesProcessor
-from metacrafter.classify.utils import strip_language_suffix
+from metacrafter.classify.utils import strip_language_suffix, strip_qualifier_suffix
 from metacrafter.registry.adapter import RegistryAdapter, SnapshotRegistry
 
 
@@ -72,6 +72,32 @@ def test_field_rule_matches_name_without_language_suffix(tmp_path):
     assert found["abstract_en"] == {"description"}
     assert found["category.description_en"] == {"description"}
     assert found["user_id"] == set()
+
+
+@pytest.mark.parametrize("name,base", [
+    ("FSA (Study: Profiling Questionnaire 2014)", "FSA"),
+    ("GENDER (Source: Profiling Questionnaire 2014)", "GENDER"),
+    ("Q14a_Primary_Transportation (Study: Profiling Questionnaire 2014)", "Q14a_Primary_Transportation"),
+    ("Peso (kg)", "Peso (kg)"),
+    ("Name (legal)", "Name (legal)"),
+    ("Ratio (a:b)", "Ratio (a:b)"),
+    ("(Study: Profiling Questionnaire 2014)", "(Study: Profiling Questionnaire 2014)"),
+    ("FSA", "FSA"),
+])
+def test_strip_qualifier_suffix(name, base):
+    assert strip_qualifier_suffix(name) == base
+
+
+def test_field_rule_matches_name_without_qualifier_suffix(tmp_path):
+    """A survey column with a labelled qualifier in parentheses is matched by the name before it, by
+    field rules and by the field guards of value rules."""
+    processor = RulesProcessor()
+    processor.import_rules(write(tmp_path, "t", field_rule("descriptionfield", "description", "abstract,description")))
+    result = processor.match_dict([{"Abstract (Study: Profiling Questionnaire 2014)": "Text", "Abstract (long)": "Text"}],
+                                  confidence=5, parse_dates=False)
+    found = {r.field: {m.dataclass for m in r.matches} for r in result.results}
+    assert found["Abstract (Study: Profiling Questionnaire 2014)"] == {"description"}
+    assert found["Abstract (long)"] == set()
 
 
 def test_field_rule_matches_parent_of_language_key(tmp_path):
