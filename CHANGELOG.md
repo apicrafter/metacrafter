@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   inventory of Mercedes, Buenos Aires (`"http://.../1436188673472.jpg","-34.649329","-59.432996",
   "Fresno Americano","Bueno",...`) had fields named `Fresno Americano` and `-34.649329`. A first
   row of labels only stays the header.
+- The delimiter of a CSV file: when the one that splits most records leaves the first line whole
+  and another one splits the first line into three or more cells and nine in ten of the records,
+  the other one is the delimiter. A school list of Mercedes, Buenos Aires names every head teacher
+  SURNAME, NAME without quotes, so a comma split each record in two and beat the semicolon of
+  `SERV. EDUC;DIRECCCIÓN;TEL FIJO;DIRECTIVO;Matricula 2016`, whose records have four or five cells.
+- An e-mail address is no column label: a record with one is not taken for a header. The header of
+  a list of private schools left its last two cells empty, so the first record
+  (`...;JARDIN DE INFANTES BICHITO DE LUZ;3 Y 38;S/N;santamariacolegio@yahoo.com.ar;1;604988`) was
+  read as the header below a group heading.
 - HXL hashtag rows: a row of Humanitarian Exchange Language hashtags right below the header of a
   CSV file or a sheet (`;#date;#country+code;#country+name;#affected+infected;;`, the HDX tables)
   is skipped, and each field reports its hashtag as `hxl` (`"hxl": "#country+code"`). It was read

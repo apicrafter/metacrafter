@@ -660,3 +660,33 @@ def test_headers_with_numbers_stay_headers():
     # A record that repeats a value below, but whose next row has another shape, stays the header.
     text = "Bueno;12;x\nBueno;y;z\nMalo;w;v\n"
     assert table_layout(text, truncated=False).header_index == 0
+
+
+def test_a_record_with_an_email_address_is_no_header():
+    # The private schools of Mercedes: the header leaves its last two cells empty, so it is
+    # narrower than the records, and the first record looked like a header below a group heading.
+    lines = ["Tipo;N° Diepregep;NOMBRE;DIRECCIÓN;Nro;MAIL RESPONSBLE;;"]
+    lines += [f"Educacion inicial comun - Gestión privada ;{1750 + 811 * i};JARDIN {name};{3 + i} Y 38;{'S/N' if i % 2 else 100 + i};"
+              f"jardin{i}@example.com.ar;{1 + i % 2};{604988 + i}" for i, name in enumerate(["BICHITO DE LUZ", "SAN PATRICIO", "SAN BENITO",
+                                                                                          "GIRASOLES", "SOLTATE"])]
+    layout = table_layout("\n".join(lines) + "\n", None, False)
+    assert layout.header_index == 0
+    assert layout.header[:6] == ["Tipo", "N° Diepregep", "NOMBRE", "DIRECCIÓN", "Nro", "MAIL RESPONSBLE"]
+
+
+def test_delimiter_that_splits_the_header_wins_over_commas_in_names():
+    # Every record names the head teacher as SURNAME, NAME: a comma splits each record in two
+    # and the header not at all; the semicolon gives four or five cells.
+    text = ("SERV. EDUC;DIRECCCIÓN;TEL FIJO;DIRECTIVO;Matricula 2016\n"
+            "EET Nº1 ;31 Nº51;434181;ISOLA, MERCEDES;404\n"
+            "EET Nº1 ;31 Nº51;434181;MUSANTE, MARINA\n"
+            "EET Nº2;509 e/ 504 Y 502;421421;PONCE, CRISTIAN;163\n"
+            "EESA Nº1;RUTA 41 Y AV. DORREGO;405027;ALMADA, SANDRA;131\n"
+            "CEPT Nº4;;434478;VITALE, JULIO;85\n")
+    layout = table_layout(text, None, False)
+    assert layout.delimiter == ";"
+    assert layout.header == ["SERV. EDUC", "DIRECCCIÓN", "TEL FIJO", "DIRECTIVO", "Matricula 2016"]
+    # A title line above a comma table stays a title.
+    text = "Escuelas de Mercedes\nnombre,direccion,telefono\nEP 1,24 338,423384\nEP 2,26 735,426849\nEP 3,16 1155,420832\n"
+    layout = table_layout(text, None, False)
+    assert layout.delimiter == "," and layout.header == ["nombre", "direccion", "telefono"]

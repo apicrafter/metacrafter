@@ -81,6 +81,7 @@ _PX_CHARSET = re.compile(rb'CHARSET\s*=\s*"([\w\-]+)"', re.IGNORECASE)
 _NUMBER = re.compile(r"^[\s+\-]?[\d\s.,]+%?$")
 _YEAR = re.compile(r"^(?:1[89]|20)\d{2}\s*[*¹²³)]*$")
 _DATE = re.compile(r"^(?:\d{1,2}[./]\d{1,2}[./]\d{4}|\d{4}-\d{2}-\d{2})$")
+_EMAIL_CELL = re.compile(r"^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$")
 # A unit note next to a table title: "単位：人", "(Unit: persons)", "Einheit: 1000".
 _UNIT_NOTE = re.compile(r"^[\s(（]*(?:単位|单位|unit|units|einheit|unité|unidad|unidade|unità|единица|одиниця)\s*[:：]",
                         re.IGNORECASE)
@@ -395,8 +396,11 @@ def _width(row: List[str]) -> int:
 
 
 def _is_label(cell: str) -> bool:
-    """A header cell: text, a year or a date (statistics tables use them as column labels)."""
-    return bool(cell) and (not _NUMBER.match(cell) or bool(_YEAR.match(cell)) or bool(_DATE.match(cell)))
+    """A header cell: text, a year or a date (statistics tables use them as column labels). An
+    e-mail address is a value: no header names a column after one."""
+    if not cell or _EMAIL_CELL.match(cell):
+        return False
+    return not _NUMBER.match(cell) or bool(_YEAR.match(cell)) or bool(_DATE.match(cell))
 
 
 #: Consecutive whole numbers in a row that are column labels, not values: single years of age
@@ -712,6 +716,30 @@ def _first_row_is_record(rows: List[List[str]], columns: int) -> bool:
     return False
 
 
+def _header_splitting(best, found):
+    """The candidate delimiter that splits the first line, when the best one leaves it whole.
+
+    A delimiter wins by the number of records that have its most common width. In a school list
+    of Mercedes, Buenos Aires, every record names its head teacher as SURNAME, NAME, so a comma
+    splits every record in two and beats the semicolon, whose records have four or five cells
+    (the last one is often missing): the header ``SERV. EDUC;DIRECCCIÓN;TEL FIJO;DIRECTIVO;
+    Matricula 2016`` has no comma. When the best delimiter does not split the first line and
+    another one splits it into three or more cells and splits nine in ten of the records too,
+    that one is the delimiter. A title line above the header has one cell for every delimiter.
+    """
+    columns, freq, delim, rows = best
+    if not rows or len(rows[0]) > 1:
+        return best
+    for other in found:
+        o_rows = other[3]
+        if other[2] == delim or not o_rows or len(o_rows[0]) < 3:
+            continue
+        split = sum(1 for r in o_rows if len(r) > 1)
+        if split >= 0.9 * len(o_rows):
+            return other
+    return best
+
+
 def table_layout(text: str, delimiter: Optional[str] = None, truncated: bool = True) -> Optional[TableLayout]:
     """Delimiter, header position and header of delimited text (first records only).
 
@@ -727,16 +755,19 @@ def table_layout(text: str, delimiter: Optional[str] = None, truncated: bool = T
         text = rest
     candidates = [delimiter] if delimiter else list(DELIMITERS)
     best = None
+    found = []
     for delim in candidates:
         rows = _rows(text, delim, truncated)
         widths = Counter(len(r) for r in rows if len(r) > 1)
         if not widths:
             continue
         columns, freq = max(widths.items(), key=lambda kv: (kv[1], kv[0]))
+        found.append((columns, freq, delim, rows))
         if best is None or (freq, columns) > (best[1], best[0]):
             best = (columns, freq, delim, rows)
     if best is None:
         return None
+    best = _header_splitting(best, found)
     columns, freq, delim, rows = best
     header_index, _, names = header_row(rows)
     if header_index == 0 and names is None and _first_row_is_record(rows, columns):
