@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Arabic markers of a missing value are empty values by default: `غير مبين` (not stated),
+  `غير محدد` (not specified), `غير معروف` (unknown) and `غير متوفر` (not available), each also with
+  the feminine ending (`غير مبينة`), and so is the English `Not Stated` (in sentence case, lower case
+  and capitals). The census and vital statistics of the Bahrain Open Data Portal (data.gov.bh, a 2024
+  snapshot) add a row of them to tables by age group, governorate and nationality: 52 of the 520
+  age-group cells of the marriage and divorce cases by age group are `غير مبين`, so the age-band
+  validators saw nine in ten values fit and the columns lost their labels. `ARABIC_EMPTY_VALUES`
+  in `metacrafter.classify.stats` lists them; `--empty-values` still replaces the whole list.
 - The English markers of a missing value are empty values by default: `n/a`, `Not Applicable`,
   `Not Assessed` and `Not Recorded`, each also in sentence case, lower case and capitals. Asset and
   tree registers of Australian councils fill columns with them: in the 2024 snapshot of the City of

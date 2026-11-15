@@ -45,8 +45,18 @@ ENGLISH_EMPTY_VALUES = [
     "n/a", "Not Applicable", "Not applicable", "not applicable", "NOT APPLICABLE",
     "Not Assessed", "Not assessed", "not assessed", "NOT ASSESSED",
     "Not Recorded", "Not recorded", "not recorded", "NOT RECORDED",
+    "Not Stated", "Not stated", "not stated", "NOT STATED",
 ]
-DEFAULT_EMPTY_VALUES = [None, "", "None", "NaN", "-", "N/A", "NA"] + SPANISH_EMPTY_VALUES + ENGLISH_EMPTY_VALUES
+# غير مبين (not stated), غير محدد (not specified), غير معروف (unknown) and غير متوفر (not available),
+# also in the feminine, mark a missing value in Arabic statistics: the census and vital statistics
+# of the Bahrain Open Data Portal (data.gov.bh) add a row of them to tables by age group, governorate
+# and nationality (52 of the 520 age-group cells of the marriage cases by age group).
+ARABIC_EMPTY_VALUES = [
+    "غير مبين", "غير مبينة", "غير محدد", "غير محددة", "غير معروف", "غير معروفة", "غير متوفر", "غير متوفرة",
+]
+DEFAULT_EMPTY_VALUES = (
+    [None, "", "None", "NaN", "-", "N/A", "NA"] + SPANISH_EMPTY_VALUES + ENGLISH_EMPTY_VALUES + ARABIC_EMPTY_VALUES
+)
 
 DEFAULT_OPTIONS = {
     "encoding": "utf8",
