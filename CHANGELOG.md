@@ -33,6 +33,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The Portuguese markers of a missing value are empty values by default: `Não informado` (not reported),
+  `Não se aplica` (not applicable), `Não disponível` (not available) and `Sem informação`, each in
+  sentence case, title case, lower case and capitals, and the ten hyphens (`----------`) the BNDES writes
+  for no value. CAPES (dadosabertos.capes.gov.br) writes `NÃO SE APLICA` in most cells of the subarea and
+  speciality of its graduate programmes and `NÃO INFORMADO` for an unknown kind of institution; the
+  Banco Central do Brasil `Não disponível` in the Saturday and Sunday columns of its payment system time
+  grids, which kept them from the `time` label; the BNDES non-automatic operations `----------` for the
+  credited bank of a direct operation. `PORTUGUESE_EMPTY_VALUES` in `metacrafter.classify.stats` lists
+  them; `--empty-values` still replaces the whole list.
+- The code page choice reads Portuguese text with `ü`, which Brazilian spelling kept until 2009
+  (`lingüística`, the author `Müll.Arg.`), as Portuguese: the alphabet of Portuguese in the cp1252 group
+  has it. A CNCFlora table of the Jardim Botânico do Rio de Janeiro (ckan.jbrj.gov.br, a 2024 snapshot)
+  saved on an old Mac, in mac_roman with CR line ends, has `í`, `í`, `ç`, `ü` and `ã` inside words:
+  four of the five were Portuguese, below the 0.9 cover the DOS and Mac choice asks, and the file was
+  read as cp1250 (`Fam’lia;Nome Cient’fico;Categoria de ameaŤa`); it is now read as mac_roman.
 - The Arabic markers of a missing value are empty values by default: `غير مبين` (not stated),
   `غير محدد` (not specified), `غير معروف` (unknown) and `غير متوفر` (not available), each also with
   the feminine ending (`غير مبينة`), and so is the English `Not Stated` (in sentence case, lower case
