@@ -240,6 +240,62 @@ def test_country_name_variant_kept_alone(tmp_path):
     assert classes(scan(processor, [{"city": "Cairo"}])["city"]) == {"egcity"}
 
 
+BO_DEPARTMENTS = {"La Paz", "Potosí", "Oruro", "Chuquisaca"}
+AR_DEPARTMENTS = {"La Paz", "Capital", "Rosario"}
+
+
+def is_bo_department(value):
+    return value in BO_DEPARTMENTS
+
+
+def is_ar_department(value):
+    return value in AR_DEPARTMENTS
+
+
+ARDEPARTMENT = """
+  ardepartmentbyname:
+    key: ar_department
+    match: text
+    type: field
+    rule: departamento
+    validator: tests.test_false_positive_gates.is_ar_department
+    needs_values: true
+    priority: 1
+"""
+BODEPARTMENT = """
+  bodepartmentbyname:
+    key: bo_department
+    match: text
+    type: field
+    rule: departamento
+    validator: tests.test_false_positive_gates.is_bo_department
+    needs_values: true
+    priority: 1
+"""
+
+
+def test_country_name_match_with_worse_fit_dropped(tmp_path):
+    # Argentina has La Paz departments too: two thirds of a Bolivian column pass its validator.
+    processor = processor_with(tmp_path, [(ARDEPARTMENT, "ar"), (BODEPARTMENT, "bo")])
+    rows = [{"departamento": v} for v in ["La Paz"] * 4 + ["Potosí", "Oruro"]]
+    columns = scan(processor, rows, explain=True)
+    assert classes(columns["departamento"]) == {"bo_department"}
+    assert any(r["ruleid"] == "ardepartmentbyname" and r["reason"].startswith("Values fit")
+               for r in columns["departamento"].rejected)
+
+
+def test_country_name_matches_of_equal_fit_kept(tmp_path):
+    processor = processor_with(tmp_path, [(ARDEPARTMENT, "ar"), (BODEPARTMENT, "bo")])
+    rows = [{"departamento": "La Paz"}] * 5
+    assert classes(scan(processor, rows)["departamento"]) == {"ar_department", "bo_department"}
+
+
+def test_country_name_matches_compete_only_without_scan_country(tmp_path):
+    processor = processor_with(tmp_path, [(ARDEPARTMENT, "ar"), (BODEPARTMENT, "bo")], countries=["ar", "bo"])
+    rows = [{"departamento": v} for v in ["La Paz"] * 4 + ["Potosí", "Oruro"]]
+    assert "ar_department" in classes(scan(processor, rows)["departamento"])
+
+
 UUIDRULE = f"""
   uuidbyvalue:
     key: uuid
