@@ -637,3 +637,36 @@ def test_fold_arabic_drawing():
     assert fold_arabic_drawing(2017) == 2017
     columns = {"a": ["دبـــي", None, 3], "b": ["Dubai"]}
     assert fold_arabic_columns(columns) == {"a": ["دبي", None, 3], "b": ["Dubai"]}
+
+
+LONG_GEOMETRY = """
+  geometrytext:
+    key: geojson
+    match: regex
+    type: data
+    rule: '\\{"coordinates": \\[\\[\\[[-0-9., \\[\\]]+\\]\\]\\], "type": "Polygon"\\}'
+    minlen: 30
+    maxlen: 5000000
+    priority: 1
+  toolong:
+    key: geojson
+    match: regex
+    type: data
+    rule: '\\{.+\\}'
+    minlen: 30
+    maxlen: 20000000
+    priority: 1
+"""
+
+
+def test_rule_length_range_takes_long_geometries(tmp_path):
+    # The geo_shape of a council area boundary exported by Opendatasoft is one GeoJSON polygon of
+    # 200 202 characters (Camden LGA, New South Wales): a rule may declare a maxlen above 100 000.
+    processor = processor_with(tmp_path, [(LONG_GEOMETRY, "xx")])
+    ring = ", ".join(f"[150.{i:06d}, -34.{i:06d}]" for i in range(8000))
+    value = '{"coordinates": [[[' + ring + ']]], "type": "Polygon"}'
+    assert len(value) > 200000
+    columns = scan(processor, [{"geo_shape": value}])
+    assert "geojson" in classes(columns["geo_shape"])
+    # A range above MAX_RULE_LEN is still refused.
+    assert [d["ruleid"] for d in processor.diagnostics] == ["toolong"]
