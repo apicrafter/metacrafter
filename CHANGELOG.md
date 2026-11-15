@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Columns of a pre/post study with the wave after a dot: `Age.Post` and `sex.post` of a stress and coping
+  survey of the Universidad de Concepción (datav.udec.cl), as R names the repeated measures of a wide
+  table, are matched by the name before the wave (`Age`, `sex`) when the full name matches no field
+  rule; the field guards of value rules read that name too. The short name of such a column was the
+  wave (`post`), so neither the age nor the gender had a label. The waves are `pre`, `post`,
+  `baseline`, `followup`, `t1`, `w2`, `wave3` and `time1` after a dot of the header itself:
+  `blog_post` keeps its name, and `user.post` of a nested record is the key `post` of the object
+  `user`.
 - Survey columns with a labelled qualifier in parentheses: `FSA (Study: Profiling Questionnaire 2014)`,
   `GENDER (Source: Profiling Questionnaire 2014)` and `Q3_Own_Rent (Study: Profiling Questionnaire 2014)`
   of the Edmonton Insight Community exports (data.edmonton.ca, about 90 survey tables) are matched by

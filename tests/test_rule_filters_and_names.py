@@ -3,7 +3,7 @@
 import pytest
 
 from metacrafter.classify.processor import RULE_TYPE_DATA, RulesProcessor
-from metacrafter.classify.utils import strip_language_suffix, strip_qualifier_suffix
+from metacrafter.classify.utils import strip_language_suffix, strip_qualifier_suffix, strip_wave_suffix
 from metacrafter.registry.adapter import RegistryAdapter, SnapshotRegistry
 
 
@@ -98,6 +98,32 @@ def test_field_rule_matches_name_without_qualifier_suffix(tmp_path):
     found = {r.field: {m.dataclass for m in r.matches} for r in result.results}
     assert found["Abstract (Study: Profiling Questionnaire 2014)"] == {"description"}
     assert found["Abstract (long)"] == set()
+
+
+@pytest.mark.parametrize("name,base", [
+    ("sex.post", "sex"), ("Age.Post", "Age"), ("weight.pre", "weight"), ("score.t2", "score"), ("bmi.w3", "bmi"),
+    ("pain.baseline", "pain"), ("pain.followup", "pain"), ("s1.mpn.post", "s1.mpn"),
+    ("blog_post", "blog_post"), ("post", "post"), (".post", ".post"), ("Str.1", "Str.1"), ("title.en", "title.en"),
+    ("sex", "sex"),
+])
+def test_strip_wave_suffix(name, base):
+    assert strip_wave_suffix(name) == base
+
+
+def test_field_rule_matches_name_without_wave_suffix(tmp_path):
+    """A column of a pre/post study with the wave after a dot of the header (sex.post) is matched by the
+    name before the wave; the key post of a nested object is not a wave."""
+    processor = RulesProcessor()
+    processor.import_rules(write(tmp_path, "t", field_rule("descriptionfield", "description", "abstract,description")))
+    rows = [{"abstract.post": "Text", "Abstract.Pre": "Text", "abstract_post": "Text", "summary": {"post": "Text"},
+             "item": {"abstract": {"post": "Text"}}}]
+    result = processor.match_dict(rows, confidence=5, parse_dates=False)
+    found = {r.field: {m.dataclass for m in r.matches} for r in result.results}
+    assert found["abstract\\.post"] == {"description"}
+    assert found["Abstract\\.Pre"] == {"description"}
+    assert found["abstract_post"] == set()
+    assert found["summary.post"] == set()
+    assert found["item.abstract.post"] == set()
 
 
 def test_field_rule_matches_parent_of_language_key(tmp_path):
