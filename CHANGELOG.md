@@ -38,8 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the feminine ending (`غير مبينة`), and so is the English `Not Stated` (in sentence case, lower case
   and capitals). The census and vital statistics of the Bahrain Open Data Portal (data.gov.bh, a 2024
   snapshot) add a row of them to tables by age group, governorate and nationality: 52 of the 520
-  age-group cells of the marriage and divorce cases by age group are `غير مبين`, so the age-band
-  validators saw nine in ten values fit and the columns lost their labels. `ARABIC_EMPTY_VALUES`
+  age-group cells of the marriage and divorce cases by age group are `غير مبين`, and a quarter of the
+  nationalities of the divorced wives. They counted as values that do not fit: the `age_range` label
+  had confidence 59 instead of 60 and `arnationality` 82.5 instead of 90; a column with more markers
+  than values would have lost its label. `ARABIC_EMPTY_VALUES`
   in `metacrafter.classify.stats` lists them; `--empty-values` still replaces the whole list.
 - The English markers of a missing value are empty values by default: `n/a`, `Not Applicable`,
   `Not Assessed` and `Not Recorded`, each also in sentence case, lower case and capitals. Asset and
