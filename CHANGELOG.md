@@ -41,6 +41,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   passed both; the Argentine match (81.3) now goes, the Bolivian one (90) stays. Matches of equal fit
   and universal rules are kept (metacrafter-testdata, Bolivian round).
 
+- The Arabic markers of a missing value are empty values by default: `غير مبين` (not stated),
+  `غير محدد` (not specified), `غير معروف` (unknown) and `غير متوفر` (not available), each also with
+  the feminine ending (`غير مبينة`), and so is the English `Not Stated` (in sentence case, lower case
+  and capitals). The census and vital statistics of the Bahrain Open Data Portal (data.gov.bh, a 2024
+  snapshot) add a row of them to tables by age group, governorate and nationality: 52 of the 520
+  age-group cells of the marriage and divorce cases by age group are `غير مبين`, and a quarter of the
+  nationalities of the divorced wives. They counted as values that do not fit: the `age_range` label
+  had confidence 59 instead of 60 and `arnationality` 82.5 instead of 90; a column with more markers
+  than values would have lost its label. `ARABIC_EMPTY_VALUES`
+  in `metacrafter.classify.stats` lists them; `--empty-values` still replaces the whole list.
+
 - The English markers of a missing value are empty values by default: `n/a`, `Not Applicable`,
   `Not Assessed` and `Not Recorded`, each also in sentence case, lower case and capitals. Asset and
   tree registers of Australian councils fill columns with them: in the 2024 snapshot of the City of
