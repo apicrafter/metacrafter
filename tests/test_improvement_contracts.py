@@ -207,6 +207,22 @@ def test_portuguese_missing_value_markers_are_empty(rule_file):
     assert "Não se aplica ao município" not in DEFAULT_EMPTY_VALUES
 
 
+def test_colombian_missing_value_markers_are_empty(rule_file):
+    """No aplica, No registra, No reporta, SIN DATO and SIN INFORMACIÓN of the Colombian registers and
+    the NULL and <Null> of SQL and ArcGIS exports do not count against a rule."""
+    processor = RulesProcessor()
+    processor.import_rules(str(rule_file))
+    for marker in ("No aplica", "No Aplica", "NO APLICA", "No registra", "NO REGISTRA", "No reporta", "SIN DATO",
+                   "SIN INFORMACIÓN", "SIN INFORMACION", "SIN INFO", "NULL", "null", "<Null>"):
+        rows = [{"x": "123"}, {"x": marker}, {"x": marker}, {"x": marker}]
+        report = processor.match_dict(rows, confidence=100, parse_dates=False)
+        assert report.results[0].matches[0].dataclass == "national_id", marker
+    # Only the whole value: a phrase that starts with one is a value.
+    from metacrafter.classify.stats import DEFAULT_EMPTY_VALUES
+    assert "No aplica descuento" not in DEFAULT_EMPTY_VALUES
+    assert "SIN DEPTO" not in DEFAULT_EMPTY_VALUES
+
+
 def test_required_validator_failure_does_not_claim_id(rule_file):
     document = yaml.safe_load(rule_file.read_text())
     document["rules"]["national_id"]["validator"] = "missing_package.validate"

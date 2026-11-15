@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Field-name matches of several countries are settled by the other fields of the table when no scan
+  country is set. Countries that share a language share field names, and some values fit the rules of
+  both: `comuna` with 4, 8 and 11 is a comuna of Buenos Aires and a comuna of Cali, so the school and
+  crime tables of Cali were labelled `ar_caba_comuna`, and with a Colombian rule beside it both
+  labels stayed, because the values fit equally. A match counts for a country when its datatype is
+  that country's own (the id starts with the country code of the rule file: `co_department`,
+  `ar_caba_barrio`); rules for universal types in a country's rule file (`district`, `street`) do
+  not. A field whose own-country field-name matches all belong to one country is now a vote for
+  that country, and in a field with own-country matches of different countries, by name or by
+  value, the matches of countries without a vote are dropped when another country of the field has
+  one. Without a vote for any of them every match stays, as before; value rules do not vote.
+- More Spanish markers of a missing value are empty values by default: `No aplica` (not applicable),
+  `No registra` and `No reporta` (not recorded, not reported), each in sentence case, title case, lower
+  case and capitals, and `SIN DATO`, `SIN DATOS`, `SIN INFORMACIÓN`, `SIN INFORMACION` and `SIN INFO` in
+  the capitals and without the accent, as Colombian registers write them; and the `NULL`, `null` and
+  `<Null>` that SQL and ArcGIS exports write for no value. In the first 1000 lines of the 689 tables of
+  a May 2024 snapshot of Datos Abiertos Colombia (www.datos.gov.co) `No aplica` fills 20 279 cells (the
+  columns of a form that do not apply to a record), `No registra` 49 983 cells of one table, `SIN DATO`,
+  `SIN INFORMACIÓN` and `SIN INFO` 7 900 cells and `NULL` or `<Null>` 3 600 cells; they counted as
+  values that do not fit a rule, so a column of NIT numbers, plates or strata with enough of them lost
+  its label. `SPANISH_EMPTY_VALUES` and the new `NULL_EMPTY_VALUES` in
+  `metacrafter.classify.stats` list them; `--empty-values` still replaces the whole list.
 - Survey columns with a labelled qualifier in parentheses: `FSA (Study: Profiling Questionnaire 2014)`,
   `GENDER (Source: Profiling Questionnaire 2014)` and `Q3_Own_Rent (Study: Profiling Questionnaire 2014)`
   of the Edmonton Insight Community exports (data.edmonton.ca, about 90 survey tables) are matched by
