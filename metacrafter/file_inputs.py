@@ -262,13 +262,32 @@ def _decodes(sample: bytes, encoding: str) -> bool:
         return False
 
 
+# The ordinal indicators of Spanish and Portuguese (Nº, 1ª): letters to Python, in no alphabet.
+_ORDINALS = frozenset("ºª")
+_SPANISH = _alphabet("áéíóúüñ")
+# Spanish typed on Spanish keyboards gets grave vowels for acute ones too (Direcciòn, DIRECCIÒN).
+_SPANISH_TYPED = _SPANISH | _alphabet("àèìòùç")
+
+
+def _spanish_letters(letters: Counter) -> bool:
+    """The non-ASCII letters of a cp1252 reading are Spanish: á, é, í, ó, ú, ñ, with fewer grave
+    vowels or ç than those (CONTRATACIÒN). The Czech and Polish alphabets hold the Spanish vowels, so a
+    Spanish text with a typed "ò" fitted cp1250 better, which turns ñ into ń and ò into ň
+    ("AŃO", "Espańa"): 46 Spanish files of Datos Abiertos Mendoza came out as cp1250."""
+    total = sum(letters.values())
+    spanish = sum(n for ch, n in letters.items() if ch in _SPANISH)
+    return bool(total) and all(ch in _SPANISH_TYPED for ch in letters) and spanish >= 0.5 * total
+
+
 def _latin_choice(sample: bytes) -> str:
     """Single-byte Latin code page whose letters best fit one language's alphabet.
 
     Detectors cannot tell cp1252, cp1250, cp1257 and cp1254 apart on short samples (German
     and French come out as cp1250). Decoded with the right code page, the non-ASCII letters
     of a text belong to one alphabet (French, Polish, ...); decoded with a wrong one they
-    mix alphabets (Polish "ś" -> French "œ" next to Spanish "ñ"). Ties go to cp1252.
+    mix alphabets (Polish "ś" -> French "œ" next to Spanish "ñ"). Ties go to cp1252, and so
+    does Spanish (``_spanish_letters``). The ordinal indicators º and ª (Nº, 1ª) are letters to
+    Python but in no alphabet, so they are not counted.
     """
     best = None
     for encoding, alphabets in LATIN_ALPHABETS:
@@ -276,9 +295,11 @@ def _latin_choice(sample: bytes) -> str:
             text = sample.decode(encoding)
         except UnicodeDecodeError:
             continue
-        letters = Counter(ch for ch in text if ord(ch) > 127 and ch.isalpha())
+        letters = Counter(ch for ch in text if ord(ch) > 127 and ch.isalpha() and ch not in _ORDINALS)
         total = sum(letters.values())
         if not total:
+            return encoding
+        if encoding == "cp1252" and _spanish_letters(letters):
             return encoding
         cover = max(sum(n for ch, n in letters.items() if ch in alphabet) for alphabet in alphabets) / total
         if best is None or cover > best[0] + 1e-9:
@@ -286,8 +307,68 @@ def _latin_choice(sample: bytes) -> str:
     return best[1] if best else "latin-1"
 
 
+# DOS and Mac code pages of Western text. They are left out of CANDIDATE_ENCODINGS because the
+# detectors pick them for short Windows samples, but spreadsheets exported by DOS and old Mac
+# programs are still published in them. The Spanish of a cp850 file reads "CABA¥AS",
+# "Inversi¢n", "N§" in cp1252, that of a mac_roman file "Ejecuci—n", "l’nea", "N¼"; the
+# detectors took such files for cp1251 or cp932 (Cyrillic or Japanese) or cp1250. By their bytes 51
+# of the 469 non-UTF-8 CSV files of Datos Abiertos Mendoza are cp850 and 12 mac_roman; the 30 with
+# three or more accented letters inside words are read in their code page.
+_DOS_MAC_PAGES = ("cp850", "mac_roman")
+# A non-ASCII character between two Latin letters: a letter in any Western text, but for the
+# apostrophes and accents typed for them (O’Higgins, D´AGOSTINO), the degree sign typed for the
+# ordinal indicator (N°REG) and the no-break space (Supplier\xa0Name).
+_IN_WORD = re.compile(r"(?<=[A-Za-z])[^\x00-\x7f’‘´`°\xa0](?=[A-Za-z])")
+_NON_ASCII_RUN = re.compile(r"[^\x00-\x7f]+")
+
+
+def _broken_words(text: str) -> bool:
+    """Most characters inside words of ``text`` are symbols, and at least three: "CABA¥AS",
+    "Inversi¢n", "Ejecuci—n"."""
+    inner = _IN_WORD.findall(text)
+    symbols = sum(1 for ch in inner if not ch.isalpha())
+    return symbols >= 3 and symbols > len(inner) - symbols
+
+
+def _dos_mac_choice(sample: bytes) -> Optional[str]:
+    """cp850 or mac_roman for Western text that cp1252 garbles, else None.
+
+    Taken only when the cp1252 reading puts symbols inside words (``_broken_words``) or fails,
+    and the DOS or Mac reading makes the characters inside words letters (at least three, 95 %
+    of them), keeps most non-ASCII characters single between ASCII ones, as accented letters
+    are (two-byte CJK text is runs of them), and gives letters of one Western alphabet
+    (Spanish á, é, í, ó, ú, ñ rather than ù, Æ, û from the wrong one of the two pages).
+    """
+    try:
+        if not _broken_words(sample.decode("cp1252")):
+            return None
+    except UnicodeDecodeError:
+        pass
+    best = None
+    for encoding in _DOS_MAC_PAGES:
+        try:
+            text = sample.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        inner = _IN_WORD.findall(text)
+        if len(inner) < 3 or sum(1 for ch in inner if ch.isalpha()) < 0.95 * len(inner):
+            continue
+        runs = _NON_ASCII_RUN.findall(text)
+        if sum(1 for run in runs if len(run) == 1) < 0.8 * len(runs):
+            continue
+        letters = Counter(ch for ch in text if ord(ch) > 127 and ch.isalpha() and ch not in _ORDINALS)
+        total = sum(letters.values())
+        if not total:
+            continue
+        cover = max(sum(n for ch, n in letters.items() if ch in alphabet) for alphabet in LATIN_ALPHABETS[0][1]) / total
+        if cover >= 0.9 and (best is None or cover > best[0] + 1e-9):
+            best = (cover, encoding)
+    return best[1] if best else None
+
+
 def detect_encoding(sample: bytes, truncated: bool = True) -> str:
-    """Encoding of a byte sample: BOM, then UTF-8, then the most likely common code page."""
+    """Encoding of a byte sample: BOM, then UTF-8, then a DOS or Mac code page of Western text
+    that cp1252 garbles (``_dos_mac_choice``), then the most likely common code page."""
     if sample.startswith(codecs.BOM_UTF8):
         return "utf-8-sig"
     if sample.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
@@ -300,6 +381,9 @@ def detect_encoding(sample: bytes, truncated: bool = True) -> str:
     except UnicodeDecodeError as exc:
         if truncated and exc.start >= len(sample) - 3:
             return "utf-8"  # the sample ends inside a multi-byte character
+    dos_mac = _dos_mac_choice(sample)
+    if dos_mac:
+        return dos_mac
     lines = b"\n".join(ln for ln in sample.split(b"\n") if re.search(rb"[\x80-\xff]", ln))[:500000]
     detected = None
     try:
@@ -316,6 +400,10 @@ def detect_encoding(sample: bytes, truncated: bool = True) -> str:
         detected = codecs.lookup(detected).name.replace("-", "_")
     if detected is None or detected in _LATIN_NAMES or detected.startswith(("mac", "cp8")):
         return _latin_choice(sample)
+    if detected in _CJK_NAMES and not re.search(rb"[\x80-\xff]{2}", lines):
+        # Two-byte text has runs of non-ASCII bytes. A Latin file whose only non-ASCII bytes
+        # stand alone (a degree sign of "TEMPERATURA °C", one "í") came out as cp932 or cp949.
+        return _latin_choice(sample)
     if detected in _KOREAN_NAMES and not _HANGUL.search(lines.decode(detected, errors="ignore")):
         return _non_latin_choice(lines) or detected
     return detected
@@ -325,6 +413,7 @@ def detect_encoding(sample: bytes, truncated: bool = True) -> str:
 # decode as Hanja in EUC-KR: the Hebrew header "מספר מקלט" in cp1255 came out as "前初 展麟",
 # because detectors guess on so few bytes (#105).
 _KOREAN_NAMES = {"euc_kr", "cp949", "johab"}
+_CJK_NAMES = _KOREAN_NAMES | {"cp932", "shift_jis", "euc_jp", "cp950", "big5", "gb18030", "gb2312", "gbk"}
 _HANGUL = re.compile("[ᄀ-ᇿ㄰-㆏가-힣]")
 # Hebrew final letters (kaf, mem, nun, pe, tsadi) end a word; their other forms never do.
 _HEBREW_FINAL = "ךםןףץ"
