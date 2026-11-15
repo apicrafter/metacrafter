@@ -125,6 +125,40 @@ def test_field_rule_with_needs_values(tmp_path):
     assert sorted(m.dataclass for m in result.matches) == ["date", "unixtime_ms"]
 
 
+def test_field_rule_validator_sees_the_values_after_an_empty_sample(tmp_path):
+    # The urban planning certificates of Buenos Aires leave COMUNA empty in the first 445 rows and
+    # write Comuna 11 after them: a field rule whose validator refuses those values does not keep
+    # its name match (city by name), and the rule that needs values and accepts them does.
+    proc = processor_with(tmp_path, """
+  citybyname:
+    key: city
+    match: text
+    type: field
+    rule: comuna
+    validator: tests.test_rules_testdata_60_61.has_letters
+  comunabyname:
+    key: ar_caba_comuna
+    match: text
+    type: field
+    rule: comuna
+    validator: tests.test_rules_testdata_69_70.is_number
+    needs_values: true
+""")
+    empty = [{"comuna": None}, {"comuna": ""}]
+    later = [{"comuna": "11"}, {"comuna": "13"}]
+    result = proc.match_dict(empty, confidence=20, parse_dates=False, explain=True, lookahead=later).results[0]
+    assert [m.dataclass for m in result.matches] == ["ar_caba_comuna"]
+    assert result.rejected[0]["dataclass"] == "city"
+    assert result.rejected[0]["reason"] == "The values do not fit the field-name rule"
+    # Without values after the sample the name match of the rule without needs_values stays.
+    assert labels(proc, empty)["comuna"] == ["city"]
+    assert labels(proc, empty, lookahead=[{"comuna": "Palermo"}])["comuna"] == ["city"]
+
+
+def is_number(value):
+    return str(value).strip().isdigit()
+
+
 def test_needs_values_is_ignored_unless_true(tmp_path):
     proc = processor_with(tmp_path, """
   createdms:

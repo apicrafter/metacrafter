@@ -41,6 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A field-name rule with a validator looks at the records after the sample when the sample has
+  no values, as a rule with `needs_values: true` does, and is dropped when those values do not
+  fit. The urban planning certificates of Buenos Aires leave `COMUNA` empty in the first 445
+  rows and write `Comuna 11` after them: the universal `city` rule, whose validator refuses a
+  numbered division, kept its name match on the empty sample and covered the country rule for
+  the comunas of the city, which had checked the later values. A field without values in the
+  sample and after it keeps its name matches as before.
 - Records of text, dates and URLs are no longer taken for upper header rows: when a second
   table sits beside the first one in its first records (the variants no longer reported, in the
   SARS-CoV-2 variants table of the Africa Data Hub), those records are wider than the rest, the
