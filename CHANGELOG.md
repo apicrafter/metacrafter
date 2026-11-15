@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Survey columns with a labelled qualifier in parentheses: `FSA (Study: Profiling Questionnaire 2014)`,
+  `GENDER (Source: Profiling Questionnaire 2014)` and `Q3_Own_Rent (Study: Profiling Questionnaire 2014)`
+  of the Edmonton Insight Community exports (data.edmonton.ca, about 90 survey tables) are matched by
+  the name before the qualifier (`FSA`, `GENDER`, `Q3_Own_Rent`) when the full name matches no field
+  rule, as a name with a language suffix falls back to its base name; the field guards of value rules
+  read the plain name too. Only a qualifier with a label and a colon is dropped: `Peso (kg)` and
+  `Name (legal)` keep their names. No such column had a label before; in the 2024 snapshot of the
+  portal the forward sortation areas, genders, age bands and home languages of these tables are now
+  read.
 - CSV files without a header row: when the first line is a record like the ones below it (the same
   mix of numbers and text, at least one number that is not a year, and a value that comes back in
   its column further down), it is read as data and the columns are named `column_1` to `column_N`.

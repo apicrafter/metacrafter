@@ -45,6 +45,7 @@ from .utils import (
     resolve_field_names,
     sparse_map_parents,
     strip_language_suffix,
+    strip_qualifier_suffix,
     unescape_field_path,
     whole_number_texts,
 )
@@ -1157,6 +1158,17 @@ class RulesProcessor:
             if base_field != name.strip() and base_name:
                 base = base_name
                 name_variants.append((base, base_field))
+            # A survey column with a labelled qualifier, "FSA (Study: Profiling Questionnaire 2014)",
+            # falls back to the name before it (FSA) in the same way.
+            plain_field = strip_qualifier_suffix(name.strip())
+            if plain_field != name.strip():
+                plain_name = plain_field.rsplit(".", 1)[-1].strip()
+                if plain_name:
+                    name_variants.append((plain_name, plain_field))
+                    # value rules guarded by the field name read the plain name too
+                    shortfield = plain_name
+                    if base == name.rsplit(".", 1)[-1].strip():
+                        base = plain_name
             name_is_data = bool(map_parents) and split_field_path(field)[0] in map_parents
             if name_is_data:
                 name_variants = []
