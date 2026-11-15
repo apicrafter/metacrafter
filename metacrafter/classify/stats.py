@@ -37,7 +37,16 @@ SPANISH_EMPTY_VALUES = [
     "s/d", "S/D", "sin dato", "Sin dato", "sin datos", "Sin datos", "Sin Datos",
     "sin_informacion", "sin información", "Sin información",
 ]
-DEFAULT_EMPTY_VALUES = [None, "", "None", "NaN", "-", "N/A", "NA"] + SPANISH_EMPTY_VALUES
+# Not Applicable, Not Assessed and Not Recorded stand for a missing value in English asset and
+# tree registers: the City of Ballarat (Australia) writes Not Assessed in 41 712 of the 81 467 DBH
+# cells of its tree register and Not Applicable in 3 405 of the 3 757 rank cells of the Avenue of
+# Honour plaques.
+ENGLISH_EMPTY_VALUES = [
+    "n/a", "Not Applicable", "Not applicable", "not applicable", "NOT APPLICABLE",
+    "Not Assessed", "Not assessed", "not assessed", "NOT ASSESSED",
+    "Not Recorded", "Not recorded", "not recorded", "NOT RECORDED",
+]
+DEFAULT_EMPTY_VALUES = [None, "", "None", "NaN", "-", "N/A", "NA"] + SPANISH_EMPTY_VALUES + ENGLISH_EMPTY_VALUES
 
 DEFAULT_OPTIONS = {
     "encoding": "utf8",
