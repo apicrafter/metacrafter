@@ -666,3 +666,71 @@ def test_wkt_geometry_longer_than_the_csv_field_limit(tmp_path):
     assert list(_fields(report)) == ["FID", "the_geom", "OBJECTID", "Name_eng"]
     assert report["stats"]["Name_eng"]["n_uniq"] == 3
     assert report["stats"]["the_geom"]["n_uniq"] == 1
+
+
+# ---------------------------------------------------------------- tables without a header row
+TREES = "".join(
+    f'"http://mercedes.gob.ar/salame/app/arbolado/fotos/14361886{i:05d}.jpg","-34.6{i:04d}","-59.43{i:03d}",'
+    f'"{species}","{state}","Derecho","0","28","{756 + 2 * i}","De 5 a 15"\n'
+    for i, (species, state) in enumerate([("Fresno Americano", "Bueno"), ("Acacia Bola", "Bueno"),
+                                          ("Fresno Americano", "Decrepito"), ("Paraiso", "Bueno"),
+                                          ("Acacia Bola", "Enfermo"), ("Fresno Americano", "Bueno")])
+)
+
+
+def test_first_row_of_a_headerless_table_is_a_record(tmp_path):
+    # The street tree inventory of Mercedes (Buenos Aires) has no header row: its first record
+    # became the column names ("Fresno Americano", "Bueno", "-34.649329") and was lost.
+    layout = table_layout(TREES, None, False)
+    assert layout.header_index == -1
+    assert layout.header == [f"column_{i}" for i in range(1, 11)]
+    path = tmp_path / "arbolado.csv"
+    path.write_text(TREES, encoding="utf-8")
+    plan = prepare_input(str(path), {})
+    assert plan.iterableargs["keys"][0] == "column_1" and plan.skip_records == 0
+    report = _scan(path)
+    assert list(_fields(report)) == [f"column_{i}" for i in range(1, 11)]
+    assert report["stats"]["column_1"]["n_uniq"] == 6
+    assert report["stats"]["column_4"]["n_uniq"] == 3
+
+
+def test_headers_with_numbers_stay_headers():
+    # A header has names, so they do not come back as values of their own column below.
+    text = "id;name;2324\n1;A;5\n2;B;6\n3;C;7\n"
+    assert table_layout(text, truncated=False).header_index == 0
+    # Labels only: the header, even when the records are text too.
+    text = "especie;estado;altura\nFresno;Bueno;De 5 a 15\nFresno;Malo;Menor a 5\nTilo;Bueno;De 5 a 15\n"
+    assert table_layout(text, truncated=False).header_index == 0
+    # A record that repeats a value below, but whose next row has another shape, stays the header.
+    text = "Bueno;12;x\nBueno;y;z\nMalo;w;v\n"
+    assert table_layout(text, truncated=False).header_index == 0
+
+
+def test_a_record_with_an_email_address_is_no_header():
+    # The private schools of Mercedes: the header leaves its last two cells empty, so it is
+    # narrower than the records, and the first record looked like a header below a group heading.
+    lines = ["Tipo;N° Diepregep;NOMBRE;DIRECCIÓN;Nro;MAIL RESPONSBLE;;"]
+    lines += [f"Educacion inicial comun - Gestión privada ;{1750 + 811 * i};JARDIN {name};{3 + i} Y 38;{'S/N' if i % 2 else 100 + i};"
+              f"jardin{i}@example.com.ar;{1 + i % 2};{604988 + i}" for i, name in enumerate(["BICHITO DE LUZ", "SAN PATRICIO", "SAN BENITO",
+                                                                                          "GIRASOLES", "SOLTATE"])]
+    layout = table_layout("\n".join(lines) + "\n", None, False)
+    assert layout.header_index == 0
+    assert layout.header[:6] == ["Tipo", "N° Diepregep", "NOMBRE", "DIRECCIÓN", "Nro", "MAIL RESPONSBLE"]
+
+
+def test_delimiter_that_splits_the_header_wins_over_commas_in_names():
+    # Every record names the head teacher as SURNAME, NAME: a comma splits each record in two
+    # and the header not at all; the semicolon gives four or five cells.
+    text = ("SERV. EDUC;DIRECCCIÓN;TEL FIJO;DIRECTIVO;Matricula 2016\n"
+            "EET Nº1 ;31 Nº51;434181;ISOLA, MERCEDES;404\n"
+            "EET Nº1 ;31 Nº51;434181;MUSANTE, MARINA\n"
+            "EET Nº2;509 e/ 504 Y 502;421421;PONCE, CRISTIAN;163\n"
+            "EESA Nº1;RUTA 41 Y AV. DORREGO;405027;ALMADA, SANDRA;131\n"
+            "CEPT Nº4;;434478;VITALE, JULIO;85\n")
+    layout = table_layout(text, None, False)
+    assert layout.delimiter == ";"
+    assert layout.header == ["SERV. EDUC", "DIRECCCIÓN", "TEL FIJO", "DIRECTIVO", "Matricula 2016"]
+    # A title line above a comma table stays a title.
+    text = "Escuelas de Mercedes\nnombre,direccion,telefono\nEP 1,24 338,423384\nEP 2,26 735,426849\nEP 3,16 1155,420832\n"
+    layout = table_layout(text, None, False)
+    assert layout.delimiter == "," and layout.header == ["nombre", "direccion", "telefono"]

@@ -81,6 +81,7 @@ _PX_CHARSET = re.compile(rb'CHARSET\s*=\s*"([\w\-]+)"', re.IGNORECASE)
 _NUMBER = re.compile(r"^[\s+\-]?[\d\s.,]+%?$")
 _YEAR = re.compile(r"^(?:1[89]|20)\d{2}\s*[*¹²³)]*$")
 _DATE = re.compile(r"^(?:\d{1,2}[./]\d{1,2}[./]\d{4}|\d{4}-\d{2}-\d{2})$")
+_EMAIL_CELL = re.compile(r"^[\w.+-]+@[\w-]+(?:\.[\w-]+)+$")
 # A unit note next to a table title: "単位：人", "(Unit: persons)", "Einheit: 1000".
 _UNIT_NOTE = re.compile(r"^[\s(（]*(?:単位|单位|unit|units|einheit|unité|unidad|unidade|unità|единица|одиниця)\s*[:：]",
                         re.IGNORECASE)
@@ -484,8 +485,11 @@ def _width(row: List[str]) -> int:
 
 
 def _is_label(cell: str) -> bool:
-    """A header cell: text, a year or a date (statistics tables use them as column labels)."""
-    return bool(cell) and (not _NUMBER.match(cell) or bool(_YEAR.match(cell)) or bool(_DATE.match(cell)))
+    """A header cell: text, a year or a date (statistics tables use them as column labels). An
+    e-mail address is a value: no header names a column after one."""
+    if not cell or _EMAIL_CELL.match(cell):
+        return False
+    return not _NUMBER.match(cell) or bool(_YEAR.match(cell)) or bool(_DATE.match(cell))
 
 
 #: Consecutive whole numbers in a row that are column labels, not values: single years of age
@@ -765,8 +769,72 @@ def _wide_header(rows: List[List[str]], columns: int) -> Optional[Tuple[int, int
     return None
 
 
+#: Names of the columns of a table without a header row: column_1, column_2, ...
+HEADERLESS_NAME = "column_{}"
+
+
+def _first_row_is_record(rows: List[List[str]], columns: int) -> bool:
+    """True when a table has no header row: its first row is a record like the ones below it.
+
+    ``header_row`` takes the first row as the header when no row looks like one, so the
+    values of the first record of a header-less export became the column names
+    (``"http://.../1436188673472.jpg","-34.649329","-59.432996","Fresno Americano","Bueno"``
+    in the street tree inventory of Mercedes, Buenos Aires) and the record was lost. The first
+    row is a record when it has the width of the records, the same mix of numbers and text as
+    the next record (``_signature``), at least one cell that is no label (a number that is not
+    a year), and a cell whose value comes back in its column further down: a column name does
+    not repeat as a value of its own column, a species or a status does. A first row of labels
+    only stays the header.
+    """
+    if len(rows) < 3:
+        return False
+    first = [str(c).strip() for c in rows[0]]
+    if abs(_width(rows[0]) - columns) > max(1, columns // 10):
+        return False
+    following = next((r for r in rows[1:] if _width(r) > 1), None)
+    if following is None or _signature(rows[0], columns) != _signature(following, columns):
+        return False
+    if all(_signature(rows[0], columns)):
+        return False
+    below = rows[1:]
+    for index, cell in enumerate(first[:columns]):
+        if cell and not _NUMBER.match(cell) and any(
+            index < len(r) and str(r[index]).strip() == cell for r in below
+        ):
+            return True
+    return False
+
+
+def _header_splitting(best, found):
+    """The candidate delimiter that splits the first line, when the best one leaves it whole.
+
+    A delimiter wins by the number of records that have its most common width. In a school list
+    of Mercedes, Buenos Aires, every record names its head teacher as SURNAME, NAME, so a comma
+    splits every record in two and beats the semicolon, whose records have four or five cells
+    (the last one is often missing): the header ``SERV. EDUC;DIRECCCIÓN;TEL FIJO;DIRECTIVO;
+    Matricula 2016`` has no comma. When the best delimiter does not split the first line and
+    another one splits it into three or more cells and splits nine in ten of the records too,
+    that one is the delimiter. A title line above the header has one cell for every delimiter.
+    """
+    columns, freq, delim, rows = best
+    if not rows or len(rows[0]) > 1:
+        return best
+    for other in found:
+        o_rows = other[3]
+        if other[2] == delim or not o_rows or len(o_rows[0]) < 3:
+            continue
+        split = sum(1 for r in o_rows if len(r) > 1)
+        if split >= 0.9 * len(o_rows):
+            return other
+    return best
+
+
 def table_layout(text: str, delimiter: Optional[str] = None, truncated: bool = True) -> Optional[TableLayout]:
-    """Delimiter, header position and header of delimited text (first records only)."""
+    """Delimiter, header position and header of delimited text (first records only).
+
+    A table without a header row (``_first_row_is_record``) has ``header_index`` -1 and the
+    names ``column_1`` to ``column_N``.
+    """
     first, _, rest = text.partition("\n")
     sep_hint = False
     hint = _SEP_HINT.match(first.strip("\ufeff\r"))
@@ -776,18 +844,24 @@ def table_layout(text: str, delimiter: Optional[str] = None, truncated: bool = T
         text = rest
     candidates = [delimiter] if delimiter else list(DELIMITERS)
     best = None
+    found = []
     for delim in candidates:
         rows = _rows(text, delim, truncated)
         widths = Counter(len(r) for r in rows if len(r) > 1)
         if not widths:
             continue
         columns, freq = max(widths.items(), key=lambda kv: (kv[1], kv[0]))
+        found.append((columns, freq, delim, rows))
         if best is None or (freq, columns) > (best[1], best[0]):
             best = (columns, freq, delim, rows)
     if best is None:
         return None
+    best = _header_splitting(best, found)
     columns, freq, delim, rows = best
     header_index, _, names = header_row(rows)
+    if header_index == 0 and names is None and _first_row_is_record(rows, columns):
+        header = [HEADERLESS_NAME.format(i + 1) for i in range(max(columns, _width(rows[0])))]
+        return TableLayout(delim, columns, -1, header, sep_hint, freq / max(len(rows), 1), None)
     header = names or (rows[header_index] if rows else [])
     tags = hxl_tags(rows[header_index + 1]) if header_index + 1 < len(rows) and hxl_tags(header) is None else None
     return TableLayout(delim, columns, header_index, header, sep_hint, freq / max(len(rows), 1), tags)
@@ -1088,6 +1162,15 @@ def _plan_table(filename: str, ext: str, codec: Optional[str], plan: InputPlan) 
         args["delimiter"] = layout.delimiter
         plan.notes.append(f"read as a table delimited by {layout.delimiter!r}")
     if layout is None:
+        return
+    if layout.header_index < 0:
+        # No header row: the first record is data, and the columns get numbered names.
+        args["delimiter"] = layout.delimiter
+        args["keys"] = list(layout.header)
+        plan.skip_records = 1 if layout.sep_hint else 0
+        plan.notes.append(
+            f"no header row: the first line is a record; columns named {layout.header[0]} to {layout.header[-1]}"
+        )
         return
     if layout.sep_hint or layout.header_index or layout.hxl:
         args["delimiter"] = layout.delimiter
