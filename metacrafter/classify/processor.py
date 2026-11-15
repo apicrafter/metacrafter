@@ -279,6 +279,11 @@ DEFAULT_MAX_LEN = 100
 DEFAULT_MIN_LEN = 3
 DEFAULT_PRIORITY = 3
 REGEX_MAX_LEN = 256
+# Largest minlen / maxlen a rule may declare. Geometries written as text are long: the GeoJSON
+# polygon of a council area boundary in an Opendatasoft geo_shape column has 200 202 characters
+# (Camden LGA, New South Wales), the WKT multipolygons of Buenos Aires over 131 072. A rule with a
+# larger range is skipped with a diagnostic.
+MAX_RULE_LEN = 10_000_000
 MATCH_TYPES = ("text", "ppr", "func", "regex", "registry")
 # Rule files with this country code (or none) apply in every country.
 UNIVERSAL_COUNTRY = "xx"
@@ -694,7 +699,7 @@ class RulesProcessor:
                 rule["priority"] = int(rule.get("priority", DEFAULT_PRIORITY))
                 rule["minlen"] = int(rule.get("minlen", DEFAULT_MIN_LEN))
                 rule["maxlen"] = int(rule.get("maxlen", DEFAULT_MAX_LEN))
-                if not 0 <= rule["minlen"] <= rule["maxlen"] <= 100000:
+                if not 0 <= rule["minlen"] <= rule["maxlen"] <= MAX_RULE_LEN:
                     raise ValueError("Invalid length range")
             except (ValueError, TypeError):
                 self.diagnostics.append({"ruleid": rulekey, "source": filename, "error": "Invalid priority or length"})

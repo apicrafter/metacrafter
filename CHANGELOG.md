@@ -41,6 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A rule may declare a `minlen` / `maxlen` up to 10 000 000 characters (`MAX_RULE_LEN` in
+  `metacrafter.classify.processor`); a range above 100 000 made the whole rule fail to load ("Invalid
+  priority or length"). Geometries written as text are longer: the `geo_shape` of the Camden LGA
+  boundary of the Opendatasoft portal of Camden Council (New South Wales) is one GeoJSON polygon of
+  200 202 characters, and the WKT multipolygons of the Buenos Aires portal pass 131 072, so a GeoJSON
+  or WKT rule could not take them. A range above the new limit is still refused with the same
+  diagnostic.
 - A field-name rule with a validator looks at the records after the sample when the sample has
   no values, as a rule with `needs_values: true` does, and is dropped when those values do not
   fit. The urban planning certificates of Buenos Aires leave `COMUNA` empty in the first 445
