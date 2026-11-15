@@ -46,6 +46,7 @@ from .utils import (
     sparse_map_parents,
     strip_language_suffix,
     strip_qualifier_suffix,
+    strip_wave_suffix,
     unescape_field_path,
     whole_number_texts,
 )
@@ -1169,6 +1170,19 @@ class RulesProcessor:
                     shortfield = plain_name
                     if base == name.rsplit(".", 1)[-1].strip():
                         base = plain_name
+            # A column of a pre/post study, "sex.post" or "Age.Post", falls back to the name before
+            # the wave (sex, Age): the short name after the dot (post) says nothing. Only a dot of
+            # the header itself (escaped in the field path) is one: user.post of a nested record is
+            # the key post of the object user.
+            wave_field = strip_wave_suffix(name.strip()) if field != name else name.strip()
+            if wave_field != name.strip():
+                wave_name = wave_field.rsplit(".", 1)[-1].strip()
+                if wave_name:
+                    name_variants.append((wave_name, wave_field))
+                    # value rules guarded by the field name read the name before the wave too
+                    shortfield = wave_name
+                    if base == name.rsplit(".", 1)[-1].strip():
+                        base = wave_name
             name_is_data = bool(map_parents) and split_field_path(field)[0] in map_parents
             if name_is_data:
                 name_variants = []
