@@ -589,3 +589,51 @@ def test_country_variant_of_a_concrete_parent_still_dropped(tmp_path, refined_ad
     # Swiss commune name is a city too.
     processor = processor_with(tmp_path, [(CITY, "xx"), (FRCOMMUNE, "fr")], refined_adapter)
     assert classes(scan(processor, [{"city": "Namur"}])["city"]) == {"city"}
+
+
+ARABIC_MONTH = """
+  armonthvalue:
+    key: ar_month
+    match: text
+    type: data
+    rule: يناير,فبراير,مارس,أبريل,مايو,يونيو
+    priority: 1
+"""
+
+ARABIC_REGION = """
+  westernregion:
+    key: ae_region
+    match: regex
+    type: data
+    rule: المنطقة الغربية|الغربيه
+    minlen: 4
+    maxlen: 40
+    priority: 1
+"""
+
+
+def test_arabic_tatweel_and_persian_letters_folded(tmp_path):
+    # UAE statistics stretch month names with the tatweel (ينايـر, مــارس) and type the
+    # Persian yeh in Arabic words (الغربیه): value rules see the Arabic letters.
+    processor = processor_with(tmp_path, [(ARABIC_MONTH, "xx"), (ARABIC_REGION, "xx")])
+    rows = [{"Month_AR": m, "Region_AR": r} for m, r in
+            [("ينايـر", "الغربیـــــه"), ("فبرايـر", "المنطقة الغربية"), ("مــارس", "الغربيه")]]
+    columns = scan(processor, rows)
+    assert "ar_month" in classes(columns["Month_AR"])
+    assert columns["Month_AR"].matches[0].confidence > 90
+    assert "ae_region" in classes(columns["Region_AR"])
+    # Text without these characters is not touched; a Latin value never matches.
+    assert "ar_month" not in classes(scan(processor, [{"m": "January"}, {"m": "Mar"}])["m"])
+
+
+def test_fold_arabic_drawing():
+    from metacrafter.classify.utils import fold_arabic_columns, fold_arabic_drawing
+
+    assert fold_arabic_drawing("أبو ظــــــبي") == "أبو ظبي"
+    assert fold_arabic_drawing("الفجــــــــــیره") == "الفجيره"
+    assert fold_arabic_drawing("المنھل") == "المنهل"
+    assert fold_arabic_drawing("کویت") == "كويت"
+    assert fold_arabic_drawing("Dubai") == "Dubai"
+    assert fold_arabic_drawing(2017) == 2017
+    columns = {"a": ["دبـــي", None, 3], "b": ["Dubai"]}
+    assert fold_arabic_columns(columns) == {"a": ["دبي", None, 3], "b": ["Dubai"]}

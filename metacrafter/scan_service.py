@@ -20,7 +20,7 @@ import qddate.patterns
 
 from iterable.helpers.detect import open_iterable
 
-from metacrafter.file_inputs import RecordSource, allow_long_csv_cells, prepare_input
+from metacrafter.file_inputs import RecordSource, prepare_input
 
 from metacrafter.classify.processor import RulesProcessor, BASE_URL, match_rank_key
 from metacrafter.classify.stats import Analyzer, DEFAULT_DICT_SHARE, DEFAULT_EMPTY_VALUES
@@ -126,8 +126,6 @@ def _open_data_file(filename, iterableargs):
     cannot rewind (zstandard) raises ``io.UnsupportedOperation``; such a file is
     opened again without detection, so its CSV delimiter is a comma.
     """
-    # Another library may have lowered the csv cell limit since metacrafter was imported.
-    allow_long_csv_cells()
     try:
         return open_iterable(filename, iterableargs=iterableargs)
     except io.UnsupportedOperation:

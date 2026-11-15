@@ -58,23 +58,6 @@ logger = logging.getLogger(__name__)
 SAMPLE_BYTES = 1 << 20
 JSON_MAX_BYTES = 256 << 20
 SAMPLE_RECORDS = 60
-# The csv module refuses a cell of more than 131 072 characters ("field larger than field
-# limit"), and a geometry column holds more: the WKT MULTIPOLYGON of a district of a city has
-# 300 000 characters. Cells of up to 256 MiB are read.
-CSV_FIELD_LIMIT = 1 << 28
-
-
-def allow_long_csv_cells() -> int:
-    """Raise the cell size limit of the csv module to ``CSV_FIELD_LIMIT``; a higher limit set
-    by the caller is kept. Returns the limit in force."""
-    current = csv.field_size_limit()
-    if current < CSV_FIELD_LIMIT:
-        csv.field_size_limit(CSV_FIELD_LIMIT)
-        return CSV_FIELD_LIMIT
-    return current
-
-
-allow_long_csv_cells()
 MAX_HEADER_OFFSET = 30
 MAX_SHEETS = 20
 MIN_TABLE_COLUMNS = 3
@@ -105,6 +88,18 @@ _UNIT_NOTE = re.compile(r"^[\s(（]*(?:単位|单位|unit|units|einheit|unité|u
 # Plataforma Nacional de Transparencia (SIPOT) follows a "Tabla Campos" line, after the format
 # id, title, type code and field id rows (#98).
 HEADER_MARKERS = {"tabla campos"}
+# Python's csv module refuses a field of more than 131072 characters (csv.field_size_limit).
+# A WFS CSV export holds the geometry as well-known text in one field, and a detailed boundary
+# or isoline is longer than that: 131365 characters in marz.csv and 255791 in Temperature.csv of
+# the Armenian Soil Information System. The limit is set for the process, so iterabledata's
+# reader gets it too.
+CSV_FIELD_LIMIT = 1 << 30
+
+
+def allow_long_csv_fields() -> None:
+    """Raise the field size limit of the csv module to ``CSV_FIELD_LIMIT`` unless it is higher."""
+    if csv.field_size_limit() < CSV_FIELD_LIMIT:
+        csv.field_size_limit(CSV_FIELD_LIMIT)
 
 
 def _alphabet(letters: str) -> frozenset:
@@ -133,6 +128,11 @@ LATIN_ALPHABETS = (
     ("cp1257", [_alphabet(a) for a in ("ąčęėįšųūž", "āčēģīķļņšūž", "äõöüšž")]),
     ("cp1254", [_alphabet("çğıöşüâîûİ")]),
 )
+
+
+#: A hashtag of the Humanitarian Exchange Language (HXL): ``#country+code``, ``#adm1+name``,
+#: ``#affected+infected``. HDX tables put a row of them right below the header.
+_HXL_TAG = re.compile(r"^#[A-Za-z][A-Za-z0-9_]*(?:\s*\+[A-Za-z][A-Za-z0-9_]*)*$")
 
 
 @dataclass
@@ -373,6 +373,7 @@ class TableLayout:
     header: List[str]  # column names (upper header rows joined in)
     sep_hint: bool
     consistent: float  # share of sampled records that have ``columns`` fields
+    hxl: Optional[List[str]] = None  # the HXL hashtag row below the header, if there is one
 
 
 def _rows(text: str, delimiter: str, truncated: bool) -> List[List[str]]:
@@ -549,6 +550,23 @@ def _combine_header(band: List[List[str]], header: List[str], columns: int) -> L
     return names
 
 
+def hxl_tags(row: Optional[List[str]]) -> Optional[List[str]]:
+    """The cells of an HXL hashtag row (``;#date;#country+code;#country+name;;``), or None.
+
+    The Humanitarian Exchange Language marks the columns of a table with a row of hashtags
+    right below the header; the Humanitarian Data Exchange (HDX) serves thousands of tables
+    with one. It is a row whose filled cells are all hashtags, two or more of them (one in a
+    table of one column). Read as a record, it puts a hashtag into every column.
+    """
+    if not row:
+        return None
+    cells = [str(c).strip() for c in row]
+    filled = [c for c in cells if c]
+    if len(filled) < min(2, len(cells)) or not all(_HXL_TAG.match(c) for c in filled):
+        return None
+    return cells
+
+
 def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
     """(header row index, body column count, combined names or None) of the first table rows.
 
@@ -556,7 +574,8 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
     every row above it is a title or note row, a section heading over the row label columns
     ("Batken oblast"), or an upper header row (merged group headings) directly above it;
     then the names join the upper rows and the header row. A header marker line ("Tabla
-    Campos") puts the header on the next row. Otherwise the header is the first row.
+    Campos") puts the header on the next row, and a first row of labels wider than the
+    records (``_wide_first_header``) is the header. Otherwise the header is the first row.
     The spreadsheet column letters that Dataverse writes into the empty cells of the first
     row are no labels (``_blank_column_letters``); a first row that stays the header keeps
     them as names, and so do the columns that no header row names.
@@ -577,6 +596,8 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
     marked = _marker_header(rows)
     if marked is not None:
         return marked, columns, None
+    if _wide_first_header(rows, columns):
+        return 0, _width(rows[0]), None
     for index, row in enumerate(rows[: MAX_HEADER_OFFSET + 1]):
         following = next((r for r in rows[index + 1:] if _width(r) > 1), None)
         if not _looks_like_header(row, columns, following):
@@ -584,7 +605,11 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
         # Headings over the row label columns only are section titles (#98).
         text_columns = _text_columns([r for r in rows[index + 1:] if _width(r) > 1], columns)
         top = index
-        while top > 0 and _is_band_row(rows[top - 1], columns) and not _is_section_row(rows[top - 1], text_columns):
+        # Group headings span several columns, so an upper header row fills fewer of the body
+        # columns than the header: a row that fills as many is a record of text and dates
+        # ("Algeria,Alpha,B.1.1.7,2021-03-11,Africa CDC,https://...") above a shorter record.
+        while (top > 0 and _is_band_row(rows[top - 1], columns) and not _is_section_row(rows[top - 1], text_columns)
+               and _filled(rows[top - 1][:columns]) < _filled(rows[index][:columns])):
             top -= 1
         # Header rows below it (GENESIS: "Stichtag" / "31.12.2025" / "Insgesamt"): label
         # rows with fewer filled cells than the first data row continue the header, unless
@@ -593,7 +618,8 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
         # text and partly empty are data.
         named = rows[index]
         while (index + 1 < len(rows) and _is_band_row(rows[index + 1])
-               and not _fills_named_text_column(rows[index + 1], named, text_columns)):
+               and not _fills_named_text_column(rows[index + 1], named, text_columns)
+               and hxl_tags(rows[index + 1]) is None):
             data = next((r for r in rows[index + 2:] if _width(r) > 1 and not _is_band_row(r)), None)
             if data is None or _filled(rows[index + 1]) >= _filled(data):
                 break
@@ -607,6 +633,26 @@ def header_row(rows: List[List[str]]) -> Tuple[int, int, Optional[List[str]]]:
     if wide is not None:
         return wide[0], wide[1], None
     return 0, columns, None
+
+
+def _wide_first_header(rows: List[List[str]], columns: int) -> bool:
+    """True when the first row is the header although the records are narrower.
+
+    The records may leave their last cells empty: in an OurAirports export most airports have
+    no ``wikipedia_link`` and ``keywords``, so the most common width is 16 of the 18 columns of
+    the header, and in a Google Forms export the last questions are optional. The first row
+    then does not look like a header for the width of the records, and the first record, mostly
+    text (``3095,GFLL,medium_airport,"Lungi International Airport",...``), became the header
+    with the real header joined above it as group headings (``id 3095``, ``ident GFLL``). A
+    first row of labels only (no numbers) that is wider than the records and at least as wide
+    as every row below it is the header.
+    """
+    first = rows[0]
+    width = _width(first)
+    below = [r for r in rows[1:] if _width(r) > 1]
+    if not below or width <= columns + max(1, columns // 10) or width < max(_width(r) for r in below):
+        return False
+    return _is_band_row(first, columns) and _looks_like_header(first, width, below[0])
 
 
 def _wide_header(rows: List[List[str]], columns: int) -> Optional[Tuple[int, int]]:
@@ -654,7 +700,8 @@ def table_layout(text: str, delimiter: Optional[str] = None, truncated: bool = T
     columns, freq, delim, rows = best
     header_index, _, names = header_row(rows)
     header = names or (rows[header_index] if rows else [])
-    return TableLayout(delim, columns, header_index, header, sep_hint, freq / max(len(rows), 1))
+    tags = hxl_tags(rows[header_index + 1]) if header_index + 1 < len(rows) and hxl_tags(header) is None else None
+    return TableLayout(delim, columns, header_index, header, sep_hint, freq / max(len(rows), 1), tags)
 
 
 def wrapped_layout(text: str, truncated: bool = True) -> Optional[TableLayout]:
@@ -874,6 +921,7 @@ def sniff_format(filename: str, codec: Optional[str] = None) -> Optional[Tuple[s
 # ---------------------------------------------------------------- the plan
 def prepare_input(filename: str, iterableargs: dict) -> InputPlan:
     """Arguments and record clean-up for opening ``filename`` with iterabledata."""
+    allow_long_csv_fields()
     args = dict(iterableargs)
     plan = InputPlan(iterableargs=args)
     if args.get("format"):
@@ -952,12 +1000,16 @@ def _plan_table(filename: str, ext: str, codec: Optional[str], plan: InputPlan) 
         plan.notes.append(f"read as a table delimited by {layout.delimiter!r}")
     if layout is None:
         return
-    if layout.sep_hint or layout.header_index:
+    if layout.sep_hint or layout.header_index or layout.hxl:
         args["delimiter"] = layout.delimiter
         args["keys"] = _unique(layout.header)
         plan.skip_records = layout.header_index + 1 + (1 if layout.sep_hint else 0)
         skipped = plan.skip_records - 1
-        plan.notes.append(f"header on record {skipped + 1}; skipped {skipped} line(s) before it")
+        if skipped:
+            plan.notes.append(f"header on record {skipped + 1}; skipped {skipped} line(s) before it")
+        if layout.hxl:
+            plan.skip_records += 1
+            _note_hxl(plan, args["keys"], layout.hxl)
     elif _repeats_names(layout.header):
         # Records are dicts: a column whose name an earlier column has already (two blocks of
         # one sheet side by side, "Ct" over each gene of a qPCR table) would replace its values.
@@ -1101,7 +1153,10 @@ def _plan_sheet(filename: str, ext: str, plan: InputPlan) -> None:
         if given is not None or _is_table(found, found_index, columns):
             page, rows, index, names = candidate, found, found_index, found_names
             break
-    if rows is None or (not index and page == 0):
+    tags = hxl_tags(rows[index + 1]) if rows is not None and index + 1 < len(rows) else None
+    if tags is not None and hxl_tags(rows[index]) is not None:
+        tags = None  # a table whose header is the hashtag row
+    if rows is None or (not index and page == 0 and tags is None):
         return
     if page != 0:
         titles = sheet_names(filename, ext)
@@ -1121,6 +1176,19 @@ def _plan_sheet(filename: str, ext: str, plan: InputPlan) -> None:
         plan.iterableargs["start_line"] = index
     if index:
         plan.notes.append(f"header on sheet row {index + 1}; skipped {index} row(s) above it")
+    if tags is not None:
+        keys = plan.iterableargs.get("keys") or _unique([str(c) for c in names or rows[index]])
+        plan.iterableargs["keys"] = keys
+        plan.iterableargs["start_line"] = index + 2
+        _note_hxl(plan, keys, tags)
+
+
+def _note_hxl(plan: InputPlan, keys: List[str], tags: List[str]) -> None:
+    """Report the HXL hashtag of each column (field ``hxl``) and that its row was skipped."""
+    for name, tag in zip(keys, tags):
+        if tag:
+            plan.field_info.setdefault(name, {})["hxl"] = tag
+    plan.notes.append("HXL hashtag row below the header: skipped, its hashtags are reported as hxl")
 
 
 def _plan_json(filename: str, codec: Optional[str], plan: InputPlan) -> None:

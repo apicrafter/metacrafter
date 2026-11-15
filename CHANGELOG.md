@@ -7,8 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- HXL hashtag rows: a row of Humanitarian Exchange Language hashtags right below the header of a
+  CSV file or a sheet (`;#date;#country+code;#country+name;#affected+infected;;`, the HDX tables)
+  is skipped, and each field reports its hashtag as `hxl` (`"hxl": "#country+code"`). It was read
+  as a record and put a hashtag into every column: `#date` among the dates, `#affected+infected`
+  among the counts. A table whose header is the hashtag row keeps it as the header.
+
 ### Changed
 
+- Value rules see Arabic text without the tatweel (kashida, U+0640) and with the Arabic letters for
+  the Persian forms of yeh, keheh and heh doachashmee (U+06CC, U+06A9, U+06BE). Statistical
+  tables of the UAE Open Data portal stretch words to fill their cells (`ينايـر`, `أبو ظــــبي`,
+  `الشارقــة`) and type Arabic words on Persian keyboard layouts (`الغربیه`, `المنھل`): 261 of its
+  1 779 CSV files have the tatweel and 192 the Persian letters, and text rules such as the Arabic
+  month names matched none of those values. Values without these characters are not touched;
+  field names are not folded.
 - The Spanish markers of a missing value are empty values by default: `s/d` and `S/D` (sin
   datos), `sin dato`, `sin datos`, `Sin datos`, `sin_informacion` and `sin información`. The
   cultural directories of the Argentine culture ministry (datos.cultura.gob.ar) fill whole
@@ -33,14 +48,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   numbered division, kept its name match on the empty sample and covered the country rule for
   the comunas of the city, which had checked the later values. A field without values in the
   sample and after it keeps its name matches as before.
-- A CSV file with a cell of more than 131 072 characters is read: the `csv` module refuses
-  such a cell by default (`field larger than field limit (131072)`), so the file failed with
-  `FormatParseError`. Geometry tables have them: the Premetro route and the school perimeter of
-  the Buenos Aires open data portal (data.buenosaires.gob.ar) keep one WKT `MULTILINESTRING` or
-  `MULTIPOLYGON` of 150 000 to 300 000 characters per row. `metacrafter.file_inputs` raises the
-  limit to 256 MiB (`CSV_FIELD_LIMIT`, `allow_long_csv_cells()`) when it is imported and before
-  a file is opened; a higher limit set by the caller is kept.
-
+- Records of text, dates and URLs are no longer taken for upper header rows: when a second
+  table sits beside the first one in its first records (the variants no longer reported, in the
+  SARS-CoV-2 variants table of the Africa Data Hub), those records are wider than the rest, the
+  first narrow record looked like a header, and the records above it were joined into its names
+  (`country Algeria Angola`). An upper header row now fills fewer of the body columns than the
+  header, as group headings do.
+- CSV files with a field longer than 131072 characters open: Python's csv module refuses such
+  a field unless its limit is raised, and a WFS CSV export holds each geometry as well-known text
+  in one field. Four of the 16 GeoServer exports of the Armenian Soil Information System
+  (ArmSIS) did not open (`field larger than field limit (131072)`): the province boundaries of
+  `marz.csv` (a boundary of 131365 characters), the isotherms (255791), isohyets and heat
+  duration zones.
+  `metacrafter.file_inputs.allow_long_csv_fields` raises the limit to 2^30 for the process
+  before a file is read.
+- A first row of labels that is wider than the records is the header: records that leave their
+  last cells empty made the first record, if mostly text, look like the header, and the real
+  header was joined above it as group headings (`id 3095`, `ident GFLL`, `iso_region SL-N`). The
+  OurAirports export of the airports of Sierra Leone on openAFRICA has 18 columns and records of
+  16 (`wikipedia_link` and `keywords` mostly empty), a Google Forms export 23 columns and answers
+  of 18 (`file_inputs._wide_first_header`).
 - A census table by single years of age keeps its header below the title rows: a header
   that is mostly the numbers 0 to 100 (`CODIGO;PROV;DEPTO;FRACCION;RADIO;0;1;2;...;100;Total`,
   statistics office of Córdoba) was taken for a record, and the title row became the header
