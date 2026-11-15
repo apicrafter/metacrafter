@@ -1149,12 +1149,13 @@ def _plan_table(filename: str, ext: str, codec: Optional[str], plan: InputPlan) 
             plan.kind = "csv"
             plan.notes.append(f"every line is one quoted cell: read the cells as text delimited by {inner.delimiter!r}")
             return
-    if ext == "tab" and layout is not None and layout.columns >= 2:
+    if ext == "tab":
         # iterabledata knows no .tab format and detects the type from the first bytes, which
         # fails when the header is longer than its sample (Dataverse exports with 3000 and more
-        # variables): read the file as delimited text.
+        # variables) and when the file has one column and so no tab at all (a Dataverse table of
+        # one variable, the ages of an ice core of UCLouvain): read the file as tab-delimited text.
         args.setdefault("format", "csv")
-        args.setdefault("delimiter", layout.delimiter)
+        args.setdefault("delimiter", layout.delimiter if layout is not None and layout.columns >= 2 else given)
     if ext == "txt":
         if layout is None or layout.consistent < 0.8 or layout.columns < 2:
             return  # plain text: iterabledata reads it line by line

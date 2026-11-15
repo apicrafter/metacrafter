@@ -477,6 +477,16 @@ def test_compressed_tab_file(tmp_path):
     assert "email" in _fields(_scan(path))["email"]
 
 
+def test_tab_file_of_one_column(tmp_path):
+    # A Dataverse table of one variable has no tab: iterabledata could not detect its type
+    # (De_ages.tab of UCLouvain, the ages of the layers of an ice rise, header "year AD").
+    path = tmp_path / "De_ages.tab"
+    path.write_text("year AD\n2012.0\n2003.35\n1993.03\n1988.4\n1985.07\n1979.96\n1972.39\n", encoding="utf-8")
+    plan = prepare_input(str(path), {})
+    assert plan.iterableargs["format"] == "csv" and plan.iterableargs["delimiter"] == "\t"
+    assert list(_fields(_scan(path))) == ["year AD"]
+
+
 # ---------------------------------------------------------------- lines quoted whole
 # Exports of datos.gob.ar (Argentina) quote every whole line: the employment by sector series
 # of the Ministry of Production write each ;-delimited record as one cell, and the physical
