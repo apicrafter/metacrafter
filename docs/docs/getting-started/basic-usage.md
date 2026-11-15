@@ -65,8 +65,10 @@ metacrafter scan file data.csv \
 
 By default `None`, `NaN`, `-`, `N/A`, `NA`, the empty string and the Spanish markers of a
 missing value (`s/d`, `S/D`, `sin dato`, `sin datos`, `Sin datos`, `sin_informacion`,
-`sin información`) and the English markers `n/a`, `Not Applicable`, `Not Assessed` and
-`Not Recorded` (also in sentence case, lower case and capitals) are empty values: they are not classified, and a field of them only is
+`sin información`), the English markers `n/a`, `Not Applicable`, `Not Assessed`, `Not Recorded`
+and `Not Stated` (also in sentence case, lower case and capitals) and the Arabic markers `غير مبين`
+(not stated), `غير محدد` (not specified), `غير معروف` (unknown) and `غير متوفر` (not available), also
+with the feminine ending `ة`, are empty values: they are not classified, and a field of them only is
 tagged `empty`. `--empty-values` replaces the list.
 
 `--dict-share` controls when a field is tagged as a dictionary (low cardinality).
