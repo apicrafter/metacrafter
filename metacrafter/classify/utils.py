@@ -461,6 +461,25 @@ def strip_qualifier_suffix(name):
     return match.group("base") if match else name
 
 
+# The wave of a repeated measure after a dot, as R writes the columns of a pre/post study: Age.Post,
+# sex.post, weight.pre, score.t2, bmi.w3, pain.baseline, pain.followup. Only a dot separates a wave:
+# blog_post and wall_post are other things.
+_WAVE_SUFFIX = re.compile(
+    r"^(?P<base>.*[^.\s])\.(?:pre|post|baseline|follow[_ ]?up|[tw][0-9]{1,2}|wave[0-9]{1,2}|time[0-9]{1,2})$",
+    re.IGNORECASE,
+)
+
+
+def strip_wave_suffix(name):
+    """Field name without a trailing wave of a repeated measure: ``sex.post`` -> ``sex``,
+    ``Age.Post`` -> ``Age``, ``score.t2`` -> ``score``.
+
+    Returns ``name`` unchanged when it has none (``blog_post``, ``post``, ``Str.1``).
+    """
+    match = _WAVE_SUFFIX.match(str(name))
+    return match.group("base") if match else name
+
+
 def strip_values(value):
     """Copy of ``value`` with leading and trailing whitespace removed from every string.
 
