@@ -783,3 +783,38 @@ def test_delimiter_that_splits_the_header_wins_over_commas_in_names():
     text = "Escuelas de Mercedes\nnombre,direccion,telefono\nEP 1,24 338,423384\nEP 2,26 735,426849\nEP 3,16 1155,420832\n"
     layout = table_layout(text, None, False)
     assert layout.delimiter == "," and layout.header == ["nombre", "direccion", "telefono"]
+
+
+# The capitals of a cp1253 table are small Cyrillic letters in KOI8-R and capitals in cp1251:
+# tables of the city of Thessaloniki (opendata.thessaloniki.gr) came out as "етос", "лгмас".
+GREEK_CAPITALS_TABLE = (
+    "A/A,ΕΤΟΣ,ΜΗΝΑΣ,ΠΑΡΑΒΑΣΕΙΣ,ΕΡΓΑΤΟΩΡΕΣ\n"
+    "1,2018,ΙΑΝΟΥΑΡΙΟΣ,13254,2310\n"
+    "2,2018,ΦΕΒΡΟΥΑΡΙΟΣ,12011,2100\n"
+    "3,2018,ΜΑΡΤΙΟΣ,14120,2520\n"
+)
+GREEK_LETTERHEAD = (
+    "ΕΛΛΗΝΙΚΗ ΔΗΜΟΚΡΑΤΙΑ;;;\nΝΟΜΟΣ ΘΕΣΣΑΛΟΝΙΚΗΣ;;;\nΔΗΜΟΣ ΘΕΣΣΑΛΟΝΙΚΗΣ;;;\n"
+    "ΠΙΝΑΚΑΣ ΣΤΟΙΧΕΙΩΝ ΔΡΑΣΤΗΡΙΟΤΗΤΩΝ – Γ΄ ΔΗΜΟΤΙΚΗΣ ΚΟΙΝΟΤΗΤΑΣ;2016;2017;2018\n"
+)
+
+
+@pytest.mark.parametrize("text", [GREEK_CAPITALS_TABLE, GREEK_LETTERHEAD])
+def test_greek_capitals_are_not_cyrillic(text):
+    assert detect_encoding(text.encode("cp1253"), truncated=False) == "cp1253"
+
+
+@pytest.mark.parametrize("encoding", ["koi8_r", "cp1251"])
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Дата,Сумма,Код,Название организации,Адрес\n01.02.2020,100,12,Школа номер один,улица Ленина\n",
+        "наименование,количество,единица,цена,итого,месяц\nмолоко,10,литр,50,500,май\nвода,7,литр,20,140,июль\n",
+        "сумма,дата,имя,код,доход,сила,вода,небо,лето,зима,осина,тема\n",
+    ],
+)
+def test_cyrillic_text_is_not_greek(text, encoding):
+    from metacrafter.file_inputs import _greek_text
+
+    assert not _greek_text(text.encode(encoding))
+    assert detect_encoding(text.encode(encoding), truncated=False) == encoding

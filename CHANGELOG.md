@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Greek capitals of a Windows-1253 table are no longer read as Cyrillic or Japanese. The bytes of `ΕΤΟΣ`,
+  `ΜΗΝΑΣ` and `ΠΑΡΑΒΑΣΕΙΣ` are small Cyrillic letters in KOI8-R (`етос`, `лгмас`, `паяабасеис`) and
+  capitals in cp1251, so four of the nine non-UTF-8 tables of the city of Thessaloniki (opendata.thessaloniki.gr,
+  a 2024 snapshot) came out in Cyrillic and lost their field names and month names. When a detector answers a
+  Cyrillic or a CJK code page, the cp1253 reading is now tried first: every non-ASCII letter must be Greek, with
+  at least 20 letters in 4 words of three letters or more, each of these words must have a vowel and be written
+  in capitals, in small letters or capitalised, and 85 % of them must end in a vowel, ς or ν, as Greek words do.
+  Russian text fails: р of KOI8-R and я of cp1251 are bytes that cp1253 does not define, and words such as
+  `для` and `год` read `ΔΜΡ` and `ΓΟΔ`.
 - A language tag after a hash in a header: `SEXO#es`, `TERRITORIO#es`, `PAIS_RESIDENCIA#es` and `name#ca`
   of the statistical exports of the statistics institute of the Canary Islands (datos.canarias.es, about
   6700 tables in a 2024 snapshot) are matched by the name before the tag (`SEXO`, `TERRITORIO`) when the

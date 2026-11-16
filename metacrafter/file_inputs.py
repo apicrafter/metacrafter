@@ -402,6 +402,8 @@ def detect_encoding(sample: bytes, truncated: bool = True) -> str:
         detected = codecs.lookup(detected).name.replace("-", "_")
     if detected is None or detected in _LATIN_NAMES or detected.startswith(("mac", "cp8")):
         return _latin_choice(sample)
+    if detected in _CYRILLIC_NAMES | _CJK_NAMES and _greek_text(lines):
+        return "cp1253"
     if detected in _CJK_NAMES and not re.search(rb"[\x80-\xff]{2}", lines):
         # Two-byte text has runs of non-ASCII bytes. A Latin file whose only non-ASCII bytes
         # stand alone (a degree sign of "TEMPERATURA °C", one "í") came out as cp932 or cp949.
@@ -424,6 +426,45 @@ _HEBREW_MEDIAL = "כמנפצ"
 _NON_LATIN_PAGES = (("cp1255", "א", "ת"), ("cp1256", "ؠ", "ۿ"),
                     ("cp1253", "Ά", "ώ"), ("cp1251", "Ѐ", "ӿ"))
 _GREEK_VOWELS = set("αεηιουωάέήίόύώϊϋΑΕΗΙΟΥΩΆΈΉΊΌΎΏ")
+
+
+# Cyrillic code pages that detectors pick for Greek capitals. The bytes of "ΕΤΟΣ", "ΜΗΝΑΣ" and
+# "ΠΑΡΑΒΑΣΕΙΣ" in cp1253 are small Cyrillic letters in KOI8-R ("етос", "лгмас", "паяабасеис") and
+# capitals in cp1251 ("ЕФПУ"), so tables of the city of Thessaloniki written in capitals came out
+# in Cyrillic; a short one was taken for cp932 (Japanese).
+_CYRILLIC_NAMES = {"koi8_r", "koi8_u", "cp1251", "cp866", "cp855", "iso8859_5", "mac_cyrillic"}
+# The letters that end nearly every Greek word: the vowels, ς and ν.
+_GREEK_ENDINGS = set("ΑΕΗΙΟΥΩΣΝΆΈΉΊΌΎΏαεηιουωςνάέήίόύώ")
+#: Greek letters and words of three letters or more that ``_greek_text`` needs.
+GREEK_MIN_LETTERS = 20
+GREEK_MIN_WORDS = 4
+
+
+def _greek_text(sample: bytes) -> bool:
+    """The cp1253 reading of ``sample`` is Greek text, whatever a detector made of it.
+
+    Every non-ASCII letter is a Greek one (Russian in KOI8-R has р, byte 0xD2, which
+    cp1253 does not define, and in cp1251 я, byte 0xFF), there are at least
+    ``GREEK_MIN_LETTERS`` of them in ``GREEK_MIN_WORDS`` words of three letters or more, each
+    of these words has a vowel and is written in capitals, in small letters or capitalised,
+    and 85 % of them end in a vowel, ς or ν, as Greek words do ("для" and "год" in KOI8-R
+    read "ΔΜΡ" and "ΓΟΔ").
+    """
+    try:
+        text = sample.decode("cp1253")
+    except UnicodeDecodeError:
+        return False
+    if any(ch.isalpha() and not "Ά" <= ch <= "ώ" for ch in text if ord(ch) > 127):
+        return False
+    words = re.findall("[Ά-ώ]+", text)
+    if sum(len(w) for w in words) < GREEK_MIN_LETTERS:
+        return False
+    long_words = [w for w in words if len(w) >= 3]
+    if len(long_words) < GREEK_MIN_WORDS or not all(_GREEK_VOWELS & set(w) for w in long_words):
+        return False
+    if not all(w.isupper() or w.islower() or (w[0].isupper() and w[1:].islower()) for w in long_words):
+        return False
+    return sum(1 for w in long_words if w[-1] in _GREEK_ENDINGS) >= 0.85 * len(long_words)
 
 
 def _hebrew_words(words: List[str]) -> bool:
