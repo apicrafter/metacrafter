@@ -868,3 +868,37 @@ def test_cyrillic_text_is_not_greek(text, encoding):
 
     assert not _greek_text(text.encode(encoding))
     assert detect_encoding(text.encode(encoding), truncated=False) == encoding
+
+
+THAI_TABLES = [
+    "รหัส,เขต,จำนวนประชากร\n1001,เขตพระนคร,43062\n1002,เขตดุสิต,79960\n1003,เขตหนองจอก,180410\n",
+    "id,year,vehicle_firestation\n1,2564,สถานีดับเพลิงและกู้ภัยราษฎร์บูรณะ\n2,2564,สถานีดับเพลิงและกู้ภัยบางเขน\n",
+    "ลำดับ,คำนำหน้าชื่อ,ศูนย์หม่อนไหมเฉลิมพระเกียรติฯ,จังหวัด\n1,นาย,น่าน,น่าน\n2,นางสาว,เชียงใหม่,เชียงใหม่\n",
+]
+
+
+@pytest.mark.parametrize("text", THAI_TABLES)
+def test_thai_text_in_tis_620_gets_its_code_page(text):
+    # tables of the Bangkok Metropolitan Administration and the Department of Sericulture came out as
+    # cp1252, cp1250, cp932 or KOI8-R
+    sample = text.encode("cp874")
+    assert detect_encoding(sample, truncated=False) == "cp874"
+    assert detect_encoding(sample + "เขตบางรัก".encode("cp874")[:5]) == "cp874"
+
+
+@pytest.mark.parametrize("text,encoding", [
+    ("AÇÃO;DESCRIÇÃO;SITUAÇÃO;MÊS\nação;não;informação;três\nrevisão;não;situação;março\n", "cp1252"),
+    ("Naziv;Poštna številka;Občina\nŠola;1000;Črnomelj\nŽupnišče;8340;Škofja Loka\n", "cp1250"),
+    ("ΕΤΟΣ;ΜΗΝΑΣ;ΠΑΡΑΒΑΣΕΙΣ;ΚΑΤΗΓΟΡΙΑ\n2020;ΙΑΝΟΥΑΡΙΟΣ;12;ΤΑΧΥΤΗΤΑ\n2020;ΦΕΒΡΟΥΑΡΙΟΣ;7;ΣΤΑΘΜΕΥΣΗ\n", "cp1253"),
+    ("МОСКВА;ГОРОД;РЕГИОН;НАИМЕНОВАНИЕ\nКАЗАНЬ;ГОРОД;ТАТАРСТАН;ОРГАНИЗАЦИЯ\n", "cp1251"),
+    ("Наименование организации;Адрес;Город\nШкола номер один;улица Ленина;Москва\n", "cp1251"),
+])
+def test_other_scripts_are_not_thai(text, encoding):
+    assert detect_encoding(text.encode(encoding), truncated=False) != "cp874"
+
+
+def test_a_tis_620_file_keeps_its_thai_field_names(tmp_path):
+    path = tmp_path / "districts.csv"
+    path.write_bytes(THAI_TABLES[0].encode("cp874"))
+    assert detect_encoding(path.read_bytes()) == "cp874"
+    assert path.read_bytes().decode("cp874").splitlines()[0] == "รหัส,เขต,จำนวนประชากร"
