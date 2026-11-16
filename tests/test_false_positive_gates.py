@@ -230,67 +230,6 @@ def test_country_name_variant_dropped_when_universal_rule_matches(tmp_path):
     assert any(r["ruleid"] == "egcityfield" for r in columns["city"].rejected)
 
 
-IT_SIGLE = {"MS", "LU", "FI", "RM", "TO"}
-
-
-def is_it_sigla(value):
-    return value in IT_SIGLE
-
-
-def is_any_text(value):
-    return bool(str(value).strip())
-
-
-PROVINCE = """
-  provincebyfield:
-    key: province
-    match: text
-    type: field
-    rule: sigla_provincia
-    validator: tests.test_false_positive_gates.is_any_text
-    priority: 1
-"""
-ITSIGLA = """
-  itprovinceabbreviationbyname:
-    key: it_province_code
-    match: text
-    type: field
-    rule: sigla_provincia
-    validator: tests.test_false_positive_gates.is_it_sigla
-    needs_values: true
-    priority: 1
-"""
-ITSIGLA_ANY = ITSIGLA.replace("is_it_sigla", "is_any_text")
-PROVINCE_LIST = PROVINCE.replace("is_any_text", "is_it_sigla")
-
-
-def test_country_name_variant_with_a_narrow_value_check_kept(tmp_path):
-    # sigla_provincia of MS, LU, FI: the Italian rule checked a list of codes, the universal one any text
-    processor = processor_with(tmp_path, [(PROVINCE, "xx"), (ITSIGLA, "it")])
-    rows = [{"sigla_provincia": v} for v in ["MS", "LU", "FI", "MS"]]
-    assert classes(scan(processor, rows)["sigla_provincia"]) == {"province", "it_province_code"}
-
-
-def test_country_name_variant_with_a_narrow_value_check_needs_fitting_values(tmp_path):
-    processor = processor_with(tmp_path, [(PROVINCE, "xx"), (ITSIGLA, "it")])
-    rows = [{"sigla_provincia": v} for v in ["Massa-Carrara", "Lucca", "Firenze"]]
-    assert classes(scan(processor, rows)["sigla_provincia"]) == {"province"}
-
-
-def test_country_name_variant_with_a_broad_value_check_stays_covered(tmp_path):
-    processor = processor_with(tmp_path, [(PROVINCE, "xx"), (ITSIGLA_ANY, "it")])
-    rows = [{"sigla_provincia": v} for v in ["MS", "LU", "FI"]]
-    columns = scan(processor, rows, explain=True)
-    assert classes(columns["sigla_provincia"]) == {"province"}
-    assert any(r["ruleid"] == "itprovinceabbreviationbyname" for r in columns["sigla_provincia"].rejected)
-
-
-def test_country_name_variant_stays_covered_by_a_universal_rule_with_a_narrow_check(tmp_path):
-    processor = processor_with(tmp_path, [(PROVINCE_LIST, "xx"), (ITSIGLA, "it")])
-    rows = [{"sigla_provincia": v} for v in ["MS", "LU", "FI"]]
-    assert classes(scan(processor, rows)["sigla_provincia"]) == {"province"}
-
-
 def test_weaker_country_name_variant_dropped(tmp_path):
     processor = processor_with(tmp_path, [(AUNAME, "au"), (RUNAME, "ru")])
     assert classes(scan(processor, [{"full_name": "x"}])["full_name"]) == {"person_name"}

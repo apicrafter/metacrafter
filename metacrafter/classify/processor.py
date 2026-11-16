@@ -427,11 +427,6 @@ FALLBACK_TYPES = frozenset({"id", "category"})
 # Points of confidence by which a field-name match of one country must trail the best match of
 # another country to be dropped (_drop_weaker_country_name_matches).
 COUNTRY_NAME_MARGIN = 5.0
-# A country-specific field rule whose validator accepts at most NARROW_CHECK of any class of ordinary
-# tokens is not covered by universal rules whose validators accept at least BROAD_CHECK of one
-# (_checks_values_closer).
-NARROW_CHECK = 0.25
-BROAD_CHECK = 0.75
 #: A short lower-case code (``wp``, ``en``, ``x1``), not text for people.
 _SHORT_CODE = re.compile(r"[a-z][a-z0-9_-]{0,3}")
 #: Values of a yes/no column that are no answer, besides the empty values of a scan.
@@ -2139,47 +2134,11 @@ class RulesProcessor:
             universal = [priority_weight(r.get("priority")) for r in others if not self._rule_countries(r)]
             best_universal = max(universal) if universal else None
             if weight < best_any or (best_universal is not None and weight <= best_universal):
-                if weight >= best_any and self._checks_values_closer(rule, others):
-                    kept.append(rule)
-                    continue
                 if explain:
                     m_result.rejected.append({"ruleid": rule["id"], "dataclass": rule["key"], "confidence": 0.0, "matched_count": 0, "considered_count": 0, "reason": "Country-specific field name covered by a universal rule"})
                 continue
             kept.append(rule)
         return kept
-
-    def _validator_broadness(self, rule: Dict[str, Any]) -> Optional[float]:
-        """Background broadness of the validator of a field rule; None without a validator."""
-        vfunc = rule.get("vfunc")
-        if vfunc is None:
-            return None
-        return self._fit_check(f"{rule['id']}:validator", lambda text: bool(vfunc(text)), dictionary=False)["broadness"]
-
-    def _checks_values_closer(self, rule: Dict[str, Any], others: List[Dict[str, Any]]) -> bool:
-        """True when a country-specific field rule looked at the values much closer than the
-        universal rules that cover its field name.
-
-        The rule needs values (``needs_values: true``) and its validator, which the values
-        passed (``_drop_unfit_field_rules``), accepts at most ``NARROW_CHECK`` of every class of
-        ordinary tokens: a list of codes or names. Each universal rule on the field has no
-        validator or one that accepts at least ``BROAD_CHECK`` of some class: any text. A
-        ``sigla_provincia`` of MS, LU and FI is then ``it_province_code`` beside ``province``,
-        whose validator takes any name; a country rule with a broad validator (``fr_commune``
-        beside ``city``, both any place name) stays covered.
-        """
-        if not rule.get("needs_values"):
-            return False
-        own = self._validator_broadness(rule)
-        if own is None or own > NARROW_CHECK:
-            return False
-        universal = [r for r in others if not self._rule_countries(r)]
-        if not universal:
-            return False
-        for other in universal:
-            broadness = self._validator_broadness(other)
-            if broadness is not None and broadness < BROAD_CHECK:
-                return False
-        return True
 
     def _drop_weaker_country_name_matches(
         self, found: List[Dict[str, Any]], m_result: ColumnMatchResult, explain: bool
