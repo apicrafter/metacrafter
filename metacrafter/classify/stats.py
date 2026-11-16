@@ -78,9 +78,16 @@ PORTUGUESE_EMPTY_VALUES = [
     "Sem informação", "Sem Informação", "sem informação", "SEM INFORMAÇÃO",
     "----------",
 ]
+# A colon is the "not available" of Eurostat tables and of the national tables made for them: the asylum and
+# residence permit tables of Cyprus (data.gov.cy) fill 282 218 cells of 50 tables with it in their first
+# 1000 lines, and a column of years or counts with a few colons lost its label. Statistical tables also
+# write two hyphens, three spaced hyphens, an ellipsis, a lone full stop (the missing value of SAS) or n.a.,
+# and Cypriot registers Δ/Ε (δεν εφαρμόζεται, not applicable), alone or as Δ/Ε - N/A.
+STATISTICAL_EMPTY_VALUES = [":", "--", "- - -", "…", "...", ".", "n.a.", "N.A.", "n.a"]
+GREEK_EMPTY_VALUES = ["Δ/Ε", "Δ/Ε - N/A", "Δ/Ε - Ν/Α"]
 DEFAULT_EMPTY_VALUES = (
     [None, "", "None", "NaN", "-", "N/A", "NA"] + NULL_EMPTY_VALUES + SPANISH_EMPTY_VALUES + ENGLISH_EMPTY_VALUES + ARABIC_EMPTY_VALUES
-    + PORTUGUESE_EMPTY_VALUES
+    + PORTUGUESE_EMPTY_VALUES + STATISTICAL_EMPTY_VALUES + GREEK_EMPTY_VALUES
 )
 
 DEFAULT_OPTIONS = {
