@@ -594,6 +594,33 @@ class RuleResult:
         }
 
 
+def spreadsheet_letter_fields(fields: Iterable[str]) -> Set[str]:
+    """Fields named after their own spreadsheet column: ``AL`` in column 38, ``CF`` in column 84.
+
+    Dataverse names the empty header cells of an ingested sheet after their column, so a table
+    whose header is shorter than its records gets the columns ``AL``, ``AM`` ... ``IN`` at its
+    right. The letters are no names: ``CF`` is not a codice fiscale, ``BN`` no Business Number,
+    ``CP`` no postcode and ``RG`` no Registro Geral. They count as letters when two or more columns
+    carry the letters of their position and another column has a name of its own; a table whose
+    columns are all letters keeps them (they may be its real header).
+    """
+    names = [str(f).strip() for f in fields]
+    letters = set()
+    for index, name in enumerate(names):
+        if not 1 <= len(name) <= 3 or not name.isascii() or not name.isalpha() or not name.isupper():
+            continue
+        rest = index + 1
+        letter = ""
+        while rest:
+            rest, mod = divmod(rest - 1, 26)
+            letter = chr(65 + mod) + letter
+        if name == letter:
+            letters.add(names[index])
+    if len(letters) < 2 or len(letters) == len([n for n in names if n]):
+        return set()
+    return {f for f in fields if str(f).strip() in letters}
+
+
 class RulesProcessor:
     """Classification rules processor class.
     
@@ -1139,6 +1166,7 @@ class RulesProcessor:
             for field in datastats.keys():
                 if datastats[field]["ftype"] != "str":
                     nonstr.append(field)
+        letter_named = spreadsheet_letter_fields(fields)
         for field in fields:
             m_result = ColumnMatchResult(field=field, matches=[])
             if explain:
@@ -1185,7 +1213,7 @@ class RulesProcessor:
                     shortfield = wave_name
                     if base == short_field_name(name):
                         base = wave_name
-            name_is_data = bool(map_parents) and split_field_path(field)[0] in map_parents
+            name_is_data = (bool(map_parents) and split_field_path(field)[0] in map_parents) or field in letter_named
             if name_is_data:
                 name_variants = []
             for short_name, full_name in name_variants:

@@ -99,6 +99,28 @@ def test_italian_dos_text_with_accents_at_word_ends_gets_its_code_page():
     assert detect_encoding((ITALIAN_DOS_PROJECTS + "Costo;€ 100\r\n").encode("cp858"), truncated=False) == "cp858"
 
 
+# Registers of notified infectious diseases of the Polish National Institute of Public Health
+# (epibaza.pzh.gov.pl) in cp1250. Read as cp1252, ł, ą and ż are the signs ³, ¹ and ¿ and the other
+# letters are letters of French (ś œ, ć æ, ę ê): "zg³oszenia", "p³eæ", "M꿿czyzna".
+POLISH_REGISTER = ("licznik;jednostka chorobowa;rok zgłoszenia;płeć;grupy wiekowe;środowisko zamieszkania (miasto, wieś)\r\n"
+                   "1;Kampylobakterioza;2006;Kobieta;50-59;BD\r\n1;Kampylobakterioza;2006;Mężczyzna;1;BD\r\n"
+                   "1;Kampylobakterioza;2006;Mężczyzna;0;BD\r\n1;Kampylobakterioza;2006;Kobieta;10-19;BD\r\n")
+
+
+def test_polish_text_whose_letters_are_french_in_cp1252_is_cp1250():
+    assert detect_encoding(POLISH_REGISTER.encode("cp1250"), truncated=False) == "cp1250"
+    # ł alone (³ in cp1252) leaves no letter beyond ASCII to the cp1252 reading
+    assert detect_encoding("rok zgłoszenia;liczba\r\n2006;4\r\n".encode("cp1250"), truncated=False) == "cp1250"
+
+
+@pytest.mark.parametrize("text", [
+    "superficie;unité\r\n12 m³;m³\r\n", "¿Dónde está?;sí\r\n", "prix;devise\r\n£5;¥300\r\n", "Größe;Einheit\r\n3 km²;km²\r\n",
+    "note¹;réf\r\nvoir¹;é\r\n",
+])
+def test_signs_of_western_text_do_not_make_it_cp1250(text):
+    assert detect_encoding(text.encode("cp1252"), truncated=False) == "cp1252"
+
+
 def test_an_ellipsis_of_cp1252_is_no_italian_dos_text():
     # truncated titles: the ellipsis follows any letter, and one word in -t is not enough
     text = "title;note\r\nAnnual report of the departm…;credit…\r\nList of schools and nurser…;café\r\n"
