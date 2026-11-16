@@ -58,6 +58,9 @@ def test_match_time_language_filter_keeps_common_rules(tmp_path):
     ("title_en", "title"), ("abstract_EN", "abstract"), ("name-ru", "name"), ("description.hy", "description"),
     ("item.title.ru", "item.title"), ("meta.id", "meta.id"),
     ("user_id", "user_id"), ("is_no", "is_no"), ("time_ms", "time_ms"), ("title", "title"), ("en", "en"),
+    # a language tag after a hash (the ISTAC exports of datos.canarias.es): any two letters are a language
+    ("SEXO#es", "SEXO"), ("TERRITORIO#es", "TERRITORIO"), ("name#ca", "name"), ("TIME_PERIOD#en", "TIME_PERIOD"),
+    ("issue#12", "issue#12"), ("#es", "#es"), ("C#", "C#"), ("tag#main", "tag#main"),
 ])
 def test_strip_language_suffix(name, base):
     assert strip_language_suffix(name) == base

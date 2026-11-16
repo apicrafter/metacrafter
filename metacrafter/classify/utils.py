@@ -432,13 +432,20 @@ LANGUAGE_SUFFIXES = frozenset(
     "ro hu fi sv da et lv lt mn tg tk vi th".split()
 )
 _LANGUAGE_SUFFIX = re.compile(r"^(?P<base>.+?)[_\-.](?P<lang>[A-Za-z]{2})$")
+# A language tag after a hash, as the statistical exports of ISTAC (datos.canarias.es) label the
+# columns that hold the names of the codes: SEXO#es, TERRITORIO#es, name#ca. The hash says that a
+# language follows, so any two letters are one (ca is no word here).
+_HASH_LANGUAGE_SUFFIX = re.compile(r"^(?P<base>.*[^#\s])#(?P<lang>[A-Za-z]{2})$")
 
 
 def strip_language_suffix(name):
-    """Field name without a trailing language code: ``title_en`` -> ``title``.
+    """Field name without a trailing language code: ``title_en`` -> ``title``, ``SEXO#es`` -> ``SEXO``.
 
     Returns ``name`` unchanged when it has no known language suffix.
     """
+    match = _HASH_LANGUAGE_SUFFIX.match(str(name))
+    if match:
+        return match.group("base")
     match = _LANGUAGE_SUFFIX.match(str(name))
     if match and match.group("lang").lower() in LANGUAGE_SUFFIXES:
         return match.group("base")

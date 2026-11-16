@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A language tag after a hash in a header: `SEXO#es`, `TERRITORIO#es`, `PAIS_RESIDENCIA#es` and `name#ca`
+  of the statistical exports of the statistics institute of the Canary Islands (datos.canarias.es, about
+  6700 tables in a 2024 snapshot) are matched by the name before the tag (`SEXO`, `TERRITORIO`) when the
+  full name matches no field rule, as `title_en` falls back to `title`. After a hash any two letters are a language (`ca` is no word there), while
+  `issue#12` and `tag#main` keep their names. In the snapshot 8249 columns carry such a tag and 1029 of
+  them had a label.
 - A lone field of the European Union is no longer outvoted by the fields of a member country. The rule
   added with the Borealis round (a field that alone names its country is dropped when another country has
   the votes of two other fields) took `eu_waste_code` off `wstSubCateObjID` of the Cypriot register of
