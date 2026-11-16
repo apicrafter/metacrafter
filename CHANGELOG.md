@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A lone field of the European Union is no longer outvoted by the fields of a member country. The rule
+  added with the Borealis round (a field that alone names its country is dropped when another country has
+  the votes of two other fields) took `eu_waste_code` off `wstSubCateObjID` of the Cypriot register of
+  licensed waste operators, whose district and municipality fields are Cypriot. A type of the Union
+  belongs in the tables of its members, so its fields now neither outvote nor are outvoted.
 - A field that alone names its country is outvoted by the fields of another country when no scan country
   is set. `PROV` of a Canadian election study holds the survey's province codes (6, 8, 10), which fit the
   rule for the INDEC province codes of Argentine census tables, so the column was labelled
