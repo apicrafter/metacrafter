@@ -97,9 +97,21 @@ GERMAN_EMPTY_VALUES = [
     "keine Angabe", "Keine Angabe", "keine Angaben", "Keine Angaben", "KEINE ANGABE",
     "ohne Angabe", "Ohne Angabe", "OHNE ANGABE",
 ]
+# British transparency returns write Nil Return, or Nil, in every cell of a row that reports nothing (no gift,
+# no hospitality, no trip in the quarter), and tables of counts replace a small number with <5 or <=5 so that
+# no person can be told from it: in the first lines of the 7 107 distinct tables of 2024 snapshots of UK
+# open data portals (data.gov.uk, Cambridgeshire Insight, Calderdale Data Works and others) Nil Return stands
+# in 1 023 columns (25 264 cells), Nil in 289, <=5 in 3 919 (63 174 cells) and <5 in 3 393 (47 232 cells). Other
+# thresholds (<10, <3) are rare and stay values.
+BRITISH_EMPTY_VALUES = [
+    "Nil Return", "Nil return", "nil return", "NIL RETURN", "NIL Return", "NIL return",
+    "Nil", "NIL", "nil",
+    "<5", "<=5",
+]
 DEFAULT_EMPTY_VALUES = (
     [None, "", "None", "NaN", "-", "N/A", "NA"] + NULL_EMPTY_VALUES + SPANISH_EMPTY_VALUES + ENGLISH_EMPTY_VALUES + ARABIC_EMPTY_VALUES
     + PORTUGUESE_EMPTY_VALUES + STATISTICAL_EMPTY_VALUES + GREEK_EMPTY_VALUES + GERMAN_EMPTY_VALUES
+    + BRITISH_EMPTY_VALUES
 )
 
 DEFAULT_OPTIONS = {

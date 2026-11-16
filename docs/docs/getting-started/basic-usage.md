@@ -72,7 +72,7 @@ and `Not Stated` (also in sentence case, lower case and capitals) and the Arabic
 with the feminine ending `ة`, and the Portuguese markers `Não informado`, `Não se aplica`,
 `Não disponível` and `Sem informação` (in four cases) and `----------`, the markers of statistical tables
 (the colon of Eurostat, `--`, `- - -`, `…`, a lone full stop and `n.a.`), the Greek `Δ/Ε` (not
-applicable) and the German markers (a lone `x`, `*`, `---`, `k. A.`, `keine Angabe`, `ohne Angabe`) are empty values: they are not
+applicable) the German markers (a lone `x`, `*`, `---`, `k. A.`, `keine Angabe`, `ohne Angabe`) and the British ones (`Nil Return`, `Nil`, `<5`, `<=5`) are empty values: they are not
 classified, and a field of them only is
 tagged `empty`. `--empty-values` replaces the list.
 
