@@ -420,6 +420,39 @@ def test_types_of_the_european_union_do_not_outvote_a_member(tmp_path):
     assert classes(columns["nace_4"]) == {"eu_nace"}
 
 
+CYCODES = """
+  cydistrictbyname:
+    key: cy_district
+    match: text
+    type: field
+    rule: district
+    priority: 1
+  cymunicipalitybyname:
+    key: cy_municipality
+    match: text
+    type: field
+    rule: municipality
+    priority: 1
+"""
+EUWASTE = """
+  euwastecodebyname:
+    key: eu_waste_code
+    match: text
+    type: field
+    rule: waste
+    priority: 1
+"""
+
+
+def test_a_member_country_does_not_outvote_a_type_of_the_european_union(tmp_path):
+    # The licensed waste operators of Cyprus: a code of the European List of Waste beside two Cypriot fields.
+    processor = processor_with(tmp_path, [(CYCODES, "cy"), (EUWASTE, "eu")])
+    rows = [{"waste": "02 01 06", "district": "Lefkosia", "municipality": "Strovolos"}] * 5
+    columns = scan(processor, rows)
+    assert classes(columns["waste"]) == {"eu_waste_code"}
+    assert classes(columns["district"]) == {"cy_district"}
+
+
 UUIDRULE = f"""
   uuidbyvalue:
     key: uuid

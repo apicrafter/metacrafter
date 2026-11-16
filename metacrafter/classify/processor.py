@@ -1493,7 +1493,8 @@ class RulesProcessor:
         a Canadian election study fits the rule for the province codes of Argentine census tables,
         and the riding, economic region and metropolitan area fields beside it are Canadian. The
         types of the European Union do not outvote a member: an Austrian labour office code stays
-        beside two NACE fields.
+        beside two NACE fields. Nor are they outvoted by a member: a code of the European List of
+        Waste stays beside the district and municipality of a Cypriot register.
         """
         if self.preset_countries or len(results.results) < 2:
             return
@@ -1513,7 +1514,7 @@ class RulesProcessor:
         reason = "The other fields of the table are of another country"
         for column in results.results:
             own = voted.get(id(column))
-            if not own or any(votes[code] > 1 for code in own):
+            if not own or own <= self.SUPRANATIONAL_CODES or any(votes[code] > 1 for code in own):
                 continue
             if not any(count >= self.LONE_COUNTRY_RIVAL_FIELDS for code, count in votes.items()
                        if code not in own and code not in self.SUPRANATIONAL_CODES):
