@@ -1827,7 +1827,8 @@ class CrafterCmd(object):
                 English n/a, Not Applicable, Not Assessed, Not Recorded and Not Stated (in four cases),
                 and the Arabic غير مبين, غير محدد, غير معروف and غير متوفر (also feminine), and the
                 Portuguese Não informado, Não se aplica, Não disponível, Sem informação (in four cases)
-                and ----------.
+                and ----------, and the colon of Eurostat tables, --, - - -, …, a lone full stop and
+                n.a., and the Greek Δ/Ε.
             compression: Compression codec handling - 'auto' (detect), 'none' (disable),
                 or specific codec ('gz', 'bz2', etc.). Defaults to 'auto'.
             sheet: Workbook sheet (XLSX, XLS, ODS): a sheet name, a sheet number counted

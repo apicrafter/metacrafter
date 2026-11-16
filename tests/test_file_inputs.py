@@ -78,6 +78,26 @@ def test_dos_and_mac_spanish_get_their_code_page(encoding):
     assert detect_encoding(SPANISH_TABLE.encode(encoding), truncated=False) == encoding
 
 
+# A SICOP procurement report of the INEC of Costa Rica (datosabiertos.inec.cr) in cp850 whose
+# titles keep the no-break spaces of the web page: byte 0xFF, "ÿ" in cp1252, a letter, so the
+# words did not look broken ("Serviciosÿdeÿrevisi¢nÿfilol¢gica") and the file was read as cp1252.
+SICOP_TABLE = (
+    ";NUMERO_PROCEDIMIENTO;OBJETO_CONTRACTUAL;PROVEEDOR_ADJU\n"
+    "1;2020CD-000015-0014400001;Servicios\xa0de\xa0revisión\xa0filológica\xa0de\xa0documentos;FALLAS MORA SOCIEDAD ANONIMA\n"
+    "2;2020CD-000018-0014400001;Actualización\xa0del\xa0sistema\xa0administrativo\xa0financiero;OPTEC SISTEMAS SOCIEDAD ANONIMA\n"
+    "3;2020CD-000020-0014400001;Auditoría\xa0Externa\xa0a\xa0los\xa0Estados\xa0Financieros;MURILLO & ASOCIADOS, SOCIEDAD ANONIMA\n"
+)
+
+
+def test_cp850_with_no_break_spaces_gets_its_code_page():
+    assert detect_encoding(SICOP_TABLE.encode("cp850"), truncated=False) == "cp850"
+
+
+def test_windows_french_with_y_diaeresis_stays_cp1252():
+    text = "Commune;Département\nL'Haÿ-les-Roses;Val-de-Marne\nAÿ-Champagne;Marne\nFaÿ-lès-Nemours;Seine-et-Marne\n"
+    assert detect_encoding(text.encode("cp1252"), truncated=False) == "cp1252"
+
+
 # A CNCFlora table of the Jardim Botânico do Rio de Janeiro saved by an old Mac: mac_roman, CR line ends
 # (cp1252 reads "Fam’lia;Nome Cient’fico", and 0x8D, ç, is not cp1252).
 PORTUGUESE_MAC_TABLE = (
