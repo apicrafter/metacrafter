@@ -85,9 +85,21 @@ PORTUGUESE_EMPTY_VALUES = [
 # and Cypriot registers Δ/Ε (δεν εφαρμόζεται, not applicable), alone or as Δ/Ε - N/A.
 STATISTICAL_EMPTY_VALUES = [":", "--", "- - -", "…", "...", ".", "n.a.", "N.A.", "n.a"]
 GREEK_EMPTY_VALUES = ["Δ/Ε", "Δ/Ε - N/A", "Δ/Ε - Ν/Α"]
+# German statistical tables mark a cell without a figure with a lone x (the cell is blocked: a party that
+# did not stand in an election, a rate that makes no sense), an asterisk (the figure is withheld for
+# statistical confidentiality) or three hyphens: in the first lines of the 1 650 distinct tables of April
+# 2024 snapshots of German city portals (Offene Daten Köln, Düsseldorf, Bonn, Münster and others) x stands
+# in 141 columns of numbers, the asterisk in 77 and --- in 25. Registers write k. A. or keine Angabe (not
+# stated) and ohne Angabe. A capital X is left a value: it is the tick of a checklist column.
+GERMAN_EMPTY_VALUES = [
+    "x", "*", "---",
+    "k. A.", "k.A.", "k. A", "k.A", "K. A.", "K.A.",
+    "keine Angabe", "Keine Angabe", "keine Angaben", "Keine Angaben", "KEINE ANGABE",
+    "ohne Angabe", "Ohne Angabe", "OHNE ANGABE",
+]
 DEFAULT_EMPTY_VALUES = (
     [None, "", "None", "NaN", "-", "N/A", "NA"] + NULL_EMPTY_VALUES + SPANISH_EMPTY_VALUES + ENGLISH_EMPTY_VALUES + ARABIC_EMPTY_VALUES
-    + PORTUGUESE_EMPTY_VALUES + STATISTICAL_EMPTY_VALUES + GREEK_EMPTY_VALUES
+    + PORTUGUESE_EMPTY_VALUES + STATISTICAL_EMPTY_VALUES + GREEK_EMPTY_VALUES + GERMAN_EMPTY_VALUES
 )
 
 DEFAULT_OPTIONS = {

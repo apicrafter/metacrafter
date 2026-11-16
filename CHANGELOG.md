@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- German markers of a missing value are empty values by default: the lone `x` of statistical tables (the
+  cell is blocked: a party that did not stand in an election, a rate that makes no sense), the asterisk
+  of a figure withheld for statistical confidentiality, three hyphens (`---`), and `k. A.`, `keine Angabe`
+  and `ohne Angabe` of registers. In the first lines of the 1 650 distinct tables of April 2024 snapshots of
+  German city portals (Offene Daten Köln, Düsseldorf, Bonn, Münster, Wuppertal, Potsdam, Mannheim, the
+  Rhein-Kreis Neuss and the KDVZ municipalities) `x` stands in 141 columns of numbers (4 203 cells in all), `*` in
+  77 (776 cells) and `---` in 25 (573 cells); they counted as values that do not fit a rule. Only the whole cell
+  is a marker, and a capital `X` stays a value: it is the tick of a checklist column (109 columns of the
+  same tables hold nothing else). `GERMAN_EMPTY_VALUES` in `metacrafter.classify.stats` lists them;
+  `--empty-values` replaces the list.
 - A Spanish table in the DOS code page cp850 whose text keeps no-break spaces between words is read in
   its code page. Byte 0xFF is the no-break space of cp850 and the letter `ÿ` of cp1252, so the cp1252
   reading of such a file (`Serviciosÿdeÿrevisi¢nÿfilol¢gica`) had more letters than symbols inside its
