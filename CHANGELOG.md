@@ -19,6 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`LONE_COUNTRY_RIVAL_FIELDS`), the own-country matches of the lone field are dropped. One field of
   another country changes nothing, and two countries with one field each both stay. The types of the
   European Union (`eu_nace`) do not outvote a field of a member country.
+- A full stop that ends a header is the dot of an abbreviation, not a path dot. The short name of a field,
+  which value rules guarded by a field name read, is the part after the last dot: it was empty for `LDS-Nr.`,
+  `Tatb-Nr.`, `PB-Nr.` and `Stadtbez.`, so a guarded value rule (a school number under `LDS-Nr.`) never read
+  such a column. The trailing full stop now stays with the short name. German headers end this way often
+  (`Nr.`, `Urk.-Nr.`, `Wahlb. insges.`, `Sterbedat.`). `short_field_name` in `metacrafter.classify.utils`.
+- German markers of a missing value are empty values by default: the lone `x` of statistical tables (the
+  cell is blocked: a party that did not stand in an election, a rate that makes no sense), the asterisk
+  of a figure withheld for statistical confidentiality, three hyphens (`---`), and `k. A.`, `keine Angabe`
+  and `ohne Angabe` of registers. In the first lines of the 1 650 distinct tables of April 2024 snapshots of
+  German city portals (Offene Daten Köln, Düsseldorf, Bonn, Münster, Wuppertal, Potsdam, Mannheim, the
+  Rhein-Kreis Neuss and the KDVZ municipalities) `x` stands in 141 columns of numbers (4 203 cells in all), `*` in
+  77 (776 cells) and `---` in 25 (573 cells); they counted as values that do not fit a rule. Only the whole cell
+  is a marker, and a capital `X` stays a value: it is the tick of a checklist column (109 columns of the
+  same tables hold nothing else). `GERMAN_EMPTY_VALUES` in `metacrafter.classify.stats` lists them;
+  `--empty-values` replaces the list.
 - A Spanish table in the DOS code page cp850 whose text keeps no-break spaces between words is read in
   its code page. Byte 0xFF is the no-break space of cp850 and the letter `ÿ` of cp1252, so the cp1252
   reading of such a file (`Serviciosÿdeÿrevisi¢nÿfilol¢gica`) had more letters than symbols inside its

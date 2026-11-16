@@ -238,6 +238,21 @@ def test_statistical_and_greek_missing_value_markers_are_empty(rule_file):
         assert value not in DEFAULT_EMPTY_VALUES
 
 
+def test_german_missing_value_markers_are_empty(rule_file):
+    """The lone x and asterisk of German statistical tables, three hyphens, k. A., keine Angabe and ohne
+    Angabe do not count against a rule."""
+    processor = RulesProcessor()
+    processor.import_rules(str(rule_file))
+    for marker in ("x", "*", "---", "k. A.", "k.A.", "keine Angabe", "Keine Angabe", "ohne Angabe"):
+        rows = [{"x": "123"}, {"x": marker}, {"x": marker}, {"x": marker}]
+        report = processor.match_dict(rows, confidence=100, parse_dates=False)
+        assert report.results[0].matches[0].dataclass == "national_id", marker
+    # A capital X is the tick of a checklist column, unbekannt and keine are categories.
+    from metacrafter.classify.stats import DEFAULT_EMPTY_VALUES
+    for value in ("X", "unbekannt", "keine", "x x", "1*", "ohne"):
+        assert value not in DEFAULT_EMPTY_VALUES
+
+
 def test_required_validator_failure_does_not_claim_id(rule_file):
     document = yaml.safe_load(rule_file.read_text())
     document["rules"]["national_id"]["validator"] = "missing_package.validate"
