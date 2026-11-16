@@ -43,6 +43,7 @@ from .utils import (
     fold_arabic_columns,
     headers,
     resolve_field_names,
+    short_field_name,
     sparse_map_parents,
     strip_language_suffix,
     strip_qualifier_suffix,
@@ -1145,9 +1146,10 @@ class RulesProcessor:
             # Names are compared without the escapes of nested paths: a CSV header
             # "Имеет привязку к физ. лицам" is the column "…физ\. лицам". The short name is
             # the part after the last dot, escaped or not, so a flattened header
-            # "info.okoguCode" still matches a rule for "okoguCode".
+            # "info.okoguCode" still matches a rule for "okoguCode". A full stop that ends the
+            # header (LDS-Nr., Tatb-Nr.) is the dot of an abbreviation and stays with the short name.
             name = unescape_field_path(field)
-            shortfield = name.rsplit(".", 1)[-1].strip()
+            shortfield = short_field_name(name)
             # Match field name first; a name with a language suffix (title_en) or a language
             # key of a nested object (title.en) falls back to its base name (title) when the
             # full name matches no field rule.
@@ -1155,7 +1157,7 @@ class RulesProcessor:
             name_variants = [(shortfield, name)]
             base = shortfield
             base_field = strip_language_suffix(name.strip())
-            base_name = base_field.rsplit(".", 1)[-1].strip()
+            base_name = short_field_name(base_field)
             if base_field != name.strip() and base_name:
                 base = base_name
                 name_variants.append((base, base_field))
@@ -1163,12 +1165,12 @@ class RulesProcessor:
             # falls back to the name before it (FSA) in the same way.
             plain_field = strip_qualifier_suffix(name.strip())
             if plain_field != name.strip():
-                plain_name = plain_field.rsplit(".", 1)[-1].strip()
+                plain_name = short_field_name(plain_field)
                 if plain_name:
                     name_variants.append((plain_name, plain_field))
                     # value rules guarded by the field name read the plain name too
                     shortfield = plain_name
-                    if base == name.rsplit(".", 1)[-1].strip():
+                    if base == short_field_name(name):
                         base = plain_name
             # A column of a pre/post study, "sex.post" or "Age.Post", falls back to the name before
             # the wave (sex, Age): the short name after the dot (post) says nothing. Only a dot of
@@ -1176,12 +1178,12 @@ class RulesProcessor:
             # the key post of the object user.
             wave_field = strip_wave_suffix(name.strip()) if field != name else name.strip()
             if wave_field != name.strip():
-                wave_name = wave_field.rsplit(".", 1)[-1].strip()
+                wave_name = short_field_name(wave_field)
                 if wave_name:
                     name_variants.append((wave_name, wave_field))
                     # value rules guarded by the field name read the name before the wave too
                     shortfield = wave_name
-                    if base == name.rsplit(".", 1)[-1].strip():
+                    if base == short_field_name(name):
                         base = wave_name
             name_is_data = bool(map_parents) and split_field_path(field)[0] in map_parents
             if name_is_data:
