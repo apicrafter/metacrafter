@@ -223,6 +223,21 @@ def test_colombian_missing_value_markers_are_empty(rule_file):
     assert "SIN DEPTO" not in DEFAULT_EMPTY_VALUES
 
 
+def test_statistical_and_greek_missing_value_markers_are_empty(rule_file):
+    """The colon of Eurostat tables, two hyphens, three spaced hyphens, an ellipsis, a lone full stop, n.a.
+    and the Greek Δ/Ε of the Cypriot tables do not count against a rule."""
+    processor = RulesProcessor()
+    processor.import_rules(str(rule_file))
+    for marker in (":", "--", "- - -", "…", "...", ".", "n.a.", "N.A.", "Δ/Ε", "Δ/Ε - N/A"):
+        rows = [{"x": "123"}, {"x": marker}, {"x": marker}, {"x": marker}]
+        report = processor.match_dict(rows, confidence=100, parse_dates=False)
+        assert report.results[0].matches[0].dataclass == "national_id", marker
+    # Only the whole value: a flagged figure (: z, 0d) and a time (12:30) are values.
+    from metacrafter.classify.stats import DEFAULT_EMPTY_VALUES
+    for value in (": z", "0d", "12:30", "---x", "n.a. (2019)"):
+        assert value not in DEFAULT_EMPTY_VALUES
+
+
 def test_required_validator_failure_does_not_claim_id(rule_file):
     document = yaml.safe_load(rule_file.read_text())
     document["rules"]["national_id"]["validator"] = "missing_package.validate"

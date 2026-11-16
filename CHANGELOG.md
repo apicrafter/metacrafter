@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The markers of a missing value of statistical tables are empty values by default: the colon that
+  Eurostat writes for "not available", two hyphens (`--`), three spaced hyphens (`- - -`), an ellipsis
+  (`…`, `...`), a lone full stop (the missing value of SAS) and `n.a.`; and the Greek `Δ/Ε` (δεν
+  εφαρμόζεται, not applicable), alone or as `Δ/Ε - N/A`. In the first 1000 lines of the 880 tables of an
+  April 2024 snapshot of the National Open Data Portal of Cyprus (data.gov.cy) the colon fills 282 218
+  cells of 50 tables (the asylum and residence permit tables that keep the layout of the Eurostat
+  datasets), `--` and `- - -` 1 964 cells, `n.a.` 573 and `Δ/Ε - N/A` 290; they counted as values that do
+  not fit a rule. Only the whole cell is a marker: a flagged figure (`: z`, `0d`) and a time stay
+  values. `STATISTICAL_EMPTY_VALUES` and `GREEK_EMPTY_VALUES` in `metacrafter.classify.stats` list them;
+  `--empty-values` replaces the list.
 - Field-name matches of several countries are settled by the other fields of the table when no scan
   country is set. Countries that share a language share field names, and some values fit the rules of
   both: `comuna` with 4, 8 and 11 is a comuna of Buenos Aires and a comuna of Cali, so the school and
