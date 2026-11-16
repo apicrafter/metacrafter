@@ -348,6 +348,111 @@ def test_language_rules_of_a_country_file_do_not_vote(tmp_path):
     assert classes(columns["provincia"]) == {"district"}
 
 
+ARPROVINCECODE = """
+  arprovincecodebyname:
+    key: ar_indec_province_code
+    match: text
+    type: field
+    rule: prov
+    priority: 1
+"""
+CACODES = """
+  cafedbyname:
+    key: ca_feduid
+    match: text
+    type: field
+    rule: fed
+    priority: 1
+  caerbyname:
+    key: ca_eruid
+    match: text
+    type: field
+    rule: er
+    priority: 1
+"""
+
+
+def test_lone_field_of_a_country_is_outvoted_by_two_fields_of_another(tmp_path):
+    # PROV of a Canadian election study fits the Argentine province codes; the riding and the economic
+    # region beside it are Canadian.
+    processor = processor_with(tmp_path, [(ARPROVINCECODE, "ar"), (CACODES, "ca")])
+    rows = [{"prov": "6", "fed": "35092", "er": "3530"}] * 5
+    columns = scan(processor, rows, explain=True)
+    assert classes(columns["prov"]) == set()
+    assert classes(columns["fed"]) == {"ca_feduid"}
+    assert any(r["ruleid"] == "arprovincecodebyname" and r["reason"].startswith("The other fields")
+               for r in columns["prov"].rejected)
+    # One field of another country is not enough, and two countries with one field each both stay.
+    rows = [{"prov": "6", "fed": "35092", "other": "x"}] * 5
+    columns = scan(processor, rows)
+    assert classes(columns["prov"]) == {"ar_indec_province_code"}
+    assert classes(columns["fed"]) == {"ca_feduid"}
+    # With a scan country nothing is dropped.
+    processor = processor_with(tmp_path, [(ARPROVINCECODE, "ar"), (CACODES, "ca")], countries=["ar", "ca"])
+    rows = [{"prov": "6", "fed": "35092", "er": "3530"}] * 5
+    assert classes(scan(processor, rows)["prov"]) == {"ar_indec_province_code"}
+
+
+EUCODES = """
+  eunacebyname:
+    key: eu_nace
+    match: text
+    type: field
+    rule: nace_1,nace_4
+    priority: 1
+"""
+ATCODE = """
+  atrgsbyname:
+    key: at_ams_rgs
+    match: text
+    type: field
+    rule: rgscode
+    priority: 1
+"""
+
+
+def test_types_of_the_european_union_do_not_outvote_a_member(tmp_path):
+    # The vacancies of the Austrian labour offices: one Austrian code beside two NACE fields.
+    processor = processor_with(tmp_path, [(EUCODES, "eu"), (ATCODE, "at")])
+    rows = [{"rgscode": "101", "nace_1": "A", "nace_4": "0161"}] * 5
+    columns = scan(processor, rows)
+    assert classes(columns["rgscode"]) == {"at_ams_rgs"}
+    assert classes(columns["nace_4"]) == {"eu_nace"}
+
+
+CYCODES = """
+  cydistrictbyname:
+    key: cy_district
+    match: text
+    type: field
+    rule: district
+    priority: 1
+  cymunicipalitybyname:
+    key: cy_municipality
+    match: text
+    type: field
+    rule: municipality
+    priority: 1
+"""
+EUWASTE = """
+  euwastecodebyname:
+    key: eu_waste_code
+    match: text
+    type: field
+    rule: waste
+    priority: 1
+"""
+
+
+def test_a_member_country_does_not_outvote_a_type_of_the_european_union(tmp_path):
+    # The licensed waste operators of Cyprus: a code of the European List of Waste beside two Cypriot fields.
+    processor = processor_with(tmp_path, [(CYCODES, "cy"), (EUWASTE, "eu")])
+    rows = [{"waste": "02 01 06", "district": "Lefkosia", "municipality": "Strovolos"}] * 5
+    columns = scan(processor, rows)
+    assert classes(columns["waste"]) == {"eu_waste_code"}
+    assert classes(columns["district"]) == {"cy_district"}
+
+
 UUIDRULE = f"""
   uuidbyvalue:
     key: uuid

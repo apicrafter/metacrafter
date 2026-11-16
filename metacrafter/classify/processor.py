@@ -1467,6 +1467,11 @@ class RulesProcessor:
         self._drop_other_table_countries(results, explain)
         return results
 
+    #: Fields of another country that outvote a field that alone names its country.
+    LONE_COUNTRY_RIVAL_FIELDS = 2
+    #: Rule files of a union of countries: their types (``eu_nace``) sit beside those of a member.
+    SUPRANATIONAL_CODES = frozenset({"eu"})
+
     def _drop_other_table_countries(self, results: TableScanResult, explain: bool) -> None:
         """Settle matches of several countries in a field by the country of the other fields of the table.
 
@@ -1482,6 +1487,14 @@ class RulesProcessor:
         the matches of countries without a vote are dropped when another country of the field has
         one. Without votes for any of them every match stays. Value rules do not vote: a pattern
         that fits by chance says little about the table.
+
+        A field that alone votes for its country is dropped as well when another country has the
+        votes of at least ``LONE_COUNTRY_RIVAL_FIELDS`` other fields: ``PROV`` with 6, 8 and 10 of
+        a Canadian election study fits the rule for the province codes of Argentine census tables,
+        and the riding, economic region and metropolitan area fields beside it are Canadian. The
+        types of the European Union do not outvote a member: an Austrian labour office code stays
+        beside two NACE fields. Nor are they outvoted by a member: a code of the European List of
+        Waste stays beside the district and municipality of a Cypriot register.
         """
         if self.preset_countries or len(results.results) < 2:
             return
@@ -1490,12 +1503,28 @@ class RulesProcessor:
             key = str(rule.get("key") or "")
             owners[rule["id"]] = {code for code in self._rule_countries(rule) if key.startswith(code + "_")}
         votes: Counter = Counter()
+        voted: Dict[int, Set[str]] = {}
         for column in results.results:
             named = [owners[m.ruleid] for m in column.matches if m.ruletype == "field" and owners.get(m.ruleid)]
             if named:
-                votes.update(set.intersection(*named))
+                voted[id(column)] = set.intersection(*named)
+                votes.update(voted[id(column)])
         if not votes:
             return
+        reason = "The other fields of the table are of another country"
+        for column in results.results:
+            own = voted.get(id(column))
+            if not own or own <= self.SUPRANATIONAL_CODES or any(votes[code] > 1 for code in own):
+                continue
+            if not any(count >= self.LONE_COUNTRY_RIVAL_FIELDS for code, count in votes.items()
+                       if code not in own and code not in self.SUPRANATIONAL_CODES):
+                continue
+            for match in [m for m in column.matches if owners.get(m.ruleid) and owners[m.ruleid] <= own]:
+                column.matches.remove(match)
+                if explain:
+                    column.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": reason})
+            for code in own:
+                votes[code] -= 1
         for column in results.results:
             specific = [m for m in column.matches if owners.get(m.ruleid)]
             if not any(votes[code] for m in specific for code in owners[m.ruleid]):
@@ -1505,7 +1534,7 @@ class RulesProcessor:
                     continue
                 column.matches.remove(match)
                 if explain:
-                    column.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": "The other fields of the table are of another country"})
+                    column.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": reason})
 
     #: Values that a yes/no column may hold besides empty ones: two answers and a placeholder.
     MAX_BOOLEAN_VALUES = 3
