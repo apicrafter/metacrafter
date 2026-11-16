@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A language tag after a hash in a header: `SEXO#es`, `TERRITORIO#es`, `PAIS_RESIDENCIA#es` and `name#ca`
+  of the statistical exports of the statistics institute of the Canary Islands (datos.canarias.es, about
+  6700 tables in a 2024 snapshot) are matched by the name before the tag (`SEXO`, `TERRITORIO`) when the
+  full name matches no field rule, as `title_en` falls back to `title`. After a hash any two letters are a language (`ca` is no word there), while
+  `issue#12` and `tag#main` keep their names. In the snapshot 8249 columns carry such a tag and 1029 of
+  them had a label.
 - A full stop that ends a header is the dot of an abbreviation, not a path dot. The short name of a field,
   which value rules guarded by a field name read, is the part after the last dot: it was empty for `LDS-Nr.`,
   `Tatb-Nr.`, `PB-Nr.` and `Stadtbez.`, so a guarded value rule (a school number under `LDS-Nr.`) never read
