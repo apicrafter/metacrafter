@@ -247,3 +247,59 @@ def test_llm_max_requests_default():
     assert CrafterCmd(quiet=True).llm_max_requests == 100
     with pytest.raises(ValueError):
         CrafterCmd(quiet=True, llm_max_requests=0)
+
+
+@pytest.mark.parametrize(
+    "name,short",
+    [
+        ("info.okoguCode", "okoguCode"),
+        ("a.b.c", "c"),
+        ("LDS-Nr.", "LDS-Nr."),
+        ("Tatb-Nr.", "Tatb-Nr."),
+        ("Hsnr. neu", "Hsnr. neu"),
+        ("Urk.-Nr.", "Urk.-Nr."),
+        ("best. Gebäude", "best. Gebäude"),
+        ("Stadtbez.", "Stadtbez."),
+        ("sex.post", "post"),
+        ("plain", "plain"),
+    ],
+)
+def test_short_field_name_keeps_abbreviation_dots(name, short):
+    from metacrafter.classify.utils import short_field_name
+
+    assert short_field_name(name) == short
+
+
+def test_value_rule_guarded_by_a_field_name_with_an_abbreviation_dot(tmp_path):
+    """A value rule guarded by the field name reads a German header that ends with a full stop
+    (LDS-Nr.): the part after the last dot is empty."""
+    from metacrafter.classify.processor import RulesProcessor
+
+    rule_file = tmp_path / "rules.yaml"
+    rule_file.write_text(
+        """
+name: test
+description: test
+context: test
+lang: de
+rules:
+  schoolnumber:
+    key: de_schulnummer
+    name: School number
+    rule: '\\d{6}'
+    type: data
+    match: regex
+    minlen: 6
+    maxlen: 6
+    fieldrule: lds-nr.,schulnr
+    fieldrulematch: text
+""",
+        encoding="utf-8",
+    )
+    processor = RulesProcessor()
+    processor.import_rules(str(rule_file))
+    rows = [{"LDS-Nr.": "170574", "Hsnr. neu": "163922"}] * 3
+    report = processor.match_dict(rows, confidence=100, parse_dates=False)
+    labels = {r.field: [m.dataclass for m in r.matches] for r in report.results}
+    assert labels["LDS-Nr\\."] == ["de_schulnummer"]
+    assert labels["Hsnr\\. neu"] == []

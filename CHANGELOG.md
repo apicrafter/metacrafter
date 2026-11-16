@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The full stop of an abbreviation in a header is not a path dot. The short name of a field, which value
+  rules guarded by a field name and field rules read, was the part after the last dot: empty for `LDS-Nr.`,
+  `Tatb-Nr.` and `Stadtbez.`, `neu` for `Hsnr. neu`, `Gebäude` for `best. Gebäude`. A dot now separates the
+  keys of a path only before a letter, a digit or an underscore (`info.okoguCode`), so these headers keep
+  their name and a guarded value rule (a school number under `LDS-Nr.`) reads them. 282 of the 26 485
+  headers of the German city portals carry such a dot (`Wahlb. insges.`, `Urk.-Nr.`, `Nr.`).
+  `short_field_name` in `metacrafter.classify.utils`.
 - German markers of a missing value are empty values by default: the lone `x` of statistical tables (the
   cell is blocked: a party that did not stand in an election, a rate that makes no sense), the asterisk
   of a figure withheld for statistical confidentiality, three hyphens (`---`), and `k. A.`, `keine Angabe`

@@ -470,6 +470,21 @@ _WAVE_SUFFIX = re.compile(
 )
 
 
+# A dot before a letter, a digit or an underscore separates the keys of a path. A dot that ends the
+# name or stands before a space or a hyphen is the full stop of an abbreviation in the header.
+_PATH_DOT = re.compile(r"\.(?=\w)")
+
+
+def short_field_name(name):
+    """The part of a field name after its last path dot: ``info.okoguCode`` -> ``okoguCode``.
+
+    The full stop of an abbreviation is not a path dot, so German headers keep their name:
+    ``LDS-Nr.``, ``Tatb-Nr.``, ``Hsnr. neu``, ``Urk.-Nr.`` and ``best. Gebäude`` are returned whole
+    (the part after the last dot was empty, ``neu``, ``-Nr.`` or ``Gebäude``).
+    """
+    return _PATH_DOT.split(str(name))[-1].strip()
+
+
 def strip_wave_suffix(name):
     """Field name without a trailing wave of a repeated measure: ``sex.post`` -> ``sex``,
     ``Age.Post`` -> ``Age``, ``score.t2`` -> ``score``.
