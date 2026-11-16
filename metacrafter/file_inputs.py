@@ -332,6 +332,39 @@ def _broken_words(text: str) -> bool:
     return symbols >= 3 and symbols > len(inner) - symbols
 
 
+# Italian text of a DOS code page that cp1252 does not garble inside words: the accented vowel ends the
+# word (qualità, attività, città, località), so cp1252 reads an ellipsis after it, "qualit…", "Attivit…
+# trasversali", and "Nø" for N°. In the first lines of the 3 255 distinct tables of 2024 snapshots of
+# Italian open data portals (Regione Toscana, Comune di Matera, Comune di Genova, ARPA Campania, the
+# transport ministry) 31 tables have such words; they came out as cp1252, cp1251 or cp1254.
+_ITALIAN_FINAL_A = re.compile(rb"[A-Za-z]{2}[tT]\x85(?![A-Za-z\x80-\xff])")
+_NUMERO_SIGN = re.compile(rb"(?<![A-Za-z])[Nn]\xf8(?![A-Za-z\x80-\xff])")
+# What Italian text holds beyond ASCII in cp850: its accented vowels, the degree and ordinal signs,
+# guillemets, fractions and superscripts, the paragraph sign, the no-break space and, at byte 0xD5, the
+# euro of cp858.
+_ITALIAN_DOS_CHARS = frozenset("àèéìòùÀÈÉÌÒÙ°ºª«»½¼²³§€ı\xa0")
+
+
+def _italian_dos_choice(sample: bytes) -> Optional[str]:
+    """cp850 (cp858 with a euro sign) for Italian DOS text whose accented vowels end words, else None.
+
+    Taken when at least two words end in t and byte 0x85 (the à of -tà), or one does beside an
+    ``N°`` written N and byte 0xF8; at least 80 % of the 0x85 bytes end such words (an ellipsis of
+    cp1252 follows any letter); and 95 % of the non-ASCII characters of the cp850 reading are those of
+    Italian text.
+    """
+    finals = len(_ITALIAN_FINAL_A.findall(sample))
+    if not finals or (finals < 2 and not _NUMERO_SIGN.search(sample)):
+        return None
+    if finals < 0.8 * sample.count(b"\x85"):
+        return None
+    text = sample.decode("cp858", errors="replace")
+    high = [ch for ch in text if ord(ch) > 127]
+    if sum(1 for ch in high if ch in _ITALIAN_DOS_CHARS) < 0.95 * len(high):
+        return None
+    return "cp858" if b"\xd5" in sample else "cp850"
+
+
 def _dos_mac_choice(sample: bytes) -> Optional[str]:
     """cp850 or mac_roman for Western text that cp1252 garbles, else None.
 
@@ -370,7 +403,8 @@ def _dos_mac_choice(sample: bytes) -> Optional[str]:
 
 def detect_encoding(sample: bytes, truncated: bool = True) -> str:
     """Encoding of a byte sample: BOM, then UTF-8, then a DOS or Mac code page of Western text
-    that cp1252 garbles (``_dos_mac_choice``), then the most likely common code page."""
+    that cp1252 garbles (``_dos_mac_choice``) or of Italian text whose accented vowels end words
+    (``_italian_dos_choice``), then the most likely common code page."""
     if sample.startswith(codecs.BOM_UTF8):
         return "utf-8-sig"
     if sample.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
@@ -383,7 +417,7 @@ def detect_encoding(sample: bytes, truncated: bool = True) -> str:
     except UnicodeDecodeError as exc:
         if truncated and exc.start >= len(sample) - 3:
             return "utf-8"  # the sample ends inside a multi-byte character
-    dos_mac = _dos_mac_choice(sample)
+    dos_mac = _dos_mac_choice(sample) or _italian_dos_choice(sample)
     if dos_mac:
         return dos_mac
     lines = b"\n".join(ln for ln in sample.split(b"\n") if re.search(rb"[\x80-\xff]", ln))[:500000]
