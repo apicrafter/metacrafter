@@ -78,6 +78,34 @@ def test_dos_and_mac_spanish_get_their_code_page(encoding):
     assert detect_encoding(SPANISH_TABLE.encode(encoding), truncated=False) == encoding
 
 
+# A property inventory of the Comune di Matera (dati.comune.matera.it) and a table of school projects of
+# Regione Toscana (dati.toscana.it), both in cp850: the accented vowels end words, so cp1252 reads
+# "qualit…" and "Attivit… trasversali" and garbles no word inside.
+ITALIAN_DOS_TABLE = (
+    "N°,Destinazione dell'immobile,Nome Strada,Foglio,P.lla,Sub,qualità,Classe\r"
+    "1,GARAGE E RIPOSTIGLIO,VIA FERMI 1/A,68,829,10,C/6,9\r"
+    "2,GARAGE E RIPOSTIGLIO,VIA FERMI 1/B,68,829,11,C/6,9\r"
+)
+ITALIAN_DOS_PROJECTS = (
+    "Zona;Attività trasversali;Attività laboratoriali;Totale\r\n"
+    "Zona Aretina;Attività di supporto alla genitorialità;19000;21000\r\n"
+    "Zona Casentino;Continuità educativa;8000;9000\r\n"
+)
+
+
+def test_italian_dos_text_with_accents_at_word_ends_gets_its_code_page():
+    assert detect_encoding(ITALIAN_DOS_TABLE.encode("cp850"), truncated=False) == "cp850"
+    assert detect_encoding(ITALIAN_DOS_PROJECTS.encode("cp850"), truncated=False) == "cp850"
+    assert detect_encoding((ITALIAN_DOS_PROJECTS + "Costo;€ 100\r\n").encode("cp858"), truncated=False) == "cp858"
+
+
+def test_an_ellipsis_of_cp1252_is_no_italian_dos_text():
+    # truncated titles: the ellipsis follows any letter, and one word in -t is not enough
+    text = "title;note\r\nAnnual report of the departm…;credit…\r\nList of schools and nurser…;café\r\n"
+    assert detect_encoding(text.encode("cp1252"), truncated=False) == "cp1252"
+    assert detect_encoding("name;limit…\r\nx;credit…\r\ny;abc…\r\nz;def…\r\n".encode("cp1252"), truncated=False) == "cp1252"
+
+
 # A SICOP procurement report of the INEC of Costa Rica (datosabiertos.inec.cr) in cp850 whose
 # titles keep the no-break spaces of the web page: byte 0xFF, "ÿ" in cp1252, a letter, so the
 # words did not look broken ("Serviciosÿdeÿrevisi¢nÿfilol¢gica") and the file was read as cp1252.

@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Italian tables in a DOS code page keep their accented letters. Italian puts most of its accents on the last
+  vowel of a word (qualità, attività, città, località), so the cp1252 reading of a cp850 file garbles no word
+  inside, which is what the choice of a DOS code page looked for: it reads an ellipsis after the word,
+  `qualit…`, `Attivit… trasversali`, and `Nø` for `N°`, and the file stayed cp1252 (or came out as cp1251 or
+  cp1254). A sample is now read as cp850 when at least two words end in t and byte 0x85 (the à of -tà), or one
+  does beside an `N°` written with byte 0xF8, at least 80 % of the 0x85 bytes end such words (an ellipsis of
+  cp1252 follows any letter) and 95 % of the non-ASCII characters of the cp850 reading are those of Italian
+  text; with byte 0xD5 it is cp858, the same page with the euro sign. In the first lines of the 3 255 distinct
+  tables of 2024 snapshots of Italian open data portals 25 tables change to cp850 (23 of Regione Toscana, one
+  of the Comune di Matera, one of the Comune di Genova), and `qualità` of a property inventory of Matera is
+  matched under its name.
 - British markers of a missing value are empty values by default: `Nil Return` and `Nil`, which the
   transparency returns of departments and councils write in every cell of a row that reports nothing (no
   gift, no hospitality, no trip in the quarter), and `<5` and `<=5`, which tables of counts write in place of
