@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A field that alone names its country is outvoted by the fields of another country when no scan country
+  is set. `PROV` of a Canadian election study holds the survey's province codes (6, 8, 10), which fit the
+  rule for the INDEC province codes of Argentine census tables, so the column was labelled
+  `ar_indec_province_code` beside the riding (`ca_feduid`), economic region (`ca_eruid`) and metropolitan
+  area (`ca_cmauid`) of the respondent. The votes of the table (a field whose own-country field-name
+  matches all belong to one country votes for it) now also settle a field without a tie: when a country
+  has the vote of one field only and another country has the votes of at least two other fields
+  (`LONE_COUNTRY_RIVAL_FIELDS`), the own-country matches of the lone field are dropped. One field of
+  another country changes nothing, and two countries with one field each both stay. The types of the
+  European Union (`eu_nace`) do not outvote a field of a member country.
 - A full stop that ends a header is the dot of an abbreviation, not a path dot. The short name of a field,
   which value rules guarded by a field name read, is the part after the last dot: it was empty for `LDS-Nr.`,
   `Tatb-Nr.`, `PB-Nr.` and `Stadtbez.`, so a guarded value rule (a school number under `LDS-Nr.`) never read
