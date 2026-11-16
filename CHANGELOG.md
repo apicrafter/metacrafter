@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A country-specific field-name rule that checked the values closely is no longer covered by a universal rule
+  that takes any text. Without a scan country a field-name match of a country type was dropped whenever a
+  universal rule matched the same name with the same weight, so `sigla_provincia` of MS, LU and FI stayed
+  `province` although the Italian rule had checked every value against the list of province abbreviations.
+  The country rule is now kept when it needs values (`needs_values: true`), its validator accepts at most a
+  quarter of any class of ordinary tokens (`NARROW_CHECK`: a list of codes or names, measured as the
+  background broadness of value checks is) and every universal rule on the field has no validator or one that
+  accepts three quarters of some class (`BROAD_CHECK`: any name). The values still have to pass the validator,
+  and a country rule with a broad validator (`fr_commune` beside `city`, both any place name) stays covered. In
+  the first lines of the 3 255 distinct tables of 2024 snapshots of Indonesian and Italian open data portals
+  (Regione Toscana, ARPA Campania, the transport ministry, Kabupaten Tangerang and others) 41 columns of
+  province abbreviations change from `province` to `it_province_code` and no other label changes.
 - British markers of a missing value are empty values by default: `Nil Return` and `Nil`, which the
   transparency returns of departments and councils write in every cell of a row that reports nothing (no
   gift, no hospitality, no trip in the quarter), and `<5` and `<=5`, which tables of counts write in place of
