@@ -1146,8 +1146,8 @@ class RulesProcessor:
             # Names are compared without the escapes of nested paths: a CSV header
             # "Имеет привязку к физ. лицам" is the column "…физ\. лицам". The short name is
             # the part after the last dot, escaped or not, so a flattened header
-            # "info.okoguCode" still matches a rule for "okoguCode". The full stop of an abbreviation
-            # (LDS-Nr., Hsnr. neu) is not a path dot: short_field_name keeps such a header whole.
+            # "info.okoguCode" still matches a rule for "okoguCode". A full stop that ends the
+            # header (LDS-Nr., Tatb-Nr.) is the dot of an abbreviation and stays with the short name.
             name = unescape_field_path(field)
             shortfield = short_field_name(name)
             # Match field name first; a name with a language suffix (title_en) or a language
