@@ -324,9 +324,11 @@ _NON_ASCII_RUN = re.compile(r"[^\x00-\x7f]+")
 
 def _broken_words(text: str) -> bool:
     """Most characters inside words of ``text`` are symbols, and at least three: "CABA¥AS",
-    "Inversi¢n", "Ejecuci—n"."""
+    "Inversi¢n", "Ejecuci—n". A "ÿ" between letters counts as a symbol: byte 0xFF is the no-break
+    space of cp850, and a web form that keeps it between the words of a title gives
+    "Serviciosÿdeÿrevisi¢n" in cp1252, where the many ÿ, letters, would outvote the ¢ and ¡."""
     inner = _IN_WORD.findall(text)
-    symbols = sum(1 for ch in inner if not ch.isalpha())
+    symbols = sum(1 for ch in inner if not ch.isalpha() or ch == "ÿ")
     return symbols >= 3 and symbols > len(inner) - symbols
 
 

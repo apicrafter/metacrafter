@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A Spanish table in the DOS code page cp850 whose text keeps no-break spaces between words is read in
+  its code page. Byte 0xFF is the no-break space of cp850 and the letter `ÿ` of cp1252, so the cp1252
+  reading of such a file (`Serviciosÿdeÿrevisi¢nÿfilol¢gica`) had more letters than symbols inside its
+  words and did not look garbled: the file stayed cp1252. A `ÿ` between two letters now counts as a
+  symbol in that test; the cp850 reading must still give the letters of one Western alphabet. French
+  place names with a real `ÿ` (L'Haÿ-les-Roses) stay cp1252: their other accented letters outnumber it.
+  Found in a SICOP procurement report of the Instituto Nacional de Estadística y Censos of Costa Rica
+  (datosabiertos.inec.cr), whose contract titles keep the no-break spaces of the web page.
 - The markers of a missing value of statistical tables are empty values by default: the colon that
   Eurostat writes for "not available", two hyphens (`--`), three spaced hyphens (`- - -`), an ellipsis
   (`…`, `...`), a lone full stop (the missing value of SAS) and `n.a.`; and the Greek `Δ/Ε` (δεν
