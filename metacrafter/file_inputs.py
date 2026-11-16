@@ -401,10 +401,65 @@ def _dos_mac_choice(sample: bytes) -> Optional[str]:
     return best[1] if best else None
 
 
+# Thai text in TIS-620 or Windows-874, the code page of Thai spreadsheets before UTF-8. The detectors
+# are not asked for it: on short samples they would pick it for Western text, whose accented letters
+# are Thai vowels and tone marks in cp874 (é is mai tho, ã is sara ai maimuan). In the first lines of
+# the tables of 2024 snapshots of Thai government catalogues (Bangkok Metropolitan Administration,
+# Department of Sericulture, City Data Platform, Social Security Office) 111 tables are in this code
+# page; they came out as cp1252, cp1250, cp932, cp949 or KOI8-R ("¢éÍÁÙÅ", "ｨﾑｧﾋﾇﾑｴ").
+_THAI_CONSONANT = "ก-ฮ"
+# Vowel signs and tone marks written above or below a consonant: they never start a word.
+_THAI_MARK = "ัิ-ฺ็-๎"
+# Vowels written before the consonant they follow in speech: เ แ โ ใ ไ.
+_THAI_LEADING_VOWEL = "เ-ไ"
+_THAI_MARKS = re.compile(f"[{_THAI_MARK}]")
+_THAI_STRAY_MARK = re.compile(f"(?<![{_THAI_CONSONANT}{_THAI_MARK}])[{_THAI_MARK}]")
+_THAI_LEADING = re.compile(f"[{_THAI_LEADING_VOWEL}]")
+_THAI_STRAY_LEADING = re.compile(f"[{_THAI_LEADING_VOWEL}](?![{_THAI_CONSONANT}])")
+_THAI_WORD = re.compile("[ก-๛]{3,}")
+# The leading vowels, the four tone marks and the thanthakhat, bytes 0xE0 to 0xE4 and 0xE8 to 0xEC.
+# Greek and Russian written in capitals have no byte this high, and their capitals are Thai consonants
+# and vowel signs in cp874.
+_THAI_TONE = re.compile("[เ-ไ่-์]")
+#: Thai characters and runs of three Thai characters or more that ``_thai_text`` needs.
+THAI_MIN_LETTERS = 12
+THAI_MIN_WORDS = 1
+
+
+def _whole_lines(sample: bytes) -> bytes:
+    """``sample`` without its last line, which a cut may end inside a character, when it has others."""
+    head, newline, _ = sample.rpartition(b"\n")
+    return head + newline if head else sample
+
+
+def _thai_text(sample: bytes) -> bool:
+    """The cp874 reading of ``sample`` is Thai text.
+
+    The sample decodes (cp874 leaves bytes 0xDB to 0xDE and 0xFC to 0xFF undefined, the Ы, Ь, Э, Ю
+    and ь, э, ю, я of cp1251 and the ü of cp1252), has at least ``THAI_MIN_LETTERS`` Thai characters
+    in ``THAI_MIN_WORDS`` runs of three or more, a leading vowel, a tone mark or a thanthakhat, 98 % of its vowel signs
+    and tone marks stand on a consonant and 95 % of its leading vowels before one. Western text has
+    no runs of three non-ASCII letters and fails the last two rules: "ação" in cp1252 reads a
+    consonant, a mark on it, a leading vowel and "o".
+    """
+    try:
+        text = sample.decode("cp874")
+    except UnicodeDecodeError:
+        return False
+    words = _THAI_WORD.findall(text)
+    if len(words) < THAI_MIN_WORDS or sum(len(w) for w in words) < THAI_MIN_LETTERS:
+        return False
+    marks = len(_THAI_MARKS.findall(text))
+    if not marks or not _THAI_TONE.search(text) or len(_THAI_STRAY_MARK.findall(text)) > 0.02 * marks:
+        return False
+    return len(_THAI_STRAY_LEADING.findall(text)) <= 0.05 * len(_THAI_LEADING.findall(text))
+
+
 def detect_encoding(sample: bytes, truncated: bool = True) -> str:
-    """Encoding of a byte sample: BOM, then UTF-8, then a DOS or Mac code page of Western text
-    that cp1252 garbles (``_dos_mac_choice``) or of Italian text whose accented vowels end words
-    (``_italian_dos_choice``), then the most likely common code page."""
+    """Encoding of a byte sample: BOM, then UTF-8, then cp874 for Thai text (``_thai_text``), then a
+    DOS or Mac code page of Western text that cp1252 garbles (``_dos_mac_choice``) or of Italian text
+    whose accented vowels end words (``_italian_dos_choice``), then the most likely common code
+    page."""
     if sample.startswith(codecs.BOM_UTF8):
         return "utf-8-sig"
     if sample.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
@@ -417,6 +472,8 @@ def detect_encoding(sample: bytes, truncated: bool = True) -> str:
     except UnicodeDecodeError as exc:
         if truncated and exc.start >= len(sample) - 3:
             return "utf-8"  # the sample ends inside a multi-byte character
+    if _thai_text(_whole_lines(sample) if truncated else sample):
+        return "cp874"
     dos_mac = _dos_mac_choice(sample) or _italian_dos_choice(sample)
     if dos_mac:
         return dos_mac

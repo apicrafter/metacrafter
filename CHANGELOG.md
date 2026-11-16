@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Thai tables in TIS-620 or Windows-874 are read as Thai. The code page of Thai spreadsheets before UTF-8
+  was not among the code pages tried for text that is not UTF-8, because the detectors pick it for short
+  Western samples (é is the tone mark mai tho in cp874, ã the vowel sara ai maimuan), so such tables came out
+  as cp1252, cp1250, cp932, cp949 or KOI8-R and their field names and values were garbled (`¢éÍÁÙÅ`,
+  `ｨﾑｧﾋﾇﾑｴ`). A sample is now read as cp874 when it decodes in that page (bytes 0xDB to 0xDE and 0xFC to 0xFF
+  are undefined: the Ы, Ь, Э, Ю and ь, э, ю, я of cp1251, the ü of cp1252), holds a run of three Thai
+  characters or more and at least 12 Thai characters in such runs, has a leading vowel, a tone mark or a thanthakhat (bytes
+  0xE0 to 0xE4 and 0xE8 to 0xEC, which Greek and Russian written in capitals do not have), 98 % of its vowel signs and tone
+  marks stand on a consonant and 95 % of its leading vowels (เ แ โ ใ ไ) before one; Western text has no runs
+  of three non-ASCII letters, and `ação` reads a consonant, a mark, a leading vowel and `o`. In the first
+  lines of the 2 208 distinct tables of 2024 snapshots of open data portals of Portugal, Sweden, Slovenia and
+  Thailand 111 Thai tables are not UTF-8: 105 change to cp874 (53 of the Bangkok Metropolitan Administration,
+  23 of the Department of Sericulture, 10 of the City Data Platform, 8 of the Social Security Office), 6 with
+  a few Thai words stay as they were, and none of the 443 Portuguese and Slovenian tables changes.
 - Italian tables in a DOS code page keep their accented letters. Italian puts most of its accents on the last
   vowel of a word (qualità, attività, città, località), so the cp1252 reading of a cp850 file garbles no word
   inside, which is what the choice of a DOS code page looked for: it reads an ellipsis after the word,
