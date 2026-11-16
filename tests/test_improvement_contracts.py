@@ -253,6 +253,21 @@ def test_german_missing_value_markers_are_empty(rule_file):
         assert value not in DEFAULT_EMPTY_VALUES
 
 
+def test_british_missing_value_markers_are_empty(rule_file):
+    """Nil Return and Nil of UK transparency returns and the <5 and <=5 of suppressed counts do not count
+    against a rule."""
+    processor = RulesProcessor()
+    processor.import_rules(str(rule_file))
+    for marker in ("Nil Return", "Nil return", "NIL RETURN", "nil return", "Nil", "NIL", "<5", "<=5"):
+        rows = [{"x": "123"}, {"x": marker}, {"x": marker}, {"x": marker}]
+        report = processor.match_dict(rows, confidence=100, parse_dates=False)
+        assert report.results[0].matches[0].dataclass == "national_id", marker
+    # Other thresholds are rare, and Unknown, TBC and Redacted are answers.
+    from metacrafter.classify.stats import DEFAULT_EMPTY_VALUES
+    for value in ("<10", "<3", "5", "Unknown", "TBC", "Redacted", "Nil by mouth", "Return"):
+        assert value not in DEFAULT_EMPTY_VALUES
+
+
 def test_required_validator_failure_does_not_claim_id(rule_file):
     document = yaml.safe_load(rule_file.read_text())
     document["rules"]["national_id"]["validator"] = "missing_package.validate"

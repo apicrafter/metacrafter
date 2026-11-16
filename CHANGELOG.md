@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- British markers of a missing value are empty values by default: `Nil Return` and `Nil`, which the
+  transparency returns of departments and councils write in every cell of a row that reports nothing (no
+  gift, no hospitality, no trip in the quarter), and `<5` and `<=5`, which tables of counts write in place of
+  a small number so that no person can be told from it. In the first lines of the 7 107 distinct tables of
+  2024 snapshots of UK open data portals (data.gov.uk, Cambridgeshire Insight, Calderdale Data Works, Open
+  Leicester, London Datastore, Open Data Glasgow) `Nil Return` in its spellings stands in 1 023 columns
+  (25 264 cells), `Nil` in 289 (3 059 cells), `<=5` in 3 919 (63 174 cells) and `<5` in 3 393 (47 232 cells);
+  they counted as values that do not fit a rule, so a column of dates or of counts with a few of them lost
+  its label. Only the whole cell is a marker; other thresholds (`<10`, `<3`) are rare and stay values, and so
+  do `Unknown`, `TBC` and `Redacted`, which are answers. `BRITISH_EMPTY_VALUES` in
+  `metacrafter.classify.stats` lists them; `--empty-values` replaces the list.
 - A language tag after a hash in a header: `SEXO#es`, `TERRITORIO#es`, `PAIS_RESIDENCIA#es` and `name#ca`
   of the statistical exports of the statistics institute of the Canary Islands (datos.canarias.es, about
   6700 tables in a 2024 snapshot) are matched by the name before the tag (`SEXO`, `TERRITORIO`) when the
