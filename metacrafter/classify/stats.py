@@ -213,12 +213,15 @@ def guess_datatype(
         else:
             attrs = {"base": "int", "subtype": guess_int_size(int(value))}
     else:
-        try:
-            temp = float(value)
-            attrs = {"base": "float"}
-            return attrs
-        except ValueError:
-            pass
+        # float() takes the underscores of Python number literals: a code with one
+        # (186101_1, a Polish cadastral unit; 2019_2020) is text, not 1861011.0.
+        if "_" not in value:
+            try:
+                temp = float(value)
+                attrs = {"base": "float"}
+                return attrs
+            except ValueError:
+                pass
         if qd_object:
             is_date = False
             res = qd_object.match(value)

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A code with an underscore is text, not a number. Python reads the underscores of number literals, so
+  `float("186101_1")` is 1861011.0: the cadastral unit codes of Polish parcel tables (`gmina` with 186101_1, the
+  TERYT code of the gmina and the kind of unit; a 2024 snapshot of the GeoServer of GIAP, e-spdp.pl) made a
+  float column, the value rules did not run on it and the column was reported with the statistics of a number.
+  `guess_datatype` now tries a number only for a string without an underscore; `2019_2020` and `1_000.5` are
+  text as well.
 - Polish tables in Windows-1250 keep their letters when every letter of the cp1252 reading is a letter of French.
   Read as cp1252, ł, ą and ż are the signs ³, ¹ and ¿ and Ł and Ą are £ and ¥, while ś, ć, ę, ó and ń come out as
   œ, æ, ê, ó and ñ: `rok zg³oszenia`, `p³eæ`, `M꿿czyzna`. The letters of such a reading all belong to one Western
