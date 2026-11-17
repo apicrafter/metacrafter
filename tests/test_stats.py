@@ -66,6 +66,13 @@ class TestGuessDatatype:
         result = guess_datatype("0123")
         assert result["base"] == "numstr"
 
+    def test_code_with_an_underscore_is_text(self):
+        # float("186101_1") is 1861011.0 in Python: a cadastral unit code is no number
+        assert guess_datatype("186101_1")["base"] == "str"
+        assert guess_datatype("2019_2020")["base"] == "str"
+        assert guess_datatype("1_000.5")["base"] == "str"
+        assert guess_datatype("1000.5")["base"] == "float"
+
     def test_string_float(self):
         result = guess_datatype("3.14")
         assert result["base"] == "float"
