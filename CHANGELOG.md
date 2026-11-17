@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Polish tables in Windows-1250 keep their letters when every letter of the cp1252 reading is a letter of French.
+  Read as cp1252, ł, ą and ż are the signs ³, ¹ and ¿ and Ł and Ą are £ and ¥, while ś, ć, ę, ó and ń come out as
+  œ, æ, ê, ó and ñ: `rok zg³oszenia`, `p³eæ`, `M꿿czyzna`. The letters of such a reading all belong to one Western
+  alphabet, so it tied with the cp1250 reading and won. One of these signs between two letters now counts as a
+  letter outside every alphabet (in a Western text ¿ opens a sentence, ³ and ¹ follow a word and £ and ¥ stand
+  before a number), and a reading with signs but no letters beyond ASCII no longer ends the choice. Of the 205
+  tables of a 2024 snapshot of the open data of the Polish National Institute of Public Health
+  (epibaza.pzh.gov.pl) 192 are now read as cp1250, 180 before; the field names of 12 tables (`płeć`,
+  `rok zgłoszenia`, `środowisko zamieszkania`) and their values (`Mężczyzna`, `wieś`) are matched.
+- The spreadsheet column letters that Dataverse writes into empty header cells are no field names. A table whose
+  header is shorter than its records gets the columns `AL`, `AM` ... `IN` at its right, and the tables of the
+  Lithuanian Data Archive (lida.dataverse.lt, a 2024 snapshot) had `CF` (column 84) labelled as a tax number in
+  25 tables, `BN` as a Canadian Business Number in 35, `CP` as a postcode in 20, `IE` as a tax number in 14, `RG`
+  as a Brazilian identity number in 6 and `ID` (column 238) as an id in 14, all of them empty columns. A field
+  named after its own column position is matched by no field-name rule and guards no value rule when two or
+  more columns carry their letters and another column has a name of its own
+  (`metacrafter.classify.processor.spreadsheet_letter_fields`); a table whose columns are all letters keeps them.
 - Thai tables in TIS-620 or Windows-874 are read as Thai. The code page of Thai spreadsheets before UTF-8
   was not among the code pages tried for text that is not UTF-8, because the detectors pick it for short
   Western samples (é is the tone mark mai tho in cp874, ã the vowel sara ai maimuan), so such tables came out

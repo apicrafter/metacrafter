@@ -279,6 +279,14 @@ def _spanish_letters(letters: Counter) -> bool:
     return bool(total) and all(ch in _SPANISH_TYPED for ch in letters) and spanish >= 0.5 * total
 
 
+# Polish read as cp1252: ł, ą and ż are the signs ³, ¹ and ¿, and Ł and Ą are £ and ¥; the other
+# letters are letters of French (ś œ, ć æ, ę ê, ó ó, ń ñ). "zgłoszenia", "płeć" and "Mężczyzna" come
+# out as "zg³oszenia", "p³eæ" and "M꿿czyzna": every letter is French, so the cp1252 reading tied
+# with the cp1250 one and won. A sign between two letters is no sign of a Western text (¿ opens a
+# Spanish sentence, ³ and ¹ follow a unit or a word, £ and ¥ stand before a number).
+_POLISH_AS_SIGNS = re.compile(r"(?<=[^\W\d_])[³¹¿£¥](?=[^\W\d_])")
+
+
 def _latin_choice(sample: bytes) -> str:
     """Single-byte Latin code page whose letters best fit one language's alphabet.
 
@@ -297,10 +305,15 @@ def _latin_choice(sample: bytes) -> str:
             continue
         letters = Counter(ch for ch in text if ord(ch) > 127 and ch.isalpha() and ch not in _ORDINALS)
         total = sum(letters.values())
-        if not total:
-            return encoding
+        if not total and not (encoding == "cp1252" and _POLISH_AS_SIGNS.search(text)):
+            if best is None:
+                return encoding
+            continue
         if encoding == "cp1252" and _spanish_letters(letters):
             return encoding
+        # Signs inside words count as letters outside every alphabet (see _POLISH_AS_SIGNS).
+        signs = len(_POLISH_AS_SIGNS.findall(text)) if encoding == "cp1252" else 0
+        total += signs
         cover = max(sum(n for ch, n in letters.items() if ch in alphabet) for alphabet in alphabets) / total
         if best is None or cover > best[0] + 1e-9:
             best = (cover, encoding)

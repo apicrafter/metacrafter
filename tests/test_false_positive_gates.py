@@ -883,3 +883,55 @@ def test_rule_length_range_takes_long_geometries(tmp_path):
     assert "geojson" in classes(columns["geo_shape"])
     # A range above MAX_RULE_LEN is still refused.
     assert [d["ruleid"] for d in processor.diagnostics] == ["toolong"]
+
+
+LETTER_FIELDS = """
+  taxidbyname:
+    key: taxid
+    match: text
+    type: field
+    rule: cf,codice_fiscale
+    priority: 1
+  cabnbyname:
+    key: cabn
+    match: text
+    type: field
+    rule: bn,business_number
+    priority: 1
+  yearbyname:
+    key: year
+    match: text
+    type: field
+    rule: year
+    priority: 1
+"""
+
+
+def test_spreadsheet_column_letters_are_no_field_names(tmp_path):
+    # Tables of the Lithuanian Data Archive (lida.dataverse.lt): the header is shorter than the
+    # records, and Dataverse names the columns at the right after their spreadsheet column, AL to
+    # IN. CF (column 84) is no codice fiscale and BN (column 66) no Business Number.
+    from metacrafter.classify.processor import spreadsheet_letter_fields
+
+    def letter(index):
+        name, index = "", index + 1
+        while index:
+            index, rest = divmod(index - 1, 26)
+            name = chr(65 + rest) + name
+        return name
+
+    names = ["Year"] + ["Estonia:Population:%d" % i for i in range(1, 37)] + [letter(i) for i in range(37, 100)]
+    assert names[65] == "BN" and names[83] == "CF"
+    assert spreadsheet_letter_fields(names) == set(names[37:])
+    processor = processor_with(tmp_path, [(LETTER_FIELDS, None)])
+    rows = [dict({n: "" for n in names}, Year=str(1919 + i)) for i in range(5)]
+    columns = scan(processor, rows)
+    assert classes(columns["Year"]) == {"year"}
+    assert not columns["CF"].matches and not columns["BN"].matches
+    # A column that is really named so, at another position, keeps its match.
+    columns = scan(processor, [{"id": "1", "CF": "RSSMRA85T10A562S", "BN": "123456789"}])
+    assert classes(columns["CF"]) == {"taxid"} and classes(columns["BN"]) == {"cabn"}
+    # One letter in its place is a name (B of "RT, B"), and so is a header of letters only.
+    assert spreadsheet_letter_fields(["RT", "B", "MS5.5"]) == set()
+    assert spreadsheet_letter_fields(["A", "B", "C"]) == set()
+    assert spreadsheet_letter_fields(["RT", "B", "MS5.5", "D", "MS6.5", "F"]) == {"B", "D", "F"}
