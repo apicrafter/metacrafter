@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Field-name rules with the same field names compete by their values. The team abbreviations of Major League
+  Baseball, the NBA and the NFL (metacrafter-rules `us/us_sports.yaml`, found in the tables of the Many Eyes
+  archive) are all read under `Team`, `Tm`, `Opp` and `Home`, and the leagues share codes: most of a column of NFL
+  teams (Pit, Phi, Cin, Was) passes the MLB validator too, and the column was reported as `nfl_team_code`,
+  `mlb_team_code` and `nba_team_code`. Among the matches of rules of the same countries with a validator and the
+  same `match` and `rule`, one whose confidence is 5 points or more below the best of them is dropped, as matches
+  of different countries already are; matches of equal fit (a column of CLE alone) stay.
 - A code with an underscore is text, not a number. Python reads the underscores of number literals, so
   `float("186101_1")` is 1861011.0: the cadastral unit codes of Polish parcel tables (`gmina` with 186101_1, the
   TERYT code of the gmina and the kind of unit; a 2024 snapshot of the GeoServer of GIAP, e-spdp.pl) made a

@@ -935,3 +935,53 @@ def test_spreadsheet_column_letters_are_no_field_names(tmp_path):
     assert spreadsheet_letter_fields(["RT", "B", "MS5.5"]) == set()
     assert spreadsheet_letter_fields(["A", "B", "C"]) == set()
     assert spreadsheet_letter_fields(["RT", "B", "MS5.5", "D", "MS6.5", "F"]) == {"B", "D", "F"}
+
+
+NFL_TEAMS = {"NE", "GB", "NYG", "PIT", "PHI", "CIN", "CLE", "WAS", "DAL"}
+MLB_TEAMS = {"NYY", "BOS", "PIT", "PHI", "CIN", "CLE", "WAS"}
+
+
+def is_nfl_team(value):
+    return value.upper() in NFL_TEAMS
+
+
+def is_mlb_team(value):
+    return value.upper() in MLB_TEAMS
+
+
+NFLTEAM = """
+  nflteambyname:
+    key: nfl_team_code
+    match: text
+    type: field
+    rule: team,tm
+    validator: tests.test_false_positive_gates.is_nfl_team
+    needs_values: true
+    priority: 1
+"""
+MLBTEAM = """
+  mlbteambyname:
+    key: mlb_team_code
+    match: text
+    type: field
+    rule: team,tm
+    validator: tests.test_false_positive_gates.is_mlb_team
+    needs_values: true
+    priority: 1
+"""
+
+
+def test_shared_name_match_with_worse_fit_dropped(tmp_path):
+    # Five of the eight NFL teams are MLB codes too: the MLB validator passes, the values fit it worse.
+    processor = processor_with(tmp_path, [(NFLTEAM + MLBTEAM, "us")])
+    rows = [{"team": v} for v in ["Pit", "Phi", "Cin", "Was", "Cle", "NE", "GB", "NYG"]]
+    columns = scan(processor, rows, explain=True)
+    assert classes(columns["team"]) == {"nfl_team_code"}
+    assert any(r["ruleid"] == "mlbteambyname" and r["reason"].startswith("Values fit a field-name rule with the same")
+               for r in columns["team"].rejected)
+
+
+def test_shared_name_matches_of_equal_fit_kept(tmp_path):
+    processor = processor_with(tmp_path, [(NFLTEAM + MLBTEAM, "us")])
+    rows = [{"team": "CLE"}] * 5
+    assert classes(scan(processor, rows)["team"]) == {"nfl_team_code", "mlb_team_code"}
