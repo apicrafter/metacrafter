@@ -1258,6 +1258,7 @@ class RulesProcessor:
                     )
                 )
             self._drop_weaker_country_name_matches(field_found, m_result, explain)
+            self._drop_weaker_shared_name_matches(field_found, m_result, explain)
             # Before the float columns leave the loop: coordinates are floats.
             self._drop_unfit_geopoints(field, data_columns, slice, empty_values, m_result, explain)
             self._add_geometry_match(field, data_columns, m_result)
@@ -2195,6 +2196,41 @@ class RulesProcessor:
                 m_result.matches.remove(match)
                 if explain:
                     m_result.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": "Values fit a field-name rule of another country better"})
+
+    def _drop_weaker_shared_name_matches(
+        self, found: List[Dict[str, Any]], m_result: ColumnMatchResult, explain: bool
+    ) -> None:
+        """Drop the field-name matches whose values fit clearly worse than those of a rule with the same names.
+
+        Types that share their field names are told apart by the values: the team abbreviations of
+        Major League Baseball, the NBA and the NFL are all read under ``Team``, ``Tm`` and ``Opp``,
+        and the leagues share codes (ATL, BOS, CHI), so most of a column of NFL teams passes the MLB
+        validator too. Among the matches of rules of the same countries with a validator and the
+        same field-name pattern (same ``match`` and ``rule``), one whose confidence is
+        ``COUNTRY_NAME_MARGIN`` or more below the best of them is dropped (``mlb_team_code`` at 77.7
+        beside ``nfl_team_code`` at 89.0). Matches of equal fit stay (a column of CLE alone), and so
+        do the matches of other rules; rules of different countries compete in
+        ``_drop_weaker_country_name_matches``.
+        """
+        if len(found) < 2:
+            return
+        groups: Dict[Tuple[Any, str, frozenset], set] = {}
+        for rule in found:
+            if "vfunc" in rule:
+                key = (rule.get("match"), str(rule.get("rule")), frozenset(self._rule_countries(rule) or ()))
+                groups.setdefault(key, set()).add(rule["id"])
+        for ids in groups.values():
+            if len(ids) < 2:
+                continue
+            matches = [m for m in m_result.matches if m.ruletype == "field" and m.ruleid in ids]
+            if len(matches) < 2:
+                continue
+            best = max(float(m.confidence or 0.0) for m in matches)
+            for match in matches:
+                if float(match.confidence or 0.0) <= best - COUNTRY_NAME_MARGIN:
+                    m_result.matches.remove(match)
+                    if explain:
+                        m_result.rejected.append({"ruleid": match.ruleid, "dataclass": match.dataclass, "confidence": match.confidence, "matched_count": 0, "considered_count": 0, "reason": "Values fit a field-name rule with the same field names better"})
 
     @staticmethod
     def _validator_id(rule: Dict[str, Any]) -> Any:
