@@ -650,7 +650,7 @@ def _labels(cells: List[str]) -> List[bool]:
     flags = [_is_label(c) for c in cells]
     run: List[int] = []
     for i, cell in enumerate(cells + [""]):
-        number = int(cell) if cell.isdigit() and len(cell) <= 3 else None
+        number = int(cell) if cell.isdecimal() and len(cell) <= 3 else None
         if number is not None and run and number == int(cells[run[-1]]) + 1:
             run.append(i)
             continue

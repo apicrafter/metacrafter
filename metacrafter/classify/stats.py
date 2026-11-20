@@ -207,7 +207,9 @@ def guess_datatype(
     # Check for empty string before other string operations
     if not value or len(value.strip()) == 0:
         return {"base": "empty"}
-    if value.isdigit():
+    # isdecimal, not isdigit: superscripts and circled digits (628², ①) are digits to
+    # str.isdigit() but no number to int(), and one such cell stopped the scan of a file.
+    if value.isdecimal():
         if value[0] == "0":
             attrs = {"base": "numstr"}
         else:
