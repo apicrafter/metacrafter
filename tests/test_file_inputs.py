@@ -431,6 +431,13 @@ def test_years_as_column_labels():
     assert layout.header_index == 1 and layout.header == ["Indikator", "Einheit", "2019", "2020", "2021"]
 
 
+def test_superscript_numbers_in_a_row_are_no_run_of_labels():
+    # str.isdigit() takes ² for a digit and int() does not: the run of column numbers raised a ValueError
+    text = "Bil;Nama;Luas\n²;Kampung;531²\n1;Desa;628\n2;Kota;12\n"
+    layout = table_layout(text, truncated=False)
+    assert layout.header_index == 0 and layout.header == ["Bil", "Nama", "Luas"]
+
+
 def test_text_rows_below_the_header_are_data():
     layout = table_layout("name;city\nAlice;Berlin\nBob;Hamburg\nCarol;Köln\n", truncated=False)
     assert layout.header_index == 0 and layout.header == ["name", "city"]

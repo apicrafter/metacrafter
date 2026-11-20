@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A cell with a superscript or another digit that is no decimal digit (`²`, `628²`, `①`) no longer stops the scan
+  of the whole file. `str.isdigit()` takes such a character for a digit and `int()` does not, so `guess_datatype`
+  raised `ValueError: invalid literal for int() with base 10: '²'` on footnote marks and areas in square metres
+  of tables of the WDC Web Tables Corpus 2015, and the scan returned no fields at all. `guess_datatype`, the run
+  of column numbers of `table_layout` and `validate_asn` now test `str.isdecimal()`, the characters that `int()`
+  reads (Arabic-Indic digits still make a number).
+
 ### Added
 
 - Field-name rules with the same field names compete by their values. The team abbreviations of Major League

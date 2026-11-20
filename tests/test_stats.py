@@ -62,6 +62,19 @@ class TestGuessDatatype:
         assert result["base"] == "int"
         assert "subtype" in result
 
+    def test_superscript_digits_are_text(self):
+        # str.isdigit() accepts superscripts and int() does not: a cell of 628² (a footnote mark of a
+        # web table) stopped the scan of the whole file with a ValueError
+        assert guess_datatype("²")["base"] == "str"
+        assert guess_datatype("628²")["base"] == "str"
+        assert guess_datatype("①")["base"] == "str"
+        assert guess_datatype("١٢٣")["base"] == "int"
+
+    def test_analyzer_column_with_superscripts(self):
+        rows = [{"Bil": "1"}, {"Bil": "²"}, {"Bil": "531²"}]
+        stats = Analyzer(nodates=True).analyze(fromfile=None, itemlist=rows)
+        assert stats
+
     def test_string_digit_leading_zero(self):
         result = guess_datatype("0123")
         assert result["base"] == "numstr"
